@@ -47,10 +47,14 @@ const (
 const (
 	KindXUI     = "xui"
 	KindMarzban = "marzban"
+	KindSUI     = "sui"     // S-UI (a sing-box panel)
+	KindHiddify = "hiddify" // Hiddify Manager
 )
 
 // ValidKind reports whether k names a supported panel.
-func ValidKind(k string) bool { return k == KindXUI || k == KindMarzban }
+func ValidKind(k string) bool {
+	return k == KindXUI || k == KindMarzban || k == KindSUI || k == KindHiddify
+}
 
 // DefaultWeight is a server's share of new clients unless set.
 const DefaultWeight = 100
@@ -66,10 +70,10 @@ type Server struct {
 	ID      string
 	Name    string
 	BaseURL string
-	// Kind is KindXUI or KindMarzban (empty reads as KindXUI).
+	// Kind is KindXUI, KindMarzban, KindSUI or KindHiddify (empty reads as KindXUI).
 	Kind string
-	// Token is the 3x-ui API token; for a Marzban panel it is
-	// "username:password" of an admin.
+	// Token is the 3x-ui or S-UI API token; for a Marzban panel it is
+	// "username:password" of an admin, for Hiddify an admin's UUID.
 	Token        string
 	PanelVersion string
 	Enabled      bool
@@ -611,13 +615,13 @@ type ServerRef struct {
 	Name string
 }
 
-// GroupBackfillPending lists the 3x-ui servers (enabled or not) whose clients
-// have not all been put in the bot group yet, oldest first. A Marzban server
-// has no groups and is never listed.
+// GroupBackfillPending lists the 3x-ui and S-UI servers (enabled or not) whose
+// clients have not all been put in the bot group yet, oldest first. A Marzban or
+// Hiddify server has no groups and is never listed.
 func (s *Store) GroupBackfillPending(ctx context.Context) ([]ServerRef, error) {
 	rows, err := s.db.Query(ctx, `
 		SELECT id, name FROM provisioner.xui_servers
-		WHERE kind = 'xui' AND group_backfilled_at IS NULL ORDER BY created_at, id`)
+		WHERE kind IN ('xui', 'sui') AND group_backfilled_at IS NULL ORDER BY created_at, id`)
 	if err != nil {
 		return nil, fmt.Errorf("group backfill pending: %w", err)
 	}
@@ -656,7 +660,7 @@ type GroupAssignment struct {
 }
 
 // SetClientGroups records the group each client should be in and makes every 3x-ui
-// server that holds one of them go through the group backfill again, which moves the
+// or S-UI server that holds one of them go through the group backfill again, which moves the
 // clients on the panel (only those in a group BOBRES owns). It returns how many
 // subscriptions it knew; the others are skipped.
 func (s *Store) SetClientGroups(ctx context.Context, items []GroupAssignment) (int, error) {
@@ -688,7 +692,7 @@ func (s *Store) SetClientGroups(ctx context.Context, items []GroupAssignment) (i
 		}
 		if _, err := tx.Exec(ctx, `
 			UPDATE provisioner.xui_servers SET group_backfilled_at = NULL, group_reset_at = clock_timestamp()
-			WHERE kind = 'xui' AND id = ANY($1::uuid[])`, ids); err != nil {
+			WHERE kind IN ('xui', 'sui') AND id = ANY($1::uuid[])`, ids); err != nil {
 			return 0, fmt.Errorf("set client groups: %w", err)
 		}
 	}

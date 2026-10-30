@@ -15,7 +15,7 @@ Yes. Use `--xui-allow-private` and see [Install Options](Install-Options). The i
 No. Two programs cannot poll one bot token. Give BOBRES a bot of its own.
 
 **Which panels work?**
-3x-ui v3.8.5 to v3.10.2 and Marzban 0.8. Marzban 1.0 (beta), S-UI and Hiddify are not supported. See [Panels](Panels).
+3x-ui v3.8.5 to v3.10.2, Marzban 0.8, S-UI 1.6 (tested with v1.6.6) and Hiddify Manager 14 (tested with v14.0.5). Marzban 1.0 (beta) is not supported. See [Panels](Panels).
 
 **Which languages does the bot speak?**
 Persian and English. Arabic, Russian and Turkish are on the [Roadmap](Roadmap).

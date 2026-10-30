@@ -4,7 +4,8 @@
 
 **Launch your own VPN store on Telegram in one command.**
 
-BOBRES sells and manages VPN subscriptions on [3x-ui](https://github.com/MHSanaei/3x-ui) (Xray) panels, and on Marzban. Your
+BOBRES sells and manages VPN subscriptions on [3x-ui](https://github.com/MHSanaei/3x-ui) (Xray) panels, and on Marzban,
+[S-UI](https://github.com/alireza0/s-ui) (sing-box) and [Hiddify Manager](https://github.com/hiddify/Hiddify-Manager). Your
 customers buy, pay, renew and get support in a **Telegram bot** or its **Mini App**; you run the store from a **web
 dashboard**; and one **`bobres` command** on the server installs, updates, backs up and repairs everything.
 
@@ -21,7 +22,7 @@ Website: <https://bobresai.cv> · Latest release: **v0.20.0** · [Changelog](CHA
 | **Resellers** | A panel in the bot and the Mini App: buy for customers at tier prices on credit, manage their services, commission; their configs carry their own prefix and group in your 3x-ui panel |
 | **You** | A dashboard for plans, payments, orders, users, resellers, reports, branding, panels, gateways, staff, backups, updates and licenses; Telegram alerts; `/admin` in the bot |
 | **Payments** | Wallet, card to card, USDT (manual and automatic on TRON), TON (automatic), Zarinpal, IDPay, NextPay, Aqayepardakht, Telegram Stars |
-| **Panels** | 3x-ui v3.8.5 to v3.10.2 and Marzban 0.8, several at once, each tested against the real panel in CI |
+| **Panels** | 3x-ui v3.8.5 to v3.10.2, Marzban 0.8, S-UI 1.6 and Hiddify Manager 14, several at once, each tested against the real panel in CI |
 | **Server** | `bobres`: install, status, logs, update with automatic rollback, encrypted backups and restore, HTTPS, hardening, health checks |
 | **Pricing** | Free core, paid premium: a free tier, a 30-day trial of everything, then a license per install ([docs/pricing.md](docs/pricing.md)) |
 
@@ -46,7 +47,7 @@ You need:
   disk, ports **80 and 443** free, and root access.
 - A **domain** whose A record points to the server.
 - A new **Telegram bot** from [@BotFather](https://t.me/BotFather), and your numeric **Telegram ID** (the owner).
-- A **3x-ui panel** (v3.8.5 to v3.10.2 are tested) with an API token. You can also add panels, 3x-ui or Marzban, later in
+- A **3x-ui panel** (v3.8.5 to v3.10.2 are tested) with an API token. You can also add panels, 3x-ui, Marzban, S-UI or Hiddify, later in
   the dashboard.
 
 As root on the server:
@@ -233,11 +234,13 @@ server: [docs/06-installer.md](docs/06-installer.md) and [docs/runbooks/uninstal
   IDPay, NextPay and Aqayepardakht, three more Iranian card gateways (off until credentials are set).
 - Each payment settles exactly once. The ledger is append-only, and amounts are whole numbers in minor units.
 
-**3x-ui and Marzban**
+**3x-ui, Marzban, S-UI and Hiddify**
 - Several panel servers, each 3x-ui (**v3.8.5 to v3.10.2**, every release in that range tested against the real panel in
-  CI) or Marzban 0.8, with health checks, weights, servers per plan and inbound choices per server.
-- Every client the bot makes is put in a 3x-ui **client group** (`BOBRES`, or `BOBRES-<NAME>` for a reseller), so you can
-  filter on what the bot made in the panel; a group you set by hand is never touched.
+  CI), Marzban 0.8, S-UI 1.6 (tested with v1.6.6) or Hiddify Manager 14 (tested with v14.0.5), with health checks,
+  weights, servers per plan and inbound choices per server.
+- Every client the bot makes on 3x-ui or S-UI is put in a **client group** (`BOBRES`, or `BOBRES-<NAME>` for a reseller),
+  so you can filter on what the bot made in the panel; a group you set by hand is never touched. Marzban and Hiddify
+  have no client groups.
 
 **Operations**
 - A one-command install on Ubuntu or Debian, and the `bobres` menu and commands on the server.
@@ -296,7 +299,7 @@ flowchart LR
     store["<b>Your BOBRES install</b><br/>on one server (Compose)<br/>caddy · core · bot<br/>payments · provisioner<br/>PostgreSQL · Redis<br/>backup · tls-agent"]
 
     telegram["<b>Telegram</b><br/>Bot API · Mini App · Stars"]
-    panels["<b>VPN panels</b><br/>3x-ui · Marzban"]
+    panels["<b>VPN panels</b><br/>3x-ui · Marzban<br/>S-UI · Hiddify"]
     gateways["<b>Card gateways</b><br/>Zarinpal · IDPay · NextPay<br/>Aqayepardakht"]
     tron["<b>TRON network</b><br/>automatic USDT (TRC20)"]
     rates["<b>USDT price</b><br/>Tetherland · Wallex"]
@@ -348,7 +351,7 @@ flowchart TB
     redis[("<b>Redis</b><br/>bot state · rate limits")]
     inet["Telegram · price pages<br/>GitHub · supplier<br/>license server"]
     gateways["Card gateways<br/>and TronGrid"]
-    panels["3x-ui and Marzban<br/>panels"]
+    panels["3x-ui, Marzban, S-UI<br/>and Hiddify panels"]
 
     web -->|"HTTPS"| caddy
     caddy --> core
@@ -538,7 +541,7 @@ directly. An install never needs the license server to keep running ([docs/05-li
 |---|---|
 | `cmd/` | One `main` per program: `core`, `bot`, `payments`, `provisioner`, `backup`, `bobres` (the CLI), `licensesrv` (the vendor's license server) |
 | `internal/core/`, `internal/bot/`, `internal/payments/`, `internal/provisioner/` | Each service's rules, storage, gRPC and HTTP handlers (core: `domain`, `store`, `server`, `web`; the bot: handlers, Persian and English texts, notifier) |
-| `internal/xui`, `internal/marzban` | The panel clients, each with a fake (`xuifake`, `marzbanfake`) for tests |
+| `internal/xui`, `internal/marzban`, `internal/sui`, `internal/hiddify` | The panel clients, each with a fake (`xuifake`, `marzbanfake`, `suifake`, `hiddifyfake`) for tests |
 | `internal/license`, `internal/release`, `internal/crypto` | License tokens and tiers, release verification, encryption |
 | `proto/`, `gen/` | The gRPC contracts (buf) and the code generated from them |
 | `web/dashboard`, `web/miniapp` | The Vue 3 dashboard and Mini App, built into the `core` binary |

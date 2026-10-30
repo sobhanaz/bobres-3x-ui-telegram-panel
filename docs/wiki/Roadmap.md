@@ -43,7 +43,7 @@ Shipped in v0.18.0 (2026-10-29), with the list of codes, the USDT plans paid fro
 
 These are not built:
 
-- **S-UI and Hiddify** panels, if operators ask for them, and an adapter for a newer 3x-ui major version when one exists and is tested. Marzban 1.0 is beta and unsupported.
+- An adapter for a newer 3x-ui major version when one exists and is tested. Marzban 1.0 is beta and unsupported. (S-UI and Hiddify panels are built, in the next release.)
 - **Growth tools**: a lottery with tickets. (Gift codes, Top users, invite cards, cashback, the daily wheel and reseller targets are built; the last three are in the next release.)
 - **More bot languages**: Arabic, Russian and Turkish. The texts are already keys, so the work is translation and review.
 - **Two-factor sign-in inside the bot.**
@@ -74,4 +74,4 @@ These belong to the owner, not to the code: the lawyer's review of the license a
 
 ## Tell us what you need
 
-Ideas and changes of order go in the roadmap file. You can also open an issue on the [issue tracker](https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/issues). New panels such as S-UI and Hiddify are planned only if operators ask for them. See [Development](Development) for how a change gets built.
+Ideas and changes of order go in the roadmap file. You can also open an issue on the [issue tracker](https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/issues). Other new panels are planned only if operators ask for them. See [Development](Development) for how a change gets built.

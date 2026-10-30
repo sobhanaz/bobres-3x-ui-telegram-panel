@@ -215,7 +215,8 @@ creates is put in a group, so an operator can filter on what the bot made in the
 group name (the owner writes NAME when making the reseller: capitals, digits and `_`, 2 to 24; unique). A client is in ONE group,
 so a reseller's clients are in their own group and not in `BOBRES`. Core sends the group with `CreateClient` (`group`, "" is the
 default); the provisioner keeps it in `client_map.panel_group` and makes the client in it. It is a label only: links, limits and
-the subscription do not depend on it. Marzban 0.8 has no groups; its adapter ignores them. A reseller's configs are also **named**
+the subscription do not depend on it. S-UI has client groups too and its adapter does the same (below); Marzban 0.8 and Hiddify
+have none, and their adapters ignore the group. A reseller's configs are also **named**
 `<prefix>-u<telegram id>-<8 random>` when the reseller has a config prefix (chosen once by the reseller in the bot or the Mini App,
 2 to 10 of a-z and 0-9, unique, not the look of `u123`; afterwards only the owner changes it): the name is made once, when the
 service is created, and stays through a later change. The group backfill (`RunGroupBackfill`, at start, when a server is added or
@@ -239,7 +240,7 @@ each on both versions, in CI's "3x-ui integration" job):
   bytes a client and would pass the 8 MiB response limit at around 11,000 clients.
 
 **Backfill.** The clients made before the group existed are put in it by the provisioner (`server.RunGroupBackfill`, started
-by `cmd/provisioner`). For each 3x-ui server (`kind = 'xui'`, switched on or off) whose `group_backfilled_at` is NULL it
+by `cmd/provisioner`). For each 3x-ui or S-UI server (`kind IN ('xui', 'sui')`, switched on or off) whose `group_backfilled_at` is NULL it
 reads the client map of that server (reservations included), lists the panel's clients, and calls `bulkAdd` with the ones
 that are held, carry the derived subscription id the map has for them (it is the proof that the client is ours and not a
 stranger's under the same email) and have **no** group. It lists again after tagging and records the server only when
@@ -250,6 +251,59 @@ once per distinct reason). A server that holds no client of ours is recorded wit
 `3x-ui groups: backfill finished` has `managed`, `tagged`, `already_in_a_group` and `missing`. A retried create (the
 reservation was written by an earlier attempt) checks the client's group once more, for an attempt made before the group
 existed.
+
+## S-UI and Hiddify adapters (provisioner)
+Two more `PanelAdapter`s, beside 3x-ui and Marzban: a server's `kind` is `sui` or `hiddify` (provisioner migration 00008
+widens `xui_servers_kind_check`; its Down deletes such servers with their clients). The credential is kept like the others
+(write-only, encrypted at rest; the same address policy: https, plain http only to a private address with allow-private).
+Each panel's own HTTP API is used, and each adapter is tested against a fake (`internal/suifake`, `internal/hiddifyfake`)
+and, in CI, against the real panel image (jobs "S-UI integration" and "Hiddify integration"; neither is a required check).
+
+**S-UI** (alireza0/s-ui, sing-box; tested with **v1.6.6**). Address: the panel with its web path
+(`https://panel.example.com:2095/app`); token: an API token the panel made (Admins > API Tokens), sent in a `Token` header to
+`<address>/apiv2/`. Every answer is HTTP 200 `{success, msg, obj}`, a refusal `success: false` ("invalid token" is a refused
+token). Clients are saved with `POST apiv2/save` (form `object=clients`, `action=new|edit|del`, `data=<JSON>`), listed with
+`GET apiv2/clients` (no configuration or links) and read whole with `apiv2/clients?id=N`. How the adapter maps BOBRES onto it:
+- A client is found by name (BOBRES's email) only in the listing; the adapter remembers name to id and checks the name on every
+  read, so a client deleted and made again under the same name is found again. A name the panel does not have is answered
+  `sui.NotFoundError` (`noSuchClient`: `GetUsage` says `client_missing`), and the listing is not repeated for it more than once
+  in 10 seconds.
+- The name is the client's subscription id on S-UI, so the derived subscription id is kept in the client's description,
+  `bobres-sub:<id>`, as on Marzban; `SubLinks` is not offered and `SubscriptionLink` gives the panel's address: the server's
+  sub base URL + `/<name>` when set, else the panel's `subURI` setting, else its subscription port and path on the panel's host.
+- A new client gets credentials for every protocol, made as the panel's own form makes them, on the inbounds chosen (all that
+  take users when none is; an inbound with no users, such as `direct` or `tun`, is listed as off). Expiry is unix seconds;
+  "start on first use" is the panel's delayed start (`delayStart` with `resetDays`, whole days). Group: `BOBRES` or the
+  reseller's (`GroupedCreator`), moved by the backfill (`GroupRegrouper`, one edit per client: S-UI has no bulk group call).
+- An edit sends the whole client back. The panel keeps its traffic counters unless both are sent as zero, which resets them
+  (adding them to the client's totals): `ResetTraffic` is that edit; every other edit sends them non-zero. The panel's job
+  switches off a client over its quota or expiry; `ResetTraffic` switches such a client (over its quota, not expired) back on,
+  and leaves one switched off by staff off.
+- Share links are the ones the panel keeps for the client; S-UI builds them from the host BOBRES called it at, so the server's
+  address should be the panel's public domain (or the inbounds should carry their own addresses).
+
+**Hiddify Manager** (hiddify/Hiddify-Manager, panel hiddify/hiddify-panel; tested with **v14.0.5**). Address: the panel with
+the admin proxy path (`https://panel.example.com/<admin path>`; a pasted admin link is cut back to that); API key: an admin's
+UUID, sent as `Hiddify-API-Key` to `<admin path>/api/v2/admin/`. Users: `POST user/`, `GET|PATCH|DELETE user/<uuid>/`, `GET user/`
+(404 "You have no user" when there are none, read as none). How the adapter maps BOBRES onto it:
+- A user is addressed by its UUID, which is also its secret (it is in its links). BOBRES's client is a user named by the email,
+  with UUID = a name-based (v5) UUID of the derived subscription id (`adapter.HiddifyUserUUID`) and `bobres-sub:<id>` in its
+  comment. A retried create meets the user an earlier attempt made; `RecreateClient` after a deletion gets the same UUID (the
+  panel only marks a deleted user, and a create with its UUID takes it over), so the customer's links work again.
+- Names need not be unique on the panel; the adapter finds users by name in the listing (remembering name to UUID), prefers the
+  one BOBRES made, and refuses to create a client whose name another user has (answered as a conflict, so the provisioner says
+  `ALREADY_EXISTS`, as for the other panels). A UUID the panel answers 404 for is `hiddify.NotFoundError` (`client_missing`).
+- Traffic is in GiB (`usage_limit_GB`, `current_usage_GB`, exact for any byte count); the panel has no "unlimited", so BOBRES's 0
+  is written as its largest quota, 1,000,000 GB, and read back as 0. Expiry is a start date and whole days by the panel's
+  calendar (UTC in its Docker image): an expiry is written as the last day the client may connect (start today) and read back as
+  the midnight UTC after it (an expiry at 15:00 reads back as the next midnight); 0 is 10,000 days; "start on first use" is a
+  package with no start date. Renew adds days to the package.
+- There is nothing to choose per user: every user gets every proxy, so the server lists one inbound, `1` ("all proxies").
+  No client groups (the panel's tags are not used).
+- `Links` and `SubscriptionLink` come from the user's own API (`<client path>/api/v2/user/all-configs/` with the user's UUID);
+  the client proxy path is read once from the dashboard API's users page. The subscription is the panel's "Auto" one
+  (`.../<uuid>/auto/`, its `asn` query dropped); with a sub base URL (`https://sub.example.com/<client path>`) it is
+  `<sub base>/<uuid>/auto/`.
 
 ## Public HTTP surface (via gateway)
 - `/webhooks/<provider>` (signature verified, replay-protected)

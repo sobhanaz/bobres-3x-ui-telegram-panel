@@ -65,7 +65,7 @@ Every password login needs an authenticator code. Link logins do not.
 
 In the dashboard:
 
-1. **Panel servers:** add your 3x-ui or Marzban panel if the installer did not. Use **Test connection**. See [Panels](Panels).
+1. **Panel servers:** add your 3x-ui, Marzban, S-UI or Hiddify panel if the installer did not. Use **Test connection**. See [Panels](Panels).
 2. **Plans:** create what you sell, with a price, traffic and days. Mark one plan as the free trial if you want one. See [Plans and Pricing](Plans-and-Pricing).
 3. **Payment gateways:** switch on the ways customers can pay and fill in the details. See [Payments](Payments).
 4. **Branding & texts:** your store name, logo, colors, support contact and every bot text in Persian and English. Edit your own [Terms and Privacy pages](Terms-and-Privacy-Pages) here too.
