@@ -328,6 +328,11 @@ func gatedCases() []gatedCase {
 	for _, data := range []string{"lic", "lic:b:standard:1", "lic:y:standard:1:n1", "lic:my", "lic:k:l1", "lic:r:l1:1", "lic:ry:l1:1:n1", "lpay:u:4000000:n1", "lpay:x:4000000:n1"} {
 		add(buttonCase(data))
 	}
+	// Product news: the answer to the question, the switch on the language screen, and the Buy button under an announcement (a plan, a
+	// digital account, a license).
+	for _, data := range []string{"an:y", "an:n", "an:t:y", "an:t:n", "an:b:p:0123456789abcdef0123456789abcdef", "an:b:s:abcdefghij", "an:b:l:pro:12", "an:x"} {
+		add(buttonCase(data))
+	}
 	// Resellers are held like customers, in their panel too.
 	for _, data := range []string{"rs", "rs:buy", "rs:subs:1", "rs:cu:1", "rs:st:1", "rs:link", "rs:pz:s1", "rs:dy:s1"} {
 		c := buttonCase(data)

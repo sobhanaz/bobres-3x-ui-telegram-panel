@@ -17,6 +17,8 @@ import TabPanel from 'primevue/tabpanel'
 import TabPanels from 'primevue/tabpanels'
 import Tabs from 'primevue/tabs'
 import AllLicenses from '../components/licenses/AllLicenses.vue'
+import AnnounceDialog from '../components/announce/AnnounceDialog.vue'
+import { useAuth } from '../stores/auth'
 import { api } from '../api'
 import { errorText } from '../errors'
 import { useList } from '../composables/useList'
@@ -26,6 +28,16 @@ import { grantMonths, keyOk, licenseStatuses, requestId, statusSeverity, type So
 const { t, locale } = useI18n()
 const lang = computed(() => locale.value as Lang)
 const toast = useToast()
+
+// Announce a license offer on sale (a tier for a month or a year): broadcasts.write.
+const auth = useAuth()
+const canAnnounce = computed(() => auth.can('broadcasts.write'))
+const announcing = ref<{ id: string; title: string } | null>(null)
+const announceOpen = ref(false)
+function openAnnounce(tier: string, months: number) {
+  announcing.value = { id: `${tier}:${months}`, title: t('licenses.tier.' + tier) + ' · ' + t(months === 1 ? 'licenses.month' : 'licenses.year') }
+  announceOpen.value = true
+}
 
 // Where the license server is and whether the bot sells now.
 const status = ref<VendorStatus>({ available: true, on: false, configured: false, tiers: [] })
@@ -159,6 +171,19 @@ async function revoke() {
     <p class="app-muted prices">
       <span v-for="tier in status.tiers" :key="tier.name" class="price">
         {{ t('licenses.tier.' + tier.name) }}: {{ money(tier.monthly, lang) }} / {{ t('licenses.month') }} · {{ money(tier.yearly, lang) }} / {{ t('licenses.year') }}
+        <template v-if="canAnnounce && status.on">
+          <Button
+            v-for="m in [1, 12]"
+            :key="m"
+            size="small"
+            text
+            icon="pi pi-megaphone"
+            class="announce"
+            :label="t('announce.license_term', { term: t(m === 1 ? 'licenses.month' : 'licenses.year') })"
+            :aria-label="t('announce.license_aria', { tier: t('licenses.tier.' + tier.name), term: t(m === 1 ? 'licenses.month' : 'licenses.year') })"
+            @click="openAnnounce(tier.name, m)"
+          />
+        </template>
       </span>
     </p>
     <Tag v-if="status.on" severity="success" :value="t('licenses.on')" />
@@ -234,6 +259,8 @@ async function revoke() {
       </TabPanel>
     </TabPanels>
   </Tabs>
+
+  <AnnounceDialog v-if="announcing" v-model:visible="announceOpen" kind="license" :product-id="announcing.id" :title="announcing.title" />
 
   <Dialog :visible="granting !== null" modal :header="t('licenses.give')" :style="{ width: '24rem' }" @update:visible="(v: boolean) => !v && (granting = null)">
     <p class="app-muted">{{ t('licenses.give_help') }}</p>

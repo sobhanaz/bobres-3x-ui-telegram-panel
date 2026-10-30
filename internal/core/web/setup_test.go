@@ -76,6 +76,7 @@ type fakeBot struct {
 	checked   []string
 	tests     []botfiles.TestBroadcast
 	down      bool
+	canPost   bool // the bot may post in the channels it checks (product announcements)
 }
 
 func (b *fakeBot) RefreshSettings(context.Context) error {
@@ -92,7 +93,7 @@ func (b *fakeBot) CheckChannel(_ context.Context, chat string) (*botfiles.Channe
 		return nil, errors.New("bot down")
 	}
 	b.checked = append(b.checked, chat)
-	return &botfiles.ChannelCheck{OK: true, Title: "News", BotAdmin: true}, nil
+	return &botfiles.ChannelCheck{OK: true, Title: "News", BotAdmin: true, CanPost: b.canPost}, nil
 }
 
 func (b *fakeBot) TestBroadcast(_ context.Context, t botfiles.TestBroadcast) (*botfiles.TestResult, error) {

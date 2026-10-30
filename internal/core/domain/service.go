@@ -88,6 +88,9 @@ type Service struct {
 	kick  chan struct{} // wakes the provisioning worker
 	bkick chan struct{} // wakes the broadcast worker
 	lkick chan struct{} // wakes the subscription link worker
+	akick chan struct{} // wakes the announcement worker
+	// announce makes the channel posts of product announcements (the bot; nil until SetAnnounceTransport).
+	announce AnnounceTransport
 	// embedded is the license key ring built into core, read once.
 	keysOnce sync.Once
 	embedded license.KeyRing
@@ -107,7 +110,7 @@ func New(st *store.Store, cfg Config) *Service {
 	}
 	cfg.OwnerTelegramIDs = cleanOwnerIDs(cfg.OwnerTelegramIDs)
 	return &Service{st: st, ob: eventbus.NewOutbox("outbox_core"), cfg: cfg, kick: make(chan struct{}, 1),
-		bkick: make(chan struct{}, 1), lkick: make(chan struct{}, 1)}
+		bkick: make(chan struct{}, 1), lkick: make(chan struct{}, 1), akick: make(chan struct{}, 1)}
 }
 
 func (s *Service) publish(ctx context.Context, tx pgx.Tx, topic string, payload any) error {

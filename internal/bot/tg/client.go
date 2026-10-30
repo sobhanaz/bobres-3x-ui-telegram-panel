@@ -508,6 +508,19 @@ func (c *Client) SendMessage(ctx context.Context, chatID int64, text string, kb 
 	return &m, nil
 }
 
+// SendChatMessage sends an HTML-formatted message to a chat named by its @username or numeric id (a channel's post).
+func (c *Client) SendChatMessage(ctx context.Context, chat string, text string, kb *Keyboard) (*Message, error) {
+	body := map[string]any{"chat_id": chatRef(chat), "text": text, "disable_web_page_preview": true}
+	if kb != nil {
+		body["reply_markup"] = kb
+	}
+	var m Message
+	if err := c.callHTML(ctx, "sendMessage", body, "text", &m); err != nil {
+		return nil, err
+	}
+	return &m, nil
+}
+
 // SendMenu sends an HTML-formatted message carrying the bottom menu (a reply
 // keyboard), which stays under the chat until another one replaces it.
 func (c *Client) SendMenu(ctx context.Context, chatID int64, text string, m *Menu) (*Message, error) {

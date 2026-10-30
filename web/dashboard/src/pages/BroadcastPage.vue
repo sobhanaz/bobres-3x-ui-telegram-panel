@@ -88,7 +88,7 @@ const audience = computed(() => (item.value ? audienceKeys(item.value).map((k) =
 // A draft is never a message to resellers (those are sent at once): the send dialog counts customers.
 const sendSegment = computed(() => {
   const s = (sendFor.value ?? item.value)?.segment
-  return s && s !== 'resellers' ? s : 'all'
+  return s && s !== 'resellers' && s !== 'announce' ? s : 'all'
 })
 const countRows = computed(() => [
   { key: 'total', n: counts.value.total },

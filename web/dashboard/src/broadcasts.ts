@@ -6,8 +6,8 @@ import type { Lang } from './format'
 import type { BroadcastItem, LangPair, TextProblem } from './types'
 
 export type BroadcastStatus = BroadcastItem['status']
-/** The customer groups the composer offers (messages to resellers are written on the Resellers page). */
-export type Segment = Exclude<BroadcastItem['segment'], 'resellers'>
+/** The customer groups the composer offers (messages to resellers are written on the Resellers page, product announcements from the product's page). */
+export type Segment = Exclude<BroadcastItem['segment'], 'resellers' | 'announce'>
 export type AudienceLang = BroadcastItem['language']
 
 export const SEGMENTS: readonly Segment[] = ['all', 'active', 'expired', 'never_bought']
@@ -48,7 +48,7 @@ export function blankDraft(): Draft {
 
 export function draftOf(b: BroadcastItem): Draft {
   return {
-    segment: b.segment === 'resellers' ? 'all' : b.segment,
+    segment: b.segment === 'resellers' || b.segment === 'announce' ? 'all' : b.segment,
     language: b.language,
     texts: { fa: b.texts.fa ?? '', en: b.texts.en ?? '' },
     button: b.button
@@ -173,10 +173,10 @@ export function actionsFor(status: BroadcastStatus): BroadcastAction[] {
   return []
 }
 
-/** actionsOf is actionsFor a broadcast: a message to resellers is never edited in the composer (cancel it and write a new one). */
+/** actionsOf is actionsFor a broadcast: a message to resellers or a product announcement is never edited in the composer (cancel it and write a new one). */
 export function actionsOf(b: Pick<BroadcastItem, 'status' | 'segment'>): BroadcastAction[] {
   const out = actionsFor(b.status)
-  return b.segment === 'resellers' ? out.filter((a) => a !== 'edit') : out
+  return b.segment === 'resellers' || b.segment === 'announce' ? out.filter((a) => a !== 'edit') : out
 }
 
 /** audienceKeys are the texts that say who a broadcast goes to (the dashboard's keys, joined with " · "). */

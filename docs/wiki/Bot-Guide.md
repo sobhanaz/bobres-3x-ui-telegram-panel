@@ -82,6 +82,7 @@ Staff get alerts in Telegram for payments to review, new tickets, failed deliver
 | Rate limits | Settings | Taps and messages per 10 seconds, support messages per day |
 | Bans | Users | A banned customer cannot use the bot |
 | Terms and privacy | Branding | `/terms` and the buttons use your [Terms and Privacy pages](Terms-and-Privacy-Pages) |
+| Product news | Settings (`announce.enabled`, off by default) | The bot asks each customer once whether they want news of new products (a newcomer after the first /start, others at their next interaction). No answer is no. They change it under 🌐 Language or in the Mini App. Only those who said yes get your announcements in private, with a 🛒 Buy button that opens the product |
 
 When your install is at its license limit, a new purchase shows the customer only "New purchases are temporarily unavailable. Please contact support." They never see a word about licensing. Renewals and top-ups continue.
 
