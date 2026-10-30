@@ -46,7 +46,7 @@ func TestIntegrationSUIServerFlow(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
-	defer cancel()
+	t.Cleanup(cancel) // after the cleanups registered below, which use ctx
 	cleanup := func(email string) {
 		rows, err := c.Clients(ctx)
 		if err != nil {
@@ -77,7 +77,7 @@ func TestIntegrationHiddifyServerFlow(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
-	defer cancel()
+	t.Cleanup(cancel) // after the cleanups registered below, which use ctx
 	cleanup := func(email string) {
 		users, err := c.Users(ctx)
 		if err != nil {

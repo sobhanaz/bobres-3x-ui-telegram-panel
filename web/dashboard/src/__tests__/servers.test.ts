@@ -177,11 +177,12 @@ describe('server form', () => {
     expect(serverProblems(s, null)).toEqual([])
     expect(serverProblems({ ...s, token: 'two words' }, null)).toEqual(['token'])
     expect(serverBody(s)).toMatchObject({ kind: 'sui', token: 'AbC123token' })
-    const h = { ...blankServer(), kind: 'hiddify' as const, name: 'hd', baseURL: 'https://h.example.com/AdminPath', token: '0B5E6A3C-2f4d-4e8a-9c1b-7d6e5f4a3b2c' }
+    const hiddifyKey = '0B5E6A3C-2f4d-4e8a-9c1b-7d6e5f4a3b2c' // gitleaks:allow test fixture
+    const h = { ...blankServer(), kind: 'hiddify' as const, name: 'hd', baseURL: 'https://h.example.com/AdminPath', token: hiddifyKey }
     expect(serverProblems(h, null)).toEqual([])
     for (const bad of ['admin:pw', 'not-a-uuid', '0b5e6a3c-2f4d-4e8a-9c1b-7d6e5f4a3b2']) expect(serverProblems({ ...h, token: bad }, null)).toEqual(['token'])
     expect(serverProblems({ ...h, token: '' }, { has_token: true, base_url: 'https://h.example.com/AdminPath' })).toEqual([])
-    expect(testBody(h)).toMatchObject({ kind: 'hiddify', token: '0B5E6A3C-2f4d-4e8a-9c1b-7d6e5f4a3b2c' })
+    expect(testBody(h)).toMatchObject({ kind: 'hiddify', token: hiddifyKey })
     expect(serverFormOf({ ...server({ id: sid1 }), kind: 'sui' }).kind).toBe('sui')
     expect(serverFormOf({ ...server({ id: sid1 }), kind: 'hiddify' }).kind).toBe('hiddify')
     expect(serverFormOf({ ...server({ id: sid1 }), kind: 'something-new' }).kind).toBe('xui')
