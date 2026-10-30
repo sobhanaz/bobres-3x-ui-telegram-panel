@@ -38,6 +38,7 @@ Details are in [Updates, Backups, Restore](Updates-Backups-Restore).
 | `bobres admin link` | A one-time dashboard login link, for when the bot is down |
 | `bobres admin password` | Reset the owner's dashboard password. It is shown once and must be changed at first login |
 | `bobres admin owners list\|add\|remove` | The store's owners (Telegram IDs). Only the server can change them |
+| `bobres admin metrics-token generate\|status` | The token of the store's `/metrics` (Prometheus): `generate` makes a new one, printed once, and replaces any there was; `status` says whether one is set. The same as Settings > Monitoring in the dashboard |
 | `bobres admin approval status\|off` | Whether dashboard sign-ins must be approved in Telegram, and the way out when the bot or Telegram cannot be reached: switch it off. It cannot switch it on; the owner does that in the dashboard |
 
 ## Settings and secrets

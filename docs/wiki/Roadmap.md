@@ -49,7 +49,7 @@ These are not built:
 - **Two-factor sign-in inside the bot.**
 - Rotating the **master keys** is built (`sudo bobres rotate-key`).
 - More crypto networks, if a route that works from Iran exists. (Automatic TON is built: not yet tried with a real wallet.)
-- A hosted offering, and an affiliate program for BOBRES itself.
+- A hosted offering: the assisted install, the register of hosted stores and their health are built (in the next release); creating the server through a cloud provider's API is not. The affiliate program for BOBRES itself is built too (next release).
 
 ## Left out on purpose
 
