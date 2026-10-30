@@ -633,10 +633,15 @@ jobs:
             -e MYSQL_DATABASE=hiddifypanel -e MYSQL_USER=hiddifypanel -e MYSQL_PASSWORD="$dbpw" mariadb:11.8
           docker run -d --name hiddify-redis --network host redis:7-alpine redis-server --requirepass "$redispw"
           for _ in $(seq 60); do docker exec hiddify-db healthcheck.sh --connect >/dev/null 2>&1 && break; sleep 2; done
+          # On a runner the install's firewall step fails ("Finished with errors in: Firewall"),
+          # and the image's entrypoint (set -e) then exits and stops the container with the
+          # panel it has just started. The panel does not need the firewall: keep the
+          # container up after the entrypoint ends.
           docker run -d --name hiddify --network host --privileged --cap-add NET_ADMIN \
             -e SQLALCHEMY_DATABASE_URI="mysql+mysqldb://hiddifypanel:${dbpw}@127.0.0.1:3306/hiddifypanel?charset=utf8mb4" \
             -e REDIS_URI_MAIN="redis://:${redispw}@127.0.0.1:6379/1" \
-            "ghcr.io/hiddify/hiddify-manager:${HIDDIFY_VERSION}@${HIDDIFY_DIGEST}"
+            --entrypoint bash "ghcr.io/hiddify/hiddify-manager:${HIDDIFY_VERSION}@${HIDDIFY_DIGEST}" \
+            -c './scripts/docker-init.sh || echo "docker-init.sh exited with $?"; exec sleep infinity'
       - name: Wait for the panel and read its admin path and key
         run: |
           set -euo pipefail
