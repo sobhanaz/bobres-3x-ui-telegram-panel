@@ -129,6 +129,9 @@ func (s *Service) UpdateBroadcast(ctx context.Context, actor *store.User, id str
 		if old.Segment == store.SegmentResellers {
 			return stateErr("a message to resellers cannot be changed; cancel it and write a new one")
 		}
+		if old.Segment == store.SegmentAnnounce {
+			return stateErr("a product announcement cannot be changed here; cancel it and announce the product again")
+		}
 		if err := s.st.UpdateBroadcast(ctx, tx, b, version); errors.Is(err, store.ErrStale) {
 			return stateErr("someone changed this broadcast meanwhile; reload it")
 		} else if err != nil {

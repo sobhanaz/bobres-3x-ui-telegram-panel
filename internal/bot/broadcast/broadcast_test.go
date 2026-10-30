@@ -542,3 +542,49 @@ func TestResellerMessageTextsAndSettleButton(t *testing.T) {
 		t.Fatalf("without the texts: %+v", ms)
 	}
 }
+
+// A product announcement: each recipient gets the card in their language with the Buy button (the bot's own label) that opens the product;
+// data the bot would not read halts the broadcast instead.
+func TestAnnouncementBuyButton(t *testing.T) {
+	b := batch(2, "fa")
+	b.Recipients[1].Language = "en"
+	b.BuyCallback = "an:b:p:0123456789abcdef0123456789abcdef"
+	core := &fakeCore{batches: []*corev1.BroadcastBatch{b}}
+	s := newSender()
+	w, _ := newWorker(core, s, 25)
+	w.Texts = i18n.MustLoad()
+	if _, err := w.Step(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	labels := map[int64]string{}
+	for _, m := range s.messages() {
+		if m.kb == nil || len(m.kb.InlineKeyboard) != 1 {
+			t.Fatalf("chat %d: %+v", m.chat, m)
+		}
+		buy := m.kb.InlineKeyboard[0][0]
+		if buy.CallbackData != b.BuyCallback || buy.Style != tg.StyleSuccess {
+			t.Errorf("chat %d: %+v", m.chat, buy)
+		}
+		labels[m.chat] = buy.Text
+	}
+	if labels[1] != "🛒 خرید" || labels[2] != "🛒 Buy" {
+		t.Fatalf("labels: %v", labels)
+	}
+
+	for _, bad := range []string{"wallet:m", "an:b:", "an:b:p:<x>", "an:b:" + strings.Repeat("a", 60)} {
+		b := batch(2, "en")
+		b.BuyCallback = bad
+		core := &fakeCore{batches: []*corev1.BroadcastBatch{b}}
+		s := newSender()
+		w, _ := newWorker(core, s, 25)
+		if _, err := w.Step(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+		if core.halt() == "" || len(s.messages()) != 0 {
+			t.Errorf("%q: halt %q, %d sent", bad, core.halt(), len(s.messages()))
+		}
+	}
+	if !BuyCallbackOK("an:b:l:pro:12") || !BuyCallbackOK("an:b:s:abcdefghij") {
+		t.Error("good data refused")
+	}
+}

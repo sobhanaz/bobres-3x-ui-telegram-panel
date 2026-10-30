@@ -19,6 +19,8 @@ import TabPanels from 'primevue/tabpanels'
 import Tabs from 'primevue/tabs'
 import ProductDialog from '../components/supplier/ProductDialog.vue'
 import SupplierBalance from '../components/supplier/SupplierBalance.vue'
+import AnnounceDialog from '../components/announce/AnnounceDialog.vue'
+import { useAuth } from '../stores/auth'
 import { api } from '../api'
 import { errorText } from '../errors'
 import { useList } from '../composables/useList'
@@ -31,6 +33,16 @@ import { keyPattern } from '../supplierkey'
 const { t, locale } = useI18n()
 const lang = computed(() => locale.value as Lang)
 const toast = useToast()
+
+// Announce a product on sale (the store's channel and/or private messages): broadcasts.write.
+const auth = useAuth()
+const canAnnounce = computed(() => auth.can('broadcasts.write'))
+const announcing = ref<SupplierProduct | null>(null)
+const announceOpen = ref(false)
+function openAnnounce(p: SupplierProduct) {
+  announcing.value = p
+  announceOpen.value = true
+}
 const fail = (e: unknown) => toast.add({ severity: 'error', summary: errorText(e, t).text, life: 6000 })
 
 const status = ref<SupplierStatus>({ available: true, configured: false, on: false })
@@ -286,6 +298,16 @@ onMounted(() => {
           <Column :header="t('licenses.actions')">
             <template #body="{ data: p }">
               <Button icon="pi pi-pencil" text rounded :aria-label="t('supplier.edit')" @click="editing = p" />
+              <Button
+                v-if="canAnnounce && status.on && p.enabled && p.sell_price !== null && p.listed"
+                icon="pi pi-megaphone"
+                text
+                rounded
+                class="announce"
+                :aria-label="t('announce.button')"
+                v-tooltip.top="t('announce.button')"
+                @click="openAnnounce(p)"
+              />
             </template>
           </Column>
         </DataTable>
@@ -336,6 +358,7 @@ onMounted(() => {
     </TabPanels>
   </Tabs>
 
+  <AnnounceDialog v-if="announcing" v-model:visible="announceOpen" kind="supplier" :product-id="announcing.id" :title="announcing.title[lang] || announcing.title.fa || announcing.name || announcing.id" />
   <ProductDialog v-model:visible="editVisible" :product="editing" :saving="savingProduct" @save="saveProduct" />
 
   <Dialog :visible="refunding !== null" modal :header="t('supplier.refund')" :style="{ width: '26rem' }" @update:visible="(v: boolean) => !v && (refunding = null)">

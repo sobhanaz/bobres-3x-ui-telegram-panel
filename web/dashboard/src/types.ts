@@ -530,7 +530,7 @@ export interface BroadcastItem {
   id: string
   status: 'draft' | 'scheduled' | 'running' | 'paused' | 'done' | 'cancelled'
   /** resellers: a message to resellers (the Resellers page), with its own text for each of them */
-  segment: 'all' | 'active' | 'expired' | 'never_bought' | 'resellers'
+  segment: 'all' | 'active' | 'expired' | 'never_bought' | 'resellers' | 'announce'
   language: '' | 'fa' | 'en'
   texts: LangPair
   button: { url: string; labels: LangPair } | null
