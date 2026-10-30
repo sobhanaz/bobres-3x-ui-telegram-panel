@@ -645,18 +645,34 @@ jobs:
       - name: Wait for the panel and read its admin path and key
         run: |
           set -euo pipefail
-          for _ in $(seq 120); do
-            if docker exec hiddify bash -c 'cd /opt/hiddify-manager && . .venv313/bin/activate && hiddify-panel-cli all-configs' > all-configs.out 2>/dev/null &&
-               python3 -c 'import json,sys; t=open("all-configs.out").read(); json.loads(t[t.index("{"):])' 2>/dev/null &&
-               curl -fsS -o /dev/null "http://127.0.0.1:9000/$(python3 -c 'import json; t=open("all-configs.out").read(); print(json.loads(t[t.index("{"):])["api_path"])')/api/v2/panel/info/" \
-                 -H "Hiddify-API-Key: $(python3 -c 'import json; t=open("all-configs.out").read(); print(json.loads(t[t.index("{"):])["api_key"])')"; then
-              break
+          # The panel's CLI, as the manager's own scripts run it (their helpers, the venv and
+          # the panel's configuration file); expanded inside the container.
+          # shellcheck disable=SC2016
+          cli='cd /opt/hiddify-manager && source scripts/common/utils.sh >/dev/null 2>&1; activate_python_venv >/dev/null 2>&1 || . .venv313/bin/activate;
+               export HIDDIFY_CFG_PATH="${HIDDIFY_CFG_PATH:-/opt/hiddify-manager/data/hiddify-panel/app.cfg}"; hiddify-panel-cli all-configs'
+          ok=""
+          for _ in $(seq 90); do
+            if docker exec hiddify bash -c "$cli" > all-configs.out 2> all-configs.err && grep -q '"api_key"' all-configs.out; then
+              ok=1; break
             fi
             sleep 10
           done
+          if [ -z "$ok" ]; then
+            echo "hiddify-panel-cli all-configs gave no configuration; its last error output (UUIDs hidden):"
+            tail -n 40 all-configs.err | sed -E 's/[0-9a-fA-F]{8}-[0-9a-fA-F-]{27}/<uuid>/g'
+            exit 1
+          fi
           read -r path key < <(python3 -c 'import json; t=open("all-configs.out").read(); d=json.loads(t[t.index("{"):]); print(d["api_path"], d["api_key"])')
-          rm -f all-configs.out
+          rm -f all-configs.out all-configs.err
           echo "::add-mask::$path"; echo "::add-mask::$key"
+          code=""
+          for _ in $(seq 30); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' -H "Hiddify-API-Key: $key" "http://127.0.0.1:9000/$path/api/v2/panel/info/" || true)
+            [ "$code" = 200 ] && break
+            sleep 5
+          done
+          echo "The panel's info answered HTTP $code"
+          [ "$code" = 200 ]
           echo "HIDDIFY_TEST_URL=http://127.0.0.1:9000/$path" >> "$GITHUB_ENV"
           echo "HIDDIFY_TEST_KEY=$key" >> "$GITHUB_ENV"
       - name: Adapter and provisioner against the panel
