@@ -85,8 +85,7 @@ func (s *Store) ListUsers(ctx context.Context, q querier, f UserFilter, p Page) 
 	for rows.Next() {
 		var r UserRow
 		u := &r.User
-		if err := rows.Scan(&u.ID, &u.TelegramID, &u.Username, &u.Language, &u.Role, &u.Status, &u.ReferredBy,
-			&u.CreatedAt, &u.UpdatedAt, &u.RefCode, &u.BotBlockedAt, &r.Subscriptions, &r.Orders, &total); err != nil {
+		if err := rows.Scan(append(userDest(u), &r.Subscriptions, &r.Orders, &total)...); err != nil {
 			return nil, 0, err
 		}
 		out = append(out, r)

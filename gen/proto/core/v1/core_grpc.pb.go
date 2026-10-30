@@ -72,6 +72,8 @@ const (
 	CoreService_SetUserBotBlocked_FullMethodName         = "/core.v1.CoreService/SetUserBotBlocked"
 	CoreService_ClaimBroadcastBatch_FullMethodName       = "/core.v1.CoreService/ClaimBroadcastBatch"
 	CoreService_ReportBroadcastResults_FullMethodName    = "/core.v1.CoreService/ReportBroadcastResults"
+	CoreService_AskAnnounce_FullMethodName               = "/core.v1.CoreService/AskAnnounce"
+	CoreService_SetAnnounceOptIn_FullMethodName          = "/core.v1.CoreService/SetAnnounceOptIn"
 	CoreService_SetSubscriptionLabel_FullMethodName      = "/core.v1.CoreService/SetSubscriptionLabel"
 	CoreService_GetResellerInfo_FullMethodName           = "/core.v1.CoreService/GetResellerInfo"
 	CoreService_SetResellerConfigPrefix_FullMethodName   = "/core.v1.CoreService/SetResellerConfigPrefix"
@@ -187,6 +189,10 @@ type CoreServiceClient interface {
 	SetUserBotBlocked(ctx context.Context, in *SetUserBotBlockedRequest, opts ...grpc.CallOption) (*SetUserBotBlockedResponse, error)
 	ClaimBroadcastBatch(ctx context.Context, in *ClaimBroadcastBatchRequest, opts ...grpc.CallOption) (*BroadcastBatch, error)
 	ReportBroadcastResults(ctx context.Context, in *ReportBroadcastResultsRequest, opts ...grpc.CallOption) (*BroadcastState, error)
+	// Product news: AskAnnounce claims the one question "Do you want news of new products?" (true once per customer, while announcements are
+	// on); SetAnnounceOptIn stores the answer (NOT_FOUND for an unknown user) and returns the user.
+	AskAnnounce(ctx context.Context, in *AskAnnounceRequest, opts ...grpc.CallOption) (*AskAnnounceResponse, error)
+	SetAnnounceOptIn(ctx context.Context, in *SetAnnounceOptInRequest, opts ...grpc.CallOption) (*User, error)
 	// Resellers (milestone 5).
 	SetSubscriptionLabel(ctx context.Context, in *SetSubscriptionLabelRequest, opts ...grpc.CallOption) (*Subscription, error)
 	GetResellerInfo(ctx context.Context, in *GetResellerInfoRequest, opts ...grpc.CallOption) (*ResellerInfo, error)
@@ -796,6 +802,26 @@ func (c *coreServiceClient) ReportBroadcastResults(ctx context.Context, in *Repo
 	return out, nil
 }
 
+func (c *coreServiceClient) AskAnnounce(ctx context.Context, in *AskAnnounceRequest, opts ...grpc.CallOption) (*AskAnnounceResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AskAnnounceResponse)
+	err := c.cc.Invoke(ctx, CoreService_AskAnnounce_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) SetAnnounceOptIn(ctx context.Context, in *SetAnnounceOptInRequest, opts ...grpc.CallOption) (*User, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(User)
+	err := c.cc.Invoke(ctx, CoreService_SetAnnounceOptIn_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *coreServiceClient) SetSubscriptionLabel(ctx context.Context, in *SetSubscriptionLabelRequest, opts ...grpc.CallOption) (*Subscription, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Subscription)
@@ -1197,6 +1223,10 @@ type CoreServiceServer interface {
 	SetUserBotBlocked(context.Context, *SetUserBotBlockedRequest) (*SetUserBotBlockedResponse, error)
 	ClaimBroadcastBatch(context.Context, *ClaimBroadcastBatchRequest) (*BroadcastBatch, error)
 	ReportBroadcastResults(context.Context, *ReportBroadcastResultsRequest) (*BroadcastState, error)
+	// Product news: AskAnnounce claims the one question "Do you want news of new products?" (true once per customer, while announcements are
+	// on); SetAnnounceOptIn stores the answer (NOT_FOUND for an unknown user) and returns the user.
+	AskAnnounce(context.Context, *AskAnnounceRequest) (*AskAnnounceResponse, error)
+	SetAnnounceOptIn(context.Context, *SetAnnounceOptInRequest) (*User, error)
 	// Resellers (milestone 5).
 	SetSubscriptionLabel(context.Context, *SetSubscriptionLabelRequest) (*Subscription, error)
 	GetResellerInfo(context.Context, *GetResellerInfoRequest) (*ResellerInfo, error)
@@ -1433,6 +1463,12 @@ func (UnimplementedCoreServiceServer) ClaimBroadcastBatch(context.Context, *Clai
 }
 func (UnimplementedCoreServiceServer) ReportBroadcastResults(context.Context, *ReportBroadcastResultsRequest) (*BroadcastState, error) {
 	return nil, status.Error(codes.Unimplemented, "method ReportBroadcastResults not implemented")
+}
+func (UnimplementedCoreServiceServer) AskAnnounce(context.Context, *AskAnnounceRequest) (*AskAnnounceResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AskAnnounce not implemented")
+}
+func (UnimplementedCoreServiceServer) SetAnnounceOptIn(context.Context, *SetAnnounceOptInRequest) (*User, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetAnnounceOptIn not implemented")
 }
 func (UnimplementedCoreServiceServer) SetSubscriptionLabel(context.Context, *SetSubscriptionLabelRequest) (*Subscription, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetSubscriptionLabel not implemented")
@@ -2505,6 +2541,42 @@ func _CoreService_ReportBroadcastResults_Handler(srv interface{}, ctx context.Co
 	return interceptor(ctx, in, info, handler)
 }
 
+func _CoreService_AskAnnounce_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AskAnnounceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).AskAnnounce(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_AskAnnounce_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).AskAnnounce(ctx, req.(*AskAnnounceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_SetAnnounceOptIn_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetAnnounceOptInRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).SetAnnounceOptIn(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_SetAnnounceOptIn_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).SetAnnounceOptIn(ctx, req.(*SetAnnounceOptInRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _CoreService_SetSubscriptionLabel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(SetSubscriptionLabelRequest)
 	if err := dec(in); err != nil {
@@ -3299,6 +3371,14 @@ var CoreService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ReportBroadcastResults",
 			Handler:    _CoreService_ReportBroadcastResults_Handler,
+		},
+		{
+			MethodName: "AskAnnounce",
+			Handler:    _CoreService_AskAnnounce_Handler,
+		},
+		{
+			MethodName: "SetAnnounceOptIn",
+			Handler:    _CoreService_SetAnnounceOptIn_Handler,
 		},
 		{
 			MethodName: "SetSubscriptionLabel",

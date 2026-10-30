@@ -1473,7 +1473,8 @@
       "profile": "Bot profile",
       "help": "Help screens",
       "loginapp": "Dashboard sign-in approval",
-      "wheel": "Daily wheel"
+      "wheel": "Daily wheel",
+      "an": "Product news"
     },
     "problem": {
       "bad_utf8": "The text has broken characters.",
@@ -1698,6 +1699,12 @@
           "gregorian": "Gregorian",
           "jalali": "Jalali (Persian)"
         }
+      },
+      "announce": {
+        "channel_langs": {
+          "default": "Default language",
+          "both": "Every language"
+        }
       }
     },
     "group": {
@@ -1761,6 +1768,11 @@
         "title": "Daily wheel",
         "desc": "One free spin a day for customers who have paid orders, for a chance at wallet credit.",
         "note": "The wheel stays closed until it has prizes and a daily budget. The draw is made by core, once per customer per day in store time. A prize the day's budget cannot cover is not paid and the customer's spin is not used: they are asked to come back tomorrow. Only customers spin, not resellers, staff or banned customers, and only after the paid orders you ask for (at least one). A prize is credit in the wallet, not cash: it can only be spent in the store. Off until you turn it on."
+      },
+      "announce": {
+        "title": "Product announcements",
+        "desc": "Announce a new product, with a Buy button, in the store's channel and in private messages to the customers who want product news.",
+        "note": "You announce each product by hand, with the Announce button on its page (plans, digital accounts, licenses). While this is on, the bot asks every customer once whether they want news of new products; only those who say yes get private messages, and they can change it later in the bot (🌐 Language) and in the Mini App. The bot must be an admin of the channel, allowed to post. Off until you turn it on."
       }
     },
     "field": {
@@ -2048,6 +2060,32 @@
         "min_orders": {
           "label": "Paid orders needed",
           "help": "How many paid orders a customer needs before they may spin, at least 1: an account made only to spin earns nothing. Refunded orders and orders that cost nothing do not count."
+        }
+      },
+      "announce": {
+        "enabled": {
+          "label": "Product announcements",
+          "help": "When on, staff can announce a product from its page, and the bot asks each customer once whether they want news of new products. Off by default."
+        },
+        "channel": {
+          "label": "Announcement channel",
+          "help": "The channel posts go to: {'@'}name or the -100… id of a private channel. The bot must be its admin, allowed to post messages. Empty: the first required channel."
+        },
+        "channel_langs": {
+          "label": "Language of channel posts",
+          "help": "The store's default language, or every language one under the other. Private messages are always in each customer's own language."
+        },
+        "daily_max": {
+          "label": "Announcements a day",
+          "help": "The most announcements that go out in one day of the store's time zone."
+        },
+        "quiet_start": {
+          "label": "Quiet hours start",
+          "help": "From this time (the store's time zone) nothing is announced; one sent then waits until the quiet hours end. The same start and end means no quiet hours."
+        },
+        "quiet_end": {
+          "label": "Quiet hours end",
+          "help": "Announcements that waited go out at this time."
         }
       }
     },
@@ -2514,7 +2552,8 @@
       "active": "With an active service",
       "expired": "Expired (no active service)",
       "never_bought": "Never bought",
-      "resellers": "Resellers"
+      "resellers": "Resellers",
+      "announce": "Product announcement"
     },
     "resellers": {
       "debt_only": "only those who owe",
@@ -4475,5 +4514,69 @@
       "total": "All these days",
       "empty": "Nobody has spun yet."
     }
+  },
+  "announce": {
+    "button": "Announce",
+    "title": "Announce “{name}”",
+    "off": "Product announcements are off. Switch them on in Settings (Product announcements) first.",
+    "open_settings": "Open Settings",
+    "intro": "Announcements a day at most: {n}. None between {start} and {end} (one sent then waits until {end}). The same product is not announced twice within 24 hours.",
+    "where": "Where it goes",
+    "to_channel": "The store's channel",
+    "to_private": "Private messages",
+    "no_channel": "No channel is set: set it in Settings (Product announcements) or set the required channel.",
+    "channel_default": "Posted in {lang}",
+    "channel_both": "Posted in every language, one under the other",
+    "audience": "{n} customer said yes to product news | {n} customers said yes to product news",
+    "checking_channel": "Checking the channel…",
+    "channel_problem": {
+      "no_channel": "No channel is set for announcements.",
+      "not_found": "Telegram does not know the channel {chat}, or the bot is not in it. Add the bot to the channel as an admin.",
+      "not_admin": "The bot is not an admin of {chat}. Make it an admin allowed to post messages.",
+      "not_channel": "{chat} is not a channel or a group.",
+      "cannot_post": "The bot is an admin of {chat} but may not post messages there. Allow it to post messages.",
+      "error": "The bot could not check the channel {chat}. Try again in a minute."
+    },
+    "placeholders_hint": "Each card goes out written with the product's values at that moment. Every customer gets it in their own language; the channel gets the store's default language (or every language, as Settings say).",
+    "placeholders": "Placeholders",
+    "ph": {
+      "name": "name",
+      "kind": "kind",
+      "price": "price",
+      "days": "duration",
+      "traffic": "traffic",
+      "stock": "in stock",
+      "store": "store name"
+    },
+    "preview_private": "Private message ({lang})",
+    "preview_channel": "Channel post",
+    "preview_empty": "Write the card to see it here.",
+    "preview_channel_empty": "Write the card in the channel's language to see the post here.",
+    "recent": "Last announcements of this product",
+    "status": {
+      "queued": "Waiting",
+      "sent": "Sent",
+      "cancelled": "Cancelled"
+    },
+    "channel_status": {
+      "none": "No channel post",
+      "pending": "Channel post on its way",
+      "sent": "Posted in the channel",
+      "failed": "Channel post failed"
+    },
+    "pick_target": "Pick the channel, private messages, or both.",
+    "confirm_title": "Announce this product?",
+    "confirm_channel": "It is posted in {chat}.",
+    "confirm_private": "{n} customer gets a private message. | {n} customers get a private message.",
+    "confirm_private_nobody": "No customer has said yes to product news yet, so no private message goes out.",
+    "send": "Announce",
+    "sent": "Announced: it is going out now.",
+    "queued": "It is quiet hours: the announcement goes out at {at}.",
+    "repeat_title": "Announced recently",
+    "repeat_message": "This product was announced at {at}, less than 24 hours ago. Announce it again anyway?",
+    "send_anyway": "Announce anyway",
+    "limit": "The store's daily limit of announcements ({n}) is reached for {day}. Try tomorrow, or raise the limit in Settings.",
+    "license_term": "Announce ({term})",
+    "license_aria": "Announce {tier} for a {term}"
   }
 }

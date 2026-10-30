@@ -18,7 +18,7 @@ var ErrStale = errors.New("store: changed meanwhile")
 type Broadcast struct {
 	ID           string
 	Status       string // draft | scheduled | running | paused | done | cancelled
-	Segment      string // all | active | expired | never_bought | resellers
+	Segment      string // all | active | expired | never_bought | resellers | announce
 	Language     string // "" | fa | en
 	Texts        map[string]string
 	ButtonURL    string
@@ -29,27 +29,29 @@ type Broadcast struct {
 	ResellerTierID   string
 	SettleButton     bool
 	Kind             string
-	ScheduledAt      *time.Time
-	StartedAt        *time.Time
-	FinishedAt       *time.Time
-	Total            int
-	Sent             int
-	Blocked          int
-	Failed           int
-	Unknown          int
-	Pending          int // recipients still to send (pending or claimed)
-	LastError        string
-	Version          int
-	CreatedBy        string
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
+	// BuyCallback is the callback data of the Buy button under a product announcement (segment announce; "" otherwise).
+	BuyCallback string
+	ScheduledAt *time.Time
+	StartedAt   *time.Time
+	FinishedAt  *time.Time
+	Total       int
+	Sent        int
+	Blocked     int
+	Failed      int
+	Unknown     int
+	Pending     int // recipients still to send (pending or claimed)
+	LastError   string
+	Version     int
+	CreatedBy   string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 }
 
 const broadcastCols = `b.id, b.status, b.segment, b.language, b.texts, COALESCE(b.button_url, ''), b.button_labels,
 	b.scheduled_at, b.started_at, b.finished_at, b.total, b.sent, b.blocked, b.failed, b.unknown,
 	(SELECT count(*) FROM core.broadcast_recipients r WHERE r.broadcast_id = b.id AND r.status IN ('pending', 'claimed')),
 	COALESCE(b.last_error, ''), b.version, COALESCE(b.created_by::text, ''), b.created_at, b.updated_at,
-	b.reseller_debt_only, COALESCE(b.reseller_tier_id::text, ''), b.settle_button, b.kind`
+	b.reseller_debt_only, COALESCE(b.reseller_tier_id::text, ''), b.settle_button, b.kind, COALESCE(b.buy_callback, '')`
 
 func scanBroadcast(row pgx.Row, extra ...any) (*Broadcast, error) {
 	var (
@@ -58,7 +60,7 @@ func scanBroadcast(row pgx.Row, extra ...any) (*Broadcast, error) {
 	)
 	dest := append([]any{&b.ID, &b.Status, &b.Segment, &b.Language, &texts, &b.ButtonURL, &buttons, &b.ScheduledAt,
 		&b.StartedAt, &b.FinishedAt, &b.Total, &b.Sent, &b.Blocked, &b.Failed, &b.Unknown, &b.Pending, &b.LastError,
-		&b.Version, &b.CreatedBy, &b.CreatedAt, &b.UpdatedAt, &b.ResellerDebtOnly, &b.ResellerTierID, &b.SettleButton, &b.Kind}, extra...)
+		&b.Version, &b.CreatedBy, &b.CreatedAt, &b.UpdatedAt, &b.ResellerDebtOnly, &b.ResellerTierID, &b.SettleButton, &b.Kind, &b.BuyCallback}, extra...)
 	err := row.Scan(dest...)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
@@ -91,11 +93,11 @@ func (s *Store) InsertBroadcast(ctx context.Context, q querier, b *Broadcast) er
 	texts, _ := json.Marshal(b.Texts)
 	err := q.QueryRow(ctx, `
 		INSERT INTO core.broadcasts (id, status, segment, language, texts, button_url, button_labels, created_by,
-			reseller_debt_only, reseller_tier_id, settle_button, kind)
-		VALUES ($1, 'draft', $2, $3, $4, NULLIF($5, ''), $6, NULLIF($7, '')::uuid, $8, NULLIF($9, '')::uuid, $10, $11)
+			reseller_debt_only, reseller_tier_id, settle_button, kind, buy_callback)
+		VALUES ($1, 'draft', $2, $3, $4, NULLIF($5, ''), $6, NULLIF($7, '')::uuid, $8, NULLIF($9, '')::uuid, $10, $11, NULLIF($12, ''))
 		RETURNING version, created_at, updated_at`,
 		b.ID, b.Segment, b.Language, texts, b.ButtonURL, labelsJSON(b.ButtonLabels), b.CreatedBy,
-		b.ResellerDebtOnly, b.ResellerTierID, b.SettleButton, b.Kind).
+		b.ResellerDebtOnly, b.ResellerTierID, b.SettleButton, b.Kind, b.BuyCallback).
 		Scan(&b.Version, &b.CreatedAt, &b.UpdatedAt)
 	if err != nil {
 		return fmt.Errorf("insert broadcast: %w", err)
@@ -208,6 +210,8 @@ func audienceWhere(segment string) (string, error) {
 	case "expired":
 		return base + ` AND NOT ` + active + ` AND EXISTS (SELECT 1 FROM core.subscriptions s
 			WHERE s.user_id = u.id AND s.status IN ('expired', 'depleted'))`, nil
+	case SegmentAnnounce: // the customers who said yes to product news (no answer is no)
+		return base + ` AND u.announce_optin IS TRUE`, nil
 	case "never_bought":
 		return base + ` AND NOT EXISTS (SELECT 1 FROM core.orders o WHERE o.user_id = u.id AND o.amount > 0
 			AND o.created_by IS NULL AND o.status IN ('paid', 'provisioning', 'active', 'provision_failed'))`, nil

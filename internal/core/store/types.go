@@ -16,6 +16,10 @@ type User struct {
 	UpdatedAt  time.Time
 	// BotBlockedAt: when Telegram said the user blocked the bot (nil: reachable).
 	BotBlockedAt *time.Time
+	// AnnounceOptIn is the customer's answer to "Do you want news of new products?" (nil: no answer, which is no), and AnnounceAskedAt when
+	// the bot asked them (nil: not yet; it asks once).
+	AnnounceOptIn   *bool
+	AnnounceAskedAt *time.Time
 }
 
 // Plan mirrors core.plans.

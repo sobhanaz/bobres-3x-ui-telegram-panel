@@ -22,6 +22,7 @@ import { choiceOf, goneInbounds, inboundOptions, inboundsBody, noUsableServer, s
 import { useAuth } from '../stores/auth'
 import PlanGroups from '../components/plans/PlanGroups.vue'
 import DeletedPlans from '../components/plans/DeletedPlans.vue'
+import AnnounceDialog from '../components/announce/AnnounceDialog.vue'
 import type { InboundItem, PlanGroupItem, PlanItem, ServerItem } from '../types'
 
 const { t, locale } = useI18n()
@@ -70,6 +71,14 @@ const groupOptions = computed(() => [
 const canServers = computed(() => auth.can('servers.write'))
 // Only the owner deletes a plan, and only with this button: nothing deletes one by itself.
 const canDelete = computed(() => auth.can('plans.delete'))
+// Announce a plan on sale (the store's channel and/or private messages): broadcasts.write.
+const canAnnounce = computed(() => auth.can('broadcasts.write'))
+const announcing = ref<PlanItem | null>(null)
+const announceOpen = ref(false)
+function openAnnounce(p: PlanItem) {
+  announcing.value = p
+  announceOpen.value = true
+}
 const servers = ref<ServerItem[]>([])
 const serversReady = ref(false)
 const serversError = ref('')
@@ -405,12 +414,23 @@ async function toggle(p: PlanItem, enabled: boolean) {
     <Column>
       <template #body="{ data: p }">
         <Button icon="pi pi-pencil" text rounded :aria-label="t('common.edit')" @click="edit(p)" />
+        <Button
+          v-if="canAnnounce && p.enabled && !p.is_trial && !p.is_topup"
+          icon="pi pi-megaphone"
+          text
+          rounded
+          class="announce"
+          :aria-label="t('announce.button')"
+          v-tooltip.top="t('announce.button')"
+          @click="openAnnounce(p)"
+        />
         <Button v-if="canDelete" icon="pi pi-trash" text rounded severity="danger" :aria-label="t('plan.delete')" @click="remove(p)" />
       </template>
     </Column>
   </DataTable>
 
   <DeletedPlans v-if="canDelete" @restored="load" />
+  <AnnounceDialog v-if="announcing" v-model:visible="announceOpen" kind="plan" :product-id="announcing.id" :title="announcing.name[lang] || announcing.name.en || announcing.name.fa" />
 
   <Dialog v-model:visible="editing" :header="form.id ? t('plan.edit') : t('plan.new')" modal :style="{ inlineSize: 'min(36rem, 94vw)' }" :draggable="false">
     <form class="app-form" @submit.prevent="save">

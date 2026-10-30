@@ -154,6 +154,9 @@ func userToProto(u *store.User) *corev1.User {
 		CreatedAt:  u.CreatedAt.Unix(),
 		UpdatedAt:  u.UpdatedAt.Unix(),
 		BotBlocked: u.BotBlockedAt != nil,
+		// Asked once: an answer counts as asked (one given in the Mini App before the bot asked).
+		AnnounceAsked: u.AnnounceAskedAt != nil || u.AnnounceOptIn != nil,
+		AnnounceOptin: u.AnnounceOptIn != nil && *u.AnnounceOptIn,
 	}
 	if u.ReferredBy != nil {
 		out.ReferredBy = *u.ReferredBy
