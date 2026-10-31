@@ -2,7 +2,7 @@
 // sends, and how a channel check reads. Core checks everything again (it is
 // the source of truth); this only spares staff a round trip.
 import { ApiError } from './api'
-import { asciiNumber, latinDigits } from './format'
+import { asciiNumber, isLang, LANGS, latinDigits, numberLocale, type Lang } from './format'
 import type { ChannelCheck, SettingItem } from './types'
 
 /** A value a setting does not accept: a code for settings.invalid.<code>. */
@@ -113,8 +113,8 @@ export function normalizePrizes(raw: string): string {
 }
 
 /** chancePercent writes a chance (a fraction of 1) as a percent in the language, with up to two decimals ("37.5%", "۳۷٫۵٪"). */
-export function chancePercent(fraction: number, lang: 'fa' | 'en'): string {
-  return new Intl.NumberFormat(lang === 'fa' ? 'fa-IR' : 'en-US', { style: 'percent', maximumFractionDigits: 2 }).format(fraction)
+export function chancePercent(fraction: number, lang: Lang): string {
+  return new Intl.NumberFormat(numberLocale(lang), { style: 'percent', maximumFractionDigits: 2 }).format(fraction)
 }
 
 /** Groups core may still list that are edited on another page: the
@@ -155,6 +155,24 @@ export function normalizeTime(raw: string): string {
   return m ? m[1].padStart(2, '0') + ':' + m[2] : v
 }
 
+/** parseLangs reads languages.enabled ("fa,en,ru", the default first): the
+ * known codes in order, each once; an unknown one makes it invalid. */
+export function parseLangs(raw: string): { langs: Lang[] } | { code: 'langs' | 'langs_empty' } {
+  const out: Lang[] = []
+  for (const f of raw.toLowerCase().split(/[\s,;،]+/).filter(Boolean)) {
+    if (!isLang(f) || out.includes(f)) return { code: 'langs' }
+    out.push(f)
+  }
+  return out.length ? { langs: out } : { code: 'langs_empty' }
+}
+
+/** formatLangs writes the languages customers may pick, the default first and
+ * the others in the dashboard's order (what core stores). */
+export function formatLangs(enabled: readonly Lang[], def: Lang): string {
+  const rest = LANGS.filter((l) => l !== def && enabled.includes(l))
+  return [def, ...rest].join(',')
+}
+
 /** normalize turns a typed value into what is sent: trimmed, numbers in
  * ASCII digits, a channel as @name or -100id, a time of day as HH:MM. */
 export function normalize(item: SettingItem, raw: string): string {
@@ -163,6 +181,10 @@ export function normalize(item: SettingItem, raw: string): string {
   if (item.kind === 'channel') return normalizeChannel(s)
   if (item.kind === 'time') return normalizeTime(s)
   if (item.kind === 'list') return item.key === 'wheel.prizes' ? normalizePrizes(s) : normalizeTiers(s)
+  if (item.kind === 'langs') {
+    const p = parseLangs(s)
+    return 'langs' in p ? p.langs.join(',') : s
+  }
   if (item.key === 'cashback.percent') {
     const bp = percentBP(s)
     return bp === null ? s : String(bp / 100)
@@ -240,6 +262,10 @@ export function validate(item: SettingItem, value: string, others: Record<string
       return validateText(item.key, value)
     case 'list': {
       const p = item.key === 'wheel.prizes' ? parsePrizes(value) : parseTiers(value)
+      return 'code' in p ? { code: p.code } : null
+    }
+    case 'langs': {
+      const p = parseLangs(value)
       return 'code' in p ? { code: p.code } : null
     }
   }

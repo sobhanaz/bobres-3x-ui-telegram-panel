@@ -20,7 +20,7 @@ import BroadcastStatus from '../components/broadcasts/BroadcastStatus.vue'
 import SendDialog from '../components/broadcasts/SendDialog.vue'
 import { api, ApiError } from '../api'
 import { errorText } from '../errors'
-import { dateTime, type Lang } from '../format'
+import { contentLang, dateTime, type ContentLang, type Lang } from '../format'
 import {
   blankDraft,
   bodyOf,
@@ -55,8 +55,8 @@ const loading = ref(false)
 const loadError = ref('')
 const draft = ref<Draft>(blankDraft())
 const saved = ref<Draft>(blankDraft())
-const checks = reactive<Partial<Record<Lang, TextState>>>({})
-const textProblems = reactive<Record<Lang, TextProblem[]>>({ fa: [], en: [] })
+const checks = reactive<Partial<Record<ContentLang, TextState>>>({})
+const textProblems = reactive<Record<ContentLang, TextProblem[]>>({ fa: [], en: [] })
 const fieldErrors = ref<Record<string, string>>({})
 const showAll = ref(false)
 const formError = ref('')
@@ -66,11 +66,11 @@ const stale = ref(false)
 const notSent = ref(false)
 
 const needed = computed(() => neededLangs(draft.value.language))
-const tab = ref<Lang>(lang.value)
+const tab = ref<ContentLang>(contentLang(lang.value))
 watch(
   needed,
   (n) => {
-    if (!n.includes(tab.value)) tab.value = n.includes(lang.value) ? lang.value : n[0]
+    if (!n.includes(tab.value)) tab.value = n.includes(contentLang(lang.value)) ? contentLang(lang.value) : n[0]
   },
   { immediate: true },
 )
@@ -155,9 +155,9 @@ for (const [field, get] of Object.entries(fields)) {
 
 const problems = computed(() => draftProblems(draft.value, checks))
 const anyChecking = computed(() => needed.value.some((l) => checks[l]?.checking))
-const langIssue = (l: Lang) =>
+const langIssue = (l: ContentLang) =>
   textProblems[l].length > 0 || !!fieldErrors.value['texts.' + l] || checks[l]?.ok === false || (showAll.value && problems.value.includes('texts.' + l))
-const textError = (l: Lang) => (textProblems[l].length ? '' : (fieldErrors.value['texts.' + l] ?? ''))
+const textError = (l: ContentLang) => (textProblems[l].length ? '' : (fieldErrors.value['texts.' + l] ?? ''))
 
 /** applyError puts a refused save's reasons under the fields they name. */
 function applyError(e: unknown, put: boolean) {
@@ -230,7 +230,7 @@ async function saveDraft() {
 // Send to me: the text in the language of the open tab, with the button.
 const testing = ref(false)
 const test = ref<{ outcome: TestOutcome; detail: string } | null>(null)
-const testLang = computed<Lang>(() => (needed.value.includes(tab.value) ? tab.value : needed.value[0]))
+const testLang = computed<ContentLang>(() => (needed.value.includes(tab.value) ? tab.value : needed.value[0]))
 async function sendTest() {
   const l = testLang.value
   const text = draft.value.texts[l].trim()
@@ -412,7 +412,7 @@ function back() {
       <template #title>{{ t('broadcasts.text.title') }}</template>
       <template #content>
         <p class="app-muted intro">{{ needed.length > 1 ? t('broadcasts.text.both_hint') : t('broadcasts.text.one_hint', { lang: t('texts.' + needed[0]) }) }}</p>
-        <Tabs v-if="needed.length > 1" :value="tab" @update:value="(v: string | number) => (tab = v as Lang)">
+        <Tabs v-if="needed.length > 1" :value="tab" @update:value="(v: string | number) => (tab = v as ContentLang)">
           <TabList>
             <Tab v-for="l in needed" :key="l" :value="l">
               <span class="tab-name" :class="{ issue: langIssue(l) }">

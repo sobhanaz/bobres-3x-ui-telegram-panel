@@ -11,7 +11,7 @@ import Tag from 'primevue/tag'
 import HelpEditor from './HelpEditor.vue'
 import { api, ApiError } from '../../api'
 import { errorText } from '../../errors'
-import { isolate, num, type Lang } from '../../format'
+import { contentLang, isolate, num, type ContentLang, type Lang } from '../../format'
 import { HELP_LANGS, faqSize, firstLine, maxEntries, move } from '../../help'
 import type { HelpItem, HelpKind, HelpLayout, HelpPage } from '../../types'
 
@@ -32,7 +32,7 @@ const limit = computed(() => maxEntries(props.kind, limits.value))
 const full = computed(() => items.value.length >= limit.value)
 const onCount = computed(() => items.value.filter((i) => i.enabled).length)
 const k = (name: string) => t(`help.${props.kind}.${name}`)
-const named = (it: HelpItem) => isolate(it.title[lang.value] || it.title.fa || it.title.en)
+const named = (it: HelpItem) => isolate(it.title[contentLang(lang.value)] || it.title.fa || it.title.en)
 
 const busy = ref(new Set<string>())
 async function guard(id: string, fn: () => Promise<void>) {
@@ -129,7 +129,7 @@ function openEditor(it: HelpItem | null) {
 
 // How the bot lays out the FAQ in each language, with what the questions weigh.
 const layoutText = (l: HelpLayout) => (l ? t('help.layout.' + l) : t('help.layout.none'))
-const sizeOf = (l: Lang) => faqSize(items.value, l, limits.value)
+const sizeOf = (l: ContentLang) => faqSize(items.value, l, limits.value)
 </script>
 
 <template>

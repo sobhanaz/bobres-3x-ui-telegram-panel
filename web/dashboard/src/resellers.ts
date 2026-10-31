@@ -1,7 +1,7 @@
 // Helpers for the Resellers pages: amounts as core sends them, balances and
 // debt per currency (Toman first), the price a tier gives a plan, and what
 // the forms send. Pure functions (no API, no Vue).
-import { asciiNumber, currencies, decimalOf, latinDigits, minorOf, validAmount, type Lang, type Money } from './format'
+import { asciiNumber, currencies, decimalOf, latinDigits, minorOf, numberLocale, validAmount, type Lang, type Money } from './format'
 import type { PlanItem, ResellerBalance, ResellerDetail, ResellerItem, TargetsView, TierItem, UserBrief } from './types'
 
 /** Limits core checks again. */
@@ -63,7 +63,7 @@ export function debts(rows: readonly WalletRow[]): Money[] {
 
 /** percent writes a whole percent in the language ("۲۰٪", "20%"). */
 export function percent(n: number, lang: Lang): string {
-  return new Intl.NumberFormat(lang === 'fa' ? 'fa-IR' : 'en-US', { style: 'percent', maximumFractionDigits: 0 }).format(n / 100)
+  return new Intl.NumberFormat(numberLocale(lang), { style: 'percent', maximumFractionDigits: 0 }).format(n / 100)
 }
 
 /** A reseller as the pages show it. */

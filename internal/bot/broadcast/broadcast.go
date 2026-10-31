@@ -449,7 +449,7 @@ func pick(m map[string]string, lang string) string {
 	if v := m[lang]; v != "" {
 		return v
 	}
-	for _, l := range i18n.Languages {
+	for _, l := range i18n.ContentOrder(lang) {
 		if v := m[l]; v != "" {
 			return v
 		}

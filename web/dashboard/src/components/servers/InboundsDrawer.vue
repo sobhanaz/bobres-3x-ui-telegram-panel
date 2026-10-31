@@ -11,7 +11,7 @@ import Message from 'primevue/message'
 import { api } from '../../api'
 import { errorText } from '../../errors'
 import { currentLang } from '../../i18n'
-import { isolate, num, type Lang } from '../../format'
+import { isolate, num, rtl, type Lang } from '../../format'
 import { noInbound } from '../../servers'
 import type { InboundItem, ServerItem } from '../../types'
 
@@ -76,7 +76,7 @@ const none = computed(() => !loading.value && !loadError.value && items.value.le
 <template>
   <Drawer
     v-model:visible="visible"
-    :position="currentLang() === 'fa' ? 'left' : 'right'"
+    :position="rtl(currentLang()) ? 'left' : 'right'"
     :header="t('server.inbounds_of', { name: isolate(props.server?.name ?? '') })"
     class="inbounds-drawer"
     :style="{ inlineSize: 'min(34rem, 100vw)' }"

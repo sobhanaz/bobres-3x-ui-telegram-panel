@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import en from '../locales/en.json'
 import fa from '../locales/fa.json'
+import ar from '../locales/ar.json'
+import ru from '../locales/ru.json'
+import tr from '../locales/tr.json'
 
 // Every text the dashboard asks for with t('…') or te('…') exists in both
 // catalogs. A key that is missing renders as its own path (or, behind te(),
@@ -127,6 +130,9 @@ describe('the texts the sources ask for', () => {
   const catalogs = [
     ['fa', new Set(flat(fa))],
     ['en', new Set(flat(en))],
+    ['ar', new Set(flat(ar))],
+    ['ru', new Set(flat(ru))],
+    ['tr', new Set(flat(tr))],
   ] as const
 
   it('reads the calls it should (the scan itself)', () => {
@@ -161,7 +167,7 @@ describe('the texts the sources ask for', () => {
       expect(missing, `missing from ${lang}.json`).toEqual([])
     })
     it(`finds every key-shaped literal next to the ${lang} catalog's keys`, () => {
-      const missing = [...keyShaped(sources, lang === 'fa' ? fa : en)].filter(([k]) => !DYNAMIC_OK.has(k)).map(([k, file]) => `${k} (${file})`)
+      const missing = [...keyShaped(sources, { fa, en, ar, ru, tr }[lang])].filter(([k]) => !DYNAMIC_OK.has(k)).map(([k, file]) => `${k} (${file})`)
       expect(missing, `missing from ${lang}.json`).toEqual([])
     })
     it(`has something under every key prefix a source builds on in the ${lang} catalog`, () => {

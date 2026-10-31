@@ -32,6 +32,21 @@ When it is on, a staff sign-in (a login link from the bot or from `bobres admin 
 
 The runbook is [login-approval](runbooks/login-approval.md).
 
+## Languages
+The dashboard speaks Persian and English, and in **beta** (machine-translated, awaiting a native speaker's review)
+Arabic, Russian and Turkish. The language menu in the top bar and on the sign-in page lists the five in their own words,
+the beta ones with a tag; the choice is remembered in the browser. A beta language's texts are fetched the first time it
+is chosen, so the page every staff member loads stays the size of Persian and English. Arabic turns the page right to
+left like Persian and writes Arabic-Indic digits; the three take the Gregorian calendar (the Reports page still offers
+the Jalali one); numbers, money (with the Toman's Russian plural forms) and dates follow each language's Intl rules.
+Plural texts have the forms of their language (vue-i18n rules: Russian one | few | many, Arabic six forms, Turkish one).
+Store content is still written and shown in Persian and English: a staff member in a beta language reads it in English.
+
+**Customer languages** (Settings, General; `languages.enabled`, `settings.write`) chooses the languages customers may
+pick in the bot and the Mini App: a box per language (the beta ones tagged, with a note that a native speaker should
+review them) and the default among the ticked ones. It is stored as `fa,en,ru`, the default first; at least one stays
+ticked. Default `fa,en`. The bot's admin settings leave it out.
+
 ## Pages
 1. **Overview:** revenue (only in the answer for staff with `reports.read`: support does not get it), new users, active services, expiring soon, failed provisions, gateway health (on, off, details missing, failing), panel health per server (switched-off servers are not counted).
 2. **Users:** search/filter, profile (services, orders, wallet, tickets), ban, adjust balance, impersonate-view (read-only; not built). The customer's page has a read-only **Codes** tab (for staff with `users.read`, support included): the reward codes issued to the customer and the gift codes they applied, newest first, with the code (a gift code only by its last characters: core never keeps one whole), what it is worth, its state (not used yet, used, expired, switched off), when it ends and was used, and the plan and order that gave it (a link to the order). `GET /api/v1/codes?user=<customer id>&page=&size=` (`users.read`, `user` required; 400 without it or when it is not an id, 404 for an unknown customer, a banned customer's list can be read); it is the list the customer sees in the bot and the Mini App, and holds nothing that can not be attributed to them.

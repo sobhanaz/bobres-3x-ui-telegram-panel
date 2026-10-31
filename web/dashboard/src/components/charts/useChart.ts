@@ -1,5 +1,6 @@
 import { computed, onBeforeUnmount, onMounted, ref, type Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { rtl, type Lang } from '../../format'
 
 /** useChartWidth tracks the width of the element a chart sits in. Until the
  * browser has measured it (and where nothing can be measured: a test) the
@@ -37,12 +38,12 @@ export function useReducedMotion(): Ref<boolean> {
   return reduced
 }
 
-/** useRtl says whether the dashboard reads right to left (Persian), unless a
+/** useRtl says whether the dashboard reads right to left (Persian, Arabic), unless a
  * chart is told otherwise. Time runs against the reading direction's end: the
  * oldest point is at the start side, which is the right in Persian. */
 export function useRtl(forced: () => boolean | undefined): Ref<boolean> {
   const { locale } = useI18n()
-  return computed(() => forced() ?? locale.value === 'fa')
+  return computed(() => forced() ?? rtl(locale.value as Lang))
 }
 
 let counter = 0

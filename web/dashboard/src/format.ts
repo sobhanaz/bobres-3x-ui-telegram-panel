@@ -1,17 +1,73 @@
-// Numbers, money and dates in the dashboard's language: Persian digits and
-// the Jalali calendar for fa (the browser's own Intl, no library), Latin
-// digits and Gregorian dates for en.
+// Numbers, money and dates in the dashboard's language (the browser's own
+// Intl, no library): Persian digits and the Jalali calendar for fa,
+// Arabic-Indic digits for ar, the Gregorian calendar and each language's own
+// separators for en, ar, ru and tr.
 import { reactive } from 'vue'
 import { formatDate, type Calendar } from './calendar'
 
-export type Lang = 'fa' | 'en'
+/** Lang is a language the dashboard speaks: Persian and English, and in beta
+ * (machine-translated, awaiting a native review) Arabic, Russian and Turkish. */
+export type Lang = 'fa' | 'en' | 'ar' | 'ru' | 'tr'
+
+/** ContentLang is a language a store writes its own content in (plan names,
+ * broadcasts, help pages, bot texts): Persian and English. */
+export type ContentLang = 'fa' | 'en'
+
+export const LANGS: readonly Lang[] = ['fa', 'en', 'ar', 'ru', 'tr']
+export const BETA_LANGS: readonly Lang[] = ['ar', 'ru', 'tr']
+
+const LANG_NAMES: Record<Lang, string> = { fa: 'فارسی', en: 'English', ar: 'العربية', ru: 'Русский', tr: 'Türkçe' }
+
+/** languageName is a language's name in its own words ("" stays ""; an unknown code is itself). */
+export function languageName(code: string): string {
+  return isLang(code) ? LANG_NAMES[code] : code
+}
+
+/** isLang tells a language the dashboard speaks from any other string. */
+export function isLang(v: unknown): v is Lang {
+  return typeof v === 'string' && (LANGS as readonly string[]).includes(v)
+}
+
+/** rtl: the language is written right to left (Persian, Arabic). */
+export function rtl(lang: Lang): boolean {
+  return lang === 'fa' || lang === 'ar'
+}
+
+/** contentLang is the store's language a reader of lang reads its content in:
+ * Persian for Persian, English for everyone else. */
+export function contentLang(lang: Lang): ContentLang {
+  return lang === 'fa' ? 'fa' : 'en'
+}
 
 export interface Money {
   amount: number
   currency: string
 }
 
-const numberLocale = (lang: Lang) => (lang === 'fa' ? 'fa-IR' : 'en-US')
+const numberLocales: Record<Lang, string> = { fa: 'fa-IR', en: 'en-US', ar: 'ar-u-nu-arab', ru: 'ru-RU', tr: 'tr-TR' }
+
+/** numberLocale is the Intl locale of the language's numbers. */
+export const numberLocale = (lang: Lang): string => numberLocales[lang] ?? 'en-US'
+
+/** dateLocale is the Intl locale of the language's dates: the Jalali calendar
+ * for Persian, the Gregorian one for the others. */
+export const dateLocale = (lang: Lang): string =>
+  ({ fa: 'fa-IR-u-ca-persian', en: 'en-GB', ar: 'ar-u-ca-gregory-nu-arab', ru: 'ru-RU', tr: 'tr-TR' })[lang] ?? 'en-GB'
+
+/** gregorianLocale is the Intl locale of Gregorian dates, month and weekday
+ * names in the language (Persian too, for a page set to that calendar). */
+export const gregorianLocale = (lang: Lang): string =>
+  ({ fa: 'fa-IR-u-ca-gregory', en: 'en-GB', ar: 'ar-u-ca-gregory-nu-arab', ru: 'ru-RU', tr: 'tr-TR' })[lang] ?? 'en-GB'
+
+/** calendarLocale is the Intl locale of dates in the language and a calendar
+ * (the Jalali one or the Gregorian one). */
+export const calendarLocale = (lang: Lang, calendar: 'jalali' | 'gregorian'): string => {
+  const ca = calendar === 'jalali' ? 'persian' : 'gregory'
+  return ({ fa: 'fa-IR', en: 'en-GB', ar: 'ar', ru: 'ru-RU', tr: 'tr-TR' }[lang] ?? 'en-GB') + '-u-ca-' + ca + (lang === 'ar' ? '-nu-arab' : '')
+}
+
+/** listSeparator joins the items of a list in a sentence. */
+export const listSeparator = (lang: Lang): string => (rtl(lang) ? '، ' : ', ')
 
 export function num(n: number, lang: Lang): string {
   return new Intl.NumberFormat(numberLocale(lang)).format(n)
@@ -19,16 +75,18 @@ export function num(n: number, lang: Lang): string {
 
 // Currencies BOBRES charges in, with their minor-unit scale (TON: nanoton, 9 decimals).
 const scales: Record<string, number> = { IRT: 0, USDT: 6, XTR: 0, TON: 9 }
+// A name with forms per plural category ("one|few|many") takes the one its amount needs.
 const names: Record<string, Record<Lang, string>> = {
-  IRT: { fa: 'تومان', en: 'Toman' },
-  USDT: { fa: 'تتر', en: 'USDT' },
-  XTR: { fa: 'ستاره', en: 'Stars' },
-  TON: { fa: 'تون', en: 'TON' },
+  IRT: { fa: 'تومان', en: 'Toman', ar: 'تومان', ru: 'томан|томана|томанов|томана', tr: 'Toman' },
+  USDT: { fa: 'تتر', en: 'USDT', ar: 'USDT', ru: 'USDT', tr: 'USDT' },
+  XTR: { fa: 'ستاره', en: 'Stars', ar: 'نجوم', ru: 'Stars', tr: 'Stars' },
+  TON: { fa: 'تون', en: 'TON', ar: 'TON', ru: 'TON', tr: 'TON' },
 }
+const ruCategories = ['one', 'few', 'many', 'other']
 
 // The store's own name for Toman (Branding page), per language; "" = the
 // default above. Reactive, so amounts already on screen follow a change.
-const irtNames = reactive<Record<Lang, string>>({ fa: '', en: '' })
+const irtNames = reactive<Record<ContentLang, string>>({ fa: '', en: '' })
 
 /** setCurrencyNames sets how Toman is written in each language (empty or
  * missing = the default name). */
@@ -37,9 +95,19 @@ export function setCurrencyNames(custom: { fa?: string; en?: string }): void {
   irtNames.en = custom.en?.trim() ?? ''
 }
 
-function currencyName(currency: string, lang: Lang): string {
-  if (currency === 'IRT' && irtNames[lang]) return irtNames[lang]
-  return names[currency]?.[lang] ?? currency
+/** currencyName is a currency's name in the language for an amount (a store's
+ * own Toman name in the beta languages is its English one: "thousand Toman"
+ * changes what a price means). */
+function currencyName(currency: string, lang: Lang, value = 5): string {
+  if (currency === 'IRT') {
+    const own = lang === 'fa' ? irtNames.fa : irtNames.en
+    if (own) return own
+  }
+  const name = names[currency]?.[lang] ?? currency
+  if (!name.includes('|')) return name
+  const forms = name.split('|')
+  const i = ruCategories.indexOf(new Intl.PluralRules(numberLocale(lang)).select(Math.abs(value)))
+  return forms[i >= 0 ? i : forms.length - 1]
 }
 
 /** money writes an amount in its currency; signed adds "+" to gains (the
@@ -51,7 +119,7 @@ export function money(m: Money, lang: Lang, signed = false): string {
     maximumFractionDigits: Math.min(scale, 2),
     signDisplay: signed ? 'exceptZero' : 'auto',
   }).format(value)
-  return `${formatted} ${currencyName(m.currency, lang)}`
+  return `${formatted} ${currencyName(m.currency, lang, Number(value.toFixed(Math.min(scale, 2))))}`
 }
 
 /** percent writes whole percent in the language ("50%", "۵۰٪"). */
@@ -76,8 +144,7 @@ export function isolate(s: string): string {
 }
 
 export function dateTime(unix: number, lang: Lang): string {
-  const locale = lang === 'fa' ? 'fa-IR-u-ca-persian' : 'en-GB'
-  return new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(unix * 1000))
+  return new Intl.DateTimeFormat(dateLocale(lang), { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(unix * 1000))
 }
 
 /** ago says how long before nowMs a time was, in the language and its digits ("12 seconds ago", "۵ دقیقه پیش"):
@@ -95,8 +162,7 @@ export function ago(unix: number, nowMs: number, lang: Lang): string {
 }
 
 export function date(unix: number, lang: Lang): string {
-  const locale = lang === 'fa' ? 'fa-IR-u-ca-persian' : 'en-GB'
-  return new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(new Date(unix * 1000))
+  return new Intl.DateTimeFormat(dateLocale(lang), { dateStyle: 'medium' }).format(new Date(unix * 1000))
 }
 
 /** localDate writes a calendar date given as "2026-10-14" (a date in the
@@ -123,6 +189,9 @@ export function latinDigits(s: string): string {
 const byteUnits: Record<Lang, [string, string, string]> = {
   fa: ['مگابایت', 'گیگابایت', 'ترابایت'],
   en: ['MB', 'GB', 'TB'],
+  ar: ['ميغابايت', 'غيغابايت', 'تيرابايت'],
+  ru: ['МБ', 'ГБ', 'ТБ'],
+  tr: ['MB', 'GB', 'TB'],
 }
 
 /** bytes shows a traffic amount in MB, GB or TB (1 GB = 2^30 bytes, as the bot counts). */
@@ -154,7 +223,7 @@ export function validAmount(s: string, currency: string, signed = false): boolea
 /** planName is a plan's name in the language, or in the other one. */
 export function planName(names: Record<string, string> | undefined, lang: Lang): string {
   if (!names) return ''
-  return names[lang] || names.en || names.fa || ''
+  return names[lang] || names.en || names.fa || Object.values(names).find(Boolean) || ''
 }
 
 /** daysLeft is the whole days until a unix time (negative once past). */

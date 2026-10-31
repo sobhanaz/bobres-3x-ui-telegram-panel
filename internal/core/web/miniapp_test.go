@@ -228,6 +228,43 @@ func TestMiniAppSignIn(t *testing.T) {
 	}
 }
 
+// The app speaks only the languages the store enabled: a first visit takes
+// the customer's Telegram language when it is one of them, else the store's
+// default (the first), and a customer whose language was switched off since
+// reads the default.
+func TestMiniAppLanguagesFollowTheStore(t *testing.T) {
+	m := newMiniFixture(t, true)
+	lang := func(tg int64) string {
+		u, err := m.st.GetUserByTelegramID(context.Background(), m.st.Conn(), tg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return u.Language
+	}
+	m.signIn("tg:7:ivan:ru")
+	if got := lang(7); got != "fa" {
+		t.Errorf("Russian not enabled: %q", got)
+	}
+	m.setting(domain.SettingLanguages, "en,fa,ru,ar")
+	tok := m.signIn("tg:8:olga:ru-RU")
+	m.signIn("tg:9:ali:ar")
+	m.signIn("tg:10:mehmet:tr")
+	if lang(8) != "ru" || lang(9) != "ar" || lang(10) != "en" {
+		t.Errorf("languages: %q %q %q", lang(8), lang(9), lang(10))
+	}
+	code, out := m.call(http.MethodGet, "/api/mini/v1/me", tok, nil)
+	if code != 200 || out["user"].(map[string]any)["language"] != "ru" || fmt.Sprint(out["languages"]) != "[en fa ru ar]" {
+		t.Fatalf("me: %d %v %v", code, out["user"], out["languages"])
+	}
+	m.setting(domain.SettingLanguages, "fa,en")
+	if _, out = m.call(http.MethodGet, "/api/mini/v1/me", tok, nil); out["user"].(map[string]any)["language"] != "fa" {
+		t.Errorf("switched off: %v", out["user"])
+	}
+	if lang(8) != "ru" {
+		t.Error("the customer's choice is kept for when the language comes back")
+	}
+}
+
 func TestMiniAppSignInIsRateLimited(t *testing.T) {
 	m := newMiniFixture(t, true)
 	last := 0

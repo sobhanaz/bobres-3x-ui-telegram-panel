@@ -16,7 +16,7 @@ import TextImport from './TextImport.vue'
 import { api } from '../../api'
 import { errorText } from '../../errors'
 import { useAuth } from '../../stores/auth'
-import { num, type Lang } from '../../format'
+import { listSeparator, num, type ContentLang, type Lang } from '../../format'
 import { TEXT_LANGS, currentText, filterTexts, isChanged } from '../../branding'
 import type { TextItem } from '../../types'
 
@@ -27,7 +27,7 @@ const lang = computed(() => locale.value as Lang)
 const auth = useAuth()
 
 const items = ref<TextItem[]>([])
-const languages = ref<Lang[]>([...TEXT_LANGS])
+const languages = ref<ContentLang[]>([...TEXT_LANGS])
 const loading = ref(false)
 const loadError = ref('')
 let loaded = false
@@ -164,7 +164,7 @@ function saved(it: TextItem) {
         <i v-if="it.editable === false" v-tooltip="t('texts.owner_only')" class="pi pi-lock app-muted lock" :aria-label="t('texts.owner_only')" />
         <Tag v-if="isChanged(it)" :value="t('texts.changed')" severity="info" />
         <Tag v-else :value="t('texts.default')" severity="secondary" />
-        <div v-if="isChanged(it)" class="app-muted small langs">{{ changedLangs(it).map((l) => t('texts.' + l)).join(lang === 'fa' ? '، ' : ', ') }}</div>
+        <div v-if="isChanged(it)" class="app-muted small langs">{{ changedLangs(it).map((l) => t('texts.' + l)).join(listSeparator(lang)) }}</div>
       </template>
     </Column>
     <Column>

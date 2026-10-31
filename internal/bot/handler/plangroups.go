@@ -65,7 +65,7 @@ func localized(r *req, texts map[string]string) string {
 	if v := strings.TrimSpace(texts[r.lang]); v != "" {
 		return v
 	}
-	for _, l := range i18n.Languages {
+	for _, l := range i18n.ContentOrder(r.lang) {
 		if v := strings.TrimSpace(texts[l]); v != "" {
 			return v
 		}

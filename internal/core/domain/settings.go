@@ -35,7 +35,13 @@ const (
 	// KindList is a list of rows kept as compact JSON text (the reseller targets' tiers, the wheel's prizes): the dashboard has an editor for it,
 	// the bot's admin menu leaves it out.
 	KindList = "list"
+	// KindLangs is a list of language codes, the first being the default (languages.enabled): the dashboard has an editor for it, the bot's
+	// admin menu leaves it out.
+	KindLangs = "langs"
 )
+
+// SettingLanguages are the languages customers may pick in the bot and the Mini App, the store's default first (i18n.ParseEnabled).
+const SettingLanguages = "languages.enabled"
 
 // Dashboard permissions a setting needs (the web package's names).
 const (
@@ -94,6 +100,8 @@ type SettingSpec struct {
 var SettingSpecs = []SettingSpec{
 	{Key: "general.timezone", Group: "general", Kind: KindTZ, Perm: permSettings,
 		Help: "time zone of the dates the bot shows, e.g. Asia/Tehran (empty = the server's BOBRES_TIMEZONE)"},
+	{Key: SettingLanguages, Group: "general", Kind: KindLangs, Perm: permSettings, Default: i18n.DefaultEnabled,
+		Help: "the languages customers may pick in the bot and the Mini App, separated by commas, the store's default first: fa, en, and in beta (machine-translated, awaiting a native review) ar, ru, tr. A customer whose Telegram language is one of them gets it, anyone else the default; a language taken off moves its customers to the default (default fa,en)"},
 	{Key: "general.bot_profile", Group: "general", Kind: KindBool, Perm: permSettings, Default: "true",
 		Help: "true = the bot keeps its Telegram profile (menu commands, description, short description) in Persian and English from its texts, and its profile photo from the Branding page; false = the bot takes back its Persian and English texts and the staff menus (the photo stays), and you set them in @BotFather"},
 	{Key: "branding.sub_page.enabled", Group: "general", Kind: KindBool, Perm: permBranding, Default: "true",
@@ -533,8 +541,32 @@ func NormalizeSetting(key, value string) (string, error) {
 			return bad(err.Error())
 		}
 		value = list
+	case KindLangs:
+		langs, err := normalizeLangs(value)
+		if err != nil {
+			return bad(err.Error())
+		}
+		value = langs
 	}
 	return value, nil
+}
+
+// normalizeLangs checks a list of language codes (KindLangs) and writes it the way it is stored: "fa,en,ru", the default first.
+func normalizeLangs(value string) (string, error) {
+	var out []string
+	for _, f := range strings.FieldsFunc(strings.ToLower(value), func(r rune) bool { return r == ',' || r == ' ' || r == ';' || r == '،' }) {
+		switch {
+		case !slices.Contains(i18n.All, f):
+			return "", fmt.Errorf("unknown language %q: use %s", f, strings.Join(i18n.All, ", "))
+		case slices.Contains(out, f):
+			return "", fmt.Errorf("%s is listed twice", f)
+		}
+		out = append(out, f)
+	}
+	if len(out) == 0 {
+		return "", errors.New("at least one language")
+	}
+	return strings.Join(out, ","), nil
 }
 
 // normalizeList checks a list setting (KindList) and writes it the way it is stored: compact JSON, in order, "" for an empty list.

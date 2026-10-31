@@ -15,7 +15,7 @@ import BroadcastText from '../broadcasts/BroadcastText.vue'
 import TextPreview from '../branding/TextPreview.vue'
 import { api, ApiError } from '../../api'
 import { errorText } from '../../errors'
-import { dateTime, num, type Lang } from '../../format'
+import { contentLang, dateTime, num, type ContentLang, type Lang } from '../../format'
 import { splitProblems, testOutcome, timing, type TestOutcome } from '../../broadcasts'
 import {
   ANNOUNCE_LANGS,
@@ -50,8 +50,8 @@ const reply = ref<AnnounceDraftReply | null>(null)
 const loadError = ref('')
 const loading = ref(false)
 const draft = ref<AnnounceDraft>({ texts: { fa: '', en: '' }, channel: false, private: true })
-const tab = ref<Lang>(viewer.value)
-const textProblems = reactive<Record<Lang, TextProblem[]>>({ fa: [], en: [] })
+const tab = ref<ContentLang>(contentLang(viewer.value))
+const textProblems = reactive<Record<ContentLang, TextProblem[]>>({ fa: [], en: [] })
 const fieldErrors = ref<Record<string, string>>({})
 const formError = ref('')
 const showAll = ref(false)
@@ -73,7 +73,7 @@ async function load() {
     const r = await api<AnnounceDraftReply>('GET', `/announcements/draft?kind=${encodeURIComponent(props.kind)}&id=${encodeURIComponent(props.productId)}`)
     reply.value = r
     draft.value = draftFrom(r)
-    tab.value = viewer.value
+    tab.value = contentLang(viewer.value)
     repreview(0)
     if (r.settings.enabled && r.settings.channel) void checkChannel()
   } catch (e) {
@@ -304,7 +304,7 @@ watch(visible, (v) => v && void load(), { immediate: true })
           <span class="app-muted">{{ t('announce.ph.' + p) }}</span>
         </Button>
       </div>
-      <Tabs :value="tab" @update:value="(v: string | number) => (tab = v as Lang)">
+      <Tabs :value="tab" @update:value="(v: string | number) => (tab = v as ContentLang)">
         <TabList>
           <Tab v-for="l in ANNOUNCE_LANGS" :key="l" :value="l">{{ t('texts.' + l) }}</Tab>
         </TabList>

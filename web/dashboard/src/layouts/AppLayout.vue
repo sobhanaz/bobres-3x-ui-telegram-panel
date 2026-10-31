@@ -10,9 +10,10 @@ import Tag from 'primevue/tag'
 import { useAuth } from '../stores/auth'
 import { useUi } from '../stores/ui'
 import { groups, visibleSections } from '../sections'
-import { setLang, currentLang } from '../i18n'
+import { currentLang } from '../i18n'
+import LangMenu from '../components/LangMenu.vue'
 import { applyDocumentBrand } from '../theme'
-import { num, type Lang } from '../format'
+import { num, rtl, type Lang } from '../format'
 import { loadCounts, pollEvery, poller, ticketCounts } from '../support'
 import { chipOf, chipSeverityOf, poweredBy } from '../license'
 
@@ -74,9 +75,6 @@ async function logout() {
   await router.push({ name: 'login' })
 }
 
-function toggleLang() {
-  setLang(currentLang() === 'fa' ? 'en' : 'fa')
-}
 </script>
 
 <template>
@@ -101,7 +99,7 @@ function toggleLang() {
       </nav>
     </aside>
 
-    <Drawer v-model:visible="drawer" :position="currentLang() === 'fa' ? 'right' : 'left'" class="mobile-nav" :header="auth.brand">
+    <Drawer v-model:visible="drawer" :position="rtl(currentLang()) ? 'right' : 'left'" class="mobile-nav" :header="auth.brand">
       <nav>
         <template v-for="g in nav" :key="g.group">
           <div class="group">{{ t('nav.group.' + g.group) }}</div>
@@ -124,7 +122,7 @@ function toggleLang() {
         <RouterLink v-if="licenseChip" :to="{ name: 'system', query: { tab: 'license' } }" class="license-chip" :aria-label="chipAria(licenseChip)">
           <Tag :severity="chipSeverityOf(licenseChip)" :value="chipText(licenseChip)" icon="pi pi-key" />
         </RouterLink>
-        <Button :label="t('lang.switch')" text size="small" @click="toggleLang" />
+        <LangMenu />
         <Button :icon="themeIcon" text rounded :aria-label="t('theme.' + ui.theme)" v-tooltip.bottom="t('theme.' + ui.theme)" @click="ui.cycleTheme()" />
         <Button text class="user-btn" @click="userMenu?.toggle($event)">
           <i class="pi pi-user" aria-hidden="true" />

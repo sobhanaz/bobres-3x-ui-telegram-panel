@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { gregorianLocale, type Lang } from '../../format'
 import Button from 'primevue/button'
 import Card from 'primevue/card'
 import Skeleton from 'primevue/skeleton'
@@ -42,7 +43,7 @@ onMounted(() => {
 onBeforeUnmount(() => clearInterval(timer))
 
 const time = () =>
-  at.value ? new Intl.DateTimeFormat(locale.value === 'fa' ? 'fa-IR' : 'en-GB', { timeStyle: 'short' }).format(at.value) : ''
+  at.value ? new Intl.DateTimeFormat(gregorianLocale(locale.value as Lang), { timeStyle: 'short' }).format(at.value) : ''
 // nothing to show in the quiet card: still loading the first time is not "nothing"
 const hidden = () => props.quiet && !loading.value && !balanceLine(answer.value)
 </script>

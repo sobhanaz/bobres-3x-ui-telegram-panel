@@ -278,7 +278,7 @@ export interface AuditItem {
 export interface SettingItem {
   key: string
   group: string
-  kind: 'text' | 'int' | 'bool' | 'enum' | 'tz' | 'time' | 'url' | 'channel' | 'color' | 'list'
+  kind: 'text' | 'int' | 'bool' | 'enum' | 'tz' | 'time' | 'url' | 'channel' | 'color' | 'list' | 'langs'
   value: string
   default: string
   options: string[]

@@ -6,7 +6,7 @@ import TextPreview from '../branding/TextPreview.vue'
 import ProblemList from '../branding/ProblemList.vue'
 import { api } from '../../api'
 import { textLength } from '../../branding'
-import { isolate, num, type Lang } from '../../format'
+import { isolate, num, type ContentLang, type Lang } from '../../format'
 import { MAX_TEXT, problemsFor, timing, type TextState } from '../../broadcasts'
 import type { TextCheck, TextProblem } from '../../types'
 
@@ -18,7 +18,7 @@ const value = defineModel<string>({ required: true })
 // page (one written for a reseller).
 const props = withDefaults(
   defineProps<{
-    lang: Lang
+    lang: ContentLang
     problems?: TextProblem[]
     error?: string
     buttonLabel?: string

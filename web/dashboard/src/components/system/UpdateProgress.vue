@@ -5,7 +5,7 @@ import Button from 'primevue/button'
 import Card from 'primevue/card'
 import Message from 'primevue/message'
 import Tag from 'primevue/tag'
-import { dateTime, isolate, type Lang } from '../../format'
+import { dateTime, isolate, rtl, type Lang } from '../../format'
 import { isFinal, isPrerelease, stepList, type RunPhase, type StepState, type UpdateRunView } from '../../updates'
 
 // Where an update is: asked for, being made step by step, or over, with what the
@@ -26,7 +26,7 @@ const emit = defineEmits<{ reload: []; dismiss: [] }>()
 const { t, locale } = useI18n()
 const lang = computed(() => locale.value as Lang)
 // the arrow from the old version to the new one points the way the line reads
-const arrowIcon = computed(() => (locale.value === 'fa' ? 'pi-arrow-left' : 'pi-arrow-right'))
+const arrowIcon = computed(() => (rtl(locale.value as Lang) ? 'pi-arrow-left' : 'pi-arrow-right'))
 
 const open = ref(false)
 const phase = computed<RunPhase>(() => props.view.phase)
