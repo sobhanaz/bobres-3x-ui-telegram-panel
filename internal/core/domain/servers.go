@@ -37,7 +37,7 @@ type ServerAdmin interface {
 // only says one is stored.
 type Server struct {
 	ID, Name, BaseURL, SubBaseURL string
-	Kind                          string // KindXUI | KindMarzban
+	Kind                          string // KindXUI | KindMarzban | KindSUI | KindHiddify
 	Enabled, AllowPrivate         bool
 	Weight                        int32
 	Managed                       string // env | dashboard
@@ -75,7 +75,8 @@ func (l *ServerList) Find(id string) (*Server, error) {
 // the host it was entered for).
 type ServerInput struct {
 	// Kind is the panel software, fixed when the server is added; empty is
-	// 3x-ui. For Marzban, Token is "username:password" of an admin.
+	// 3x-ui. For Marzban, Token is "username:password" of an admin; for S-UI the
+	// API token the panel made; for Hiddify the API key, an admin's UUID.
 	Kind                             string
 	Name, BaseURL, SubBaseURL, Token string
 	Weight                           int32
@@ -112,7 +113,49 @@ type Inbound struct {
 const (
 	KindXUI     = "xui"
 	KindMarzban = "marzban"
+	KindSUI     = "sui"     // S-UI (a sing-box panel)
+	KindHiddify = "hiddify" // Hiddify Manager
 )
+
+// kindField is the refusal of a kind BOBRES does not know.
+var kindField = &FieldError{"kind", "3x-ui, Marzban, S-UI or Hiddify"}
+
+// validKind reports a panel kind BOBRES works with.
+func validKind(k string) bool {
+	return k == KindXUI || k == KindMarzban || k == KindSUI || k == KindHiddify
+}
+
+// hiddifyKey reports a Hiddify API key: an admin's UUID (8-4-4-4-12 hexadecimal digits).
+func hiddifyKey(t string) bool {
+	if len(t) != 36 {
+		return false
+	}
+	for i, r := range t {
+		switch {
+		case i == 8 || i == 13 || i == 18 || i == 23:
+			if r != '-' {
+				return false
+			}
+		case (r < '0' || r > '9') && (r < 'a' || r > 'f') && (r < 'A' || r > 'F'):
+			return false
+		}
+	}
+	return true
+}
+
+// tokenFormat checks a token that was sent against what the kind takes; nil
+// when it fits (or none was sent).
+func tokenFormat(kind, token string) error {
+	switch {
+	case token == "":
+		return nil
+	case kind == KindMarzban && !validMarzbanLogin(token):
+		return &FieldError{"token", "the admin's username and password as username:password"}
+	case kind == KindHiddify && !hiddifyKey(token):
+		return &FieldError{"token", "the API key: the admin's UUID, such as 0b5e6a3c-2f4d-4e8a-9c1b-7d6e5f4a3b2c"}
+	}
+	return nil
+}
 
 // Server limits (the provisioner checks them again).
 const (
@@ -139,12 +182,11 @@ func normalizeServer(in ServerInput, adding bool) (ServerInput, error) {
 	in.BaseURL = strings.TrimSpace(in.BaseURL)
 	in.SubBaseURL = strings.TrimSpace(in.SubBaseURL)
 	in.Token = strings.TrimSpace(in.Token)
-	switch in.Kind {
-	case "":
+	if in.Kind == "" {
 		in.Kind = KindXUI
-	case KindXUI, KindMarzban:
-	default:
-		return in, &FieldError{"kind", "3x-ui or Marzban"}
+	}
+	if !validKind(in.Kind) {
+		return in, kindField
 	}
 	if in.Name == "" || utf8.RuneCountInString(in.Name) > maxServerName || hasControl(in.Name) {
 		return in, &FieldError{"name", fmt.Sprintf("a name of 1 to %d characters on one line", maxServerName)}
@@ -163,10 +205,15 @@ func normalizeServer(in ServerInput, adding bool) (ServerInput, error) {
 		return in, &FieldError{"token", "the API token is one word without spaces"}
 	case adding && in.Token == "" && in.Kind == KindMarzban:
 		return in, &FieldError{"token", "the admin's username and password are required, as username:password"}
+	case adding && in.Token == "" && in.Kind == KindSUI:
+		return in, &FieldError{"token", "the panel's API token is required (S-UI: Admins > API Tokens)"}
+	case adding && in.Token == "" && in.Kind == KindHiddify:
+		return in, &FieldError{"token", "the API key is required: the admin's UUID (in the admin's panel link)"}
 	case adding && in.Token == "":
 		return in, &FieldError{"token", "the panel's API token is required (3x-ui: Settings > Security)"}
-	case in.Kind == KindMarzban && in.Token != "" && !validMarzbanLogin(in.Token):
-		return in, &FieldError{"token", "the admin's username and password as username:password"}
+	}
+	if err := tokenFormat(in.Kind, in.Token); err != nil {
+		return in, err
 	}
 	if adding && in.Weight == 0 {
 		in.Weight = defaultWeight
@@ -286,8 +333,8 @@ func (s *Service) UpdateServer(ctx context.Context, actor *store.User, sa Server
 		return nil, err
 	}
 	in.Kind = cmp.Or(before.Kind, KindXUI) // fixed when the server was added
-	if in.Kind == KindMarzban && in.Token != "" && !validMarzbanLogin(in.Token) {
-		return nil, &FieldError{"token", "the admin's username and password as username:password"}
+	if err := tokenFormat(in.Kind, in.Token); err != nil {
+		return nil, err
 	}
 	if privateNeedsOwner(actor, in.AllowPrivate, in.BaseURL, in.Token, before) {
 		return nil, ErrPrivateOwnerOnly
@@ -388,12 +435,11 @@ func (s *Service) TestServer(ctx context.Context, actor *store.User, sa ServerAd
 	if hasSpace(p.Token) || len(p.Token) > maxTokenLen {
 		return nil, &FieldError{"token", "the API token is one word without spaces"}
 	}
-	switch p.Kind {
-	case "":
+	if p.Kind == "" {
 		p.Kind = KindXUI
-	case KindXUI, KindMarzban:
-	default:
-		return nil, &FieldError{"kind", "3x-ui or Marzban"}
+	}
+	if !validKind(p.Kind) {
+		return nil, kindField
 	}
 	var stored *Server
 	if p.ID != "" {
@@ -409,10 +455,10 @@ func (s *Service) TestServer(ctx context.Context, actor *store.User, sa ServerAd
 			p.BaseURL, p.AllowPrivate = stored.BaseURL, stored.AllowPrivate
 		}
 	} else if p.Token == "" {
-		return nil, &FieldError{"token", "the panel's API token (3x-ui) or admin username:password (Marzban) is required"}
+		return nil, &FieldError{"token", "the panel's API token (3x-ui, S-UI), admin username:password (Marzban) or API key (Hiddify) is required"}
 	}
-	if p.Kind == KindMarzban && p.Token != "" && !validMarzbanLogin(p.Token) {
-		return nil, &FieldError{"token", "the admin's username and password as username:password"}
+	if err := tokenFormat(p.Kind, p.Token); err != nil {
+		return nil, err
 	}
 	if err := checkPanelURL(p.BaseURL, p.AllowPrivate); err != nil {
 		return nil, err

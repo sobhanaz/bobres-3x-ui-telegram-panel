@@ -17,9 +17,11 @@ import (
 
 	"github.com/skip2/go-qrcode"
 	provisionerv1 "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/provisioner/v1"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/hiddify"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/marzban"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/provisioner/adapter"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/provisioner/store"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/sui"
 	buuid "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/uuid"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/xui"
 	"google.golang.org/grpc"
@@ -88,12 +90,16 @@ func (s *Server) clientOptions(allowPrivate bool) []xui.Option {
 	return opts
 }
 
-// newAdapter builds the adapter of a panel kind. token is the 3x-ui API token,
-// or "username:password" of a Marzban admin.
+// newAdapter builds the adapter of a panel kind. token is the 3x-ui or S-UI API
+// token, "username:password" of a Marzban admin, or a Hiddify admin's UUID.
 func newAdapter(kind, baseURL, token string, opts ...xui.Option) (adapter.PanelAdapter, error) {
 	switch kind {
 	case store.KindMarzban:
 		return adapter.NewMarzban(baseURL, token, opts...)
+	case store.KindSUI:
+		return adapter.NewSUI(baseURL, token, opts...)
+	case store.KindHiddify:
+		return adapter.NewHiddify(baseURL, token, opts...)
 	case store.KindXUI, "":
 		return adapter.NewXUIv3(baseURL, token, opts...)
 	}
@@ -250,14 +256,16 @@ func chosenInbounds(sel []*provisionerv1.InboundSelection, serverID string) []in
 }
 
 // noSuchClient reports the panel's answer to a lookup of a client it does
-// not have. Marzban answers HTTP 404. 3x-ui: "record not found" inside a successful HTTP response, which is
+// not have. Marzban answers HTTP 404; the S-UI and Hiddify adapters say so when
+// the panel's listing (or, Hiddify, its 404 for the user's UUID) has no such
+// client. 3x-ui: "record not found" inside a successful HTTP response, which is
 // how 3x-ui reports business errors (the xui client says "client ... not
 // found" for an empty record). Anything else says nothing about the client:
 // unreachable, a server error, a refused token, a page that is not the
 // panel's, or another refusal inside HTTP 200, such as "database is locked"
 // from a busy panel.
 func noSuchClient(err error) bool {
-	if marzban.IsNotFound(err) {
+	if marzban.IsNotFound(err) || sui.IsNotFound(err) || hiddify.IsNotFound(err) {
 		return true
 	}
 	var ae *xui.APIError
@@ -274,7 +282,7 @@ func noSuchClient(err error) bool {
 func answered(err error) bool {
 	var ae *xui.APIError
 	var me *marzban.APIError
-	return errors.As(err, &ae) || errors.As(err, &me)
+	return errors.As(err, &ae) || errors.As(err, &me) || sui.Answered(err) || hiddify.Answered(err)
 }
 
 // CreateClient provisions a subscription on a panel. It is safe to retry: an
@@ -452,7 +460,7 @@ func (s *Server) createOnPanel(ctx context.Context, req *provisionerv1.CreateCli
 	if gc, ok := a.(adapter.GroupedCreator); ok {
 		createErr = gc.CreateClientInGroup(ctx, group, email, subID, expiryMs, req.GetTrafficBytes(), inboundIDs)
 	} else {
-		createErr = a.CreateClient(ctx, email, subID, expiryMs, req.GetTrafficBytes(), inboundIDs) // Marzban: no groups
+		createErr = a.CreateClient(ctx, email, subID, expiryMs, req.GetTrafficBytes(), inboundIDs) // Marzban, Hiddify: no groups
 	}
 	if err := createErr; err != nil {
 		existing, lookupErr := a.ClientSubID(ctx, email)
@@ -715,7 +723,7 @@ func (s *Server) RecreateClient(ctx context.Context, req *provisionerv1.Recreate
 	if gc, ok := a.(adapter.GroupedCreator); ok {
 		createErr = gc.CreateClientInGroup(ctx, cm.PanelGroup, cm.Email, subID, expiryMs, req.GetTrafficTotalBytes(), inboundIDs)
 	} else {
-		createErr = a.CreateClient(ctx, cm.Email, subID, expiryMs, req.GetTrafficTotalBytes(), inboundIDs) // Marzban: no groups
+		createErr = a.CreateClient(ctx, cm.Email, subID, expiryMs, req.GetTrafficTotalBytes(), inboundIDs) // Marzban, Hiddify: no groups
 	}
 	if createErr != nil {
 		return nil, s.panelError("panel create", createErr)

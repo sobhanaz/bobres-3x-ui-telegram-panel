@@ -14,7 +14,7 @@ import InboundsDrawer from '../components/servers/InboundsDrawer.vue'
 import { api, ApiError } from '../api'
 import { errorText } from '../errors'
 import { dateTime, isolate, num, planName, type Lang } from '../format'
-import { healthOf, healthSeverity, nearFull } from '../servers'
+import { healthOf, healthSeverity, nearFull, panelKindOf } from '../servers'
 import type { ServerItem, ServersReply } from '../types'
 
 // The 3x-ui panels services are created on (owner and admin): their health,
@@ -122,7 +122,7 @@ function remove(s: ServerItem) {
         <bdi class="server-name">{{ s.name }}</bdi>
         <div class="app-muted small app-ltr url">{{ s.base_url }}</div>
         <div class="tags">
-          <Tag :value="t('server.kind_' + (s.kind === 'marzban' ? 'marzban' : 'xui'))" severity="secondary" class="kind" />
+          <Tag :value="t('server.kind_' + panelKindOf(s.kind))" severity="secondary" class="kind" />
           <Tag v-if="!s.has_token" :value="t('server.no_token')" severity="danger" />
           <Tag v-if="s.allow_private" :value="t('server.private')" severity="warn" />
         </div>

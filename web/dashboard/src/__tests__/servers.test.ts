@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import en from '../locales/en.json'
 import fa from '../locales/fa.json'
 import {
   addressChanged,
@@ -8,6 +9,7 @@ import {
   choiceOf,
   goneInbounds,
   healthOf,
+  hiddifyKeyOK,
   hostOf,
   inboundOptions,
   inboundsBody,
@@ -16,6 +18,8 @@ import {
   needsToken,
   noInbound,
   noUsableServer,
+  PANEL_KINDS,
+  panelKindOf,
   panelURLProblem,
   privateNeedsOwner,
   serverBody,
@@ -165,6 +169,32 @@ describe('server form', () => {
     expect(testBody(m)).toMatchObject({ kind: 'marzban' })
     expect(serverFormOf({ ...server({ id: sid1 }), kind: 'marzban' }).kind).toBe('marzban')
     expect(serverFormOf(server({ id: sid1 })).kind).toBe('xui')
+  })
+
+  it('offers S-UI and Hiddify: an S-UI API token, and a Hiddify admin UUID as the key', () => {
+    expect(PANEL_KINDS).toEqual(['xui', 'marzban', 'sui', 'hiddify'])
+    const s = { ...blankServer(), kind: 'sui' as const, name: 'sui', baseURL: 'https://s.example.com:2095/app', token: 'AbC123token' }
+    expect(serverProblems(s, null)).toEqual([])
+    expect(serverProblems({ ...s, token: 'two words' }, null)).toEqual(['token'])
+    expect(serverBody(s)).toMatchObject({ kind: 'sui', token: 'AbC123token' })
+    const hiddifyKey = '0B5E6A3C-2f4d-4e8a-9c1b-7d6e5f4a3b2c' // gitleaks:allow test fixture
+    const h = { ...blankServer(), kind: 'hiddify' as const, name: 'hd', baseURL: 'https://h.example.com/AdminPath', token: hiddifyKey }
+    expect(serverProblems(h, null)).toEqual([])
+    for (const bad of ['admin:pw', 'not-a-uuid', '0b5e6a3c-2f4d-4e8a-9c1b-7d6e5f4a3b2']) expect(serverProblems({ ...h, token: bad }, null)).toEqual(['token'])
+    expect(serverProblems({ ...h, token: '' }, { has_token: true, base_url: 'https://h.example.com/AdminPath' })).toEqual([])
+    expect(testBody(h)).toMatchObject({ kind: 'hiddify', token: hiddifyKey })
+    expect(serverFormOf({ ...server({ id: sid1 }), kind: 'sui' }).kind).toBe('sui')
+    expect(serverFormOf({ ...server({ id: sid1 }), kind: 'hiddify' }).kind).toBe('hiddify')
+    expect(serverFormOf({ ...server({ id: sid1 }), kind: 'something-new' }).kind).toBe('xui')
+    expect(panelKindOf(undefined)).toBe('xui')
+    expect(hiddifyKeyOK('0b5e6a3c-2f4d-4e8a-9c1b-7d6e5f4a3b2c')).toBe(true)
+    // Every kind has its name and help in both languages.
+    for (const k of PANEL_KINDS) expect(fa.server['kind_' + k as 'kind_xui']).toBeTruthy()
+    for (const key of ['token_help_sui', 'api_key', 'api_key_help', 'base_url_help_sui', 'base_url_help_hiddify', 'sub_url_help_sui', 'sub_url_help_hiddify'] as const) {
+      expect(fa.server[key]).toBeTruthy()
+      expect(en.server[key]).toBeTruthy()
+    }
+    expect(fa.server.invalid.api_key).toBeTruthy()
   })
 
   it('tests the typed connection, or a saved server’s with its stored token', () => {

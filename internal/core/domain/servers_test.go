@@ -807,6 +807,27 @@ func TestNormalizeServerKind(t *testing.T) {
 	if _, err := normalizeServer(withToken(base, KindMarzban, ""), false); err != nil {
 		t.Errorf("marzban edit without token: %v", err)
 	}
+	// S-UI: an API token, one word.
+	if _, err := normalizeServer(withToken(base, KindSUI, "abcDEF123"), true); err != nil {
+		t.Errorf("s-ui token refused: %v", err)
+	}
+	for _, tok := range []string{"", "two words"} {
+		if _, err := normalizeServer(withToken(base, KindSUI, tok), true); err == nil {
+			t.Errorf("s-ui token %q accepted", tok)
+		}
+	}
+	// Hiddify: the API key is an admin's UUID.
+	if _, err := normalizeServer(withToken(base, KindHiddify, "0B5E6A3C-2f4d-4e8a-9c1b-7d6e5f4a3b2c"), true); err != nil {
+		t.Errorf("hiddify key refused: %v", err)
+	}
+	for _, tok := range []string{"", "admin:pw", "0b5e6a3c-2f4d-4e8a-9c1b-7d6e5f4a3b2", "0b5e6a3c-2f4d-4e8a-9c1b-7d6e5f4a3b2g", "0b5e6a3c2f4d-4e8a-9c1b-7d6e5f4a3b2cc"} {
+		if _, err := normalizeServer(withToken(base, KindHiddify, tok), true); err == nil {
+			t.Errorf("hiddify key %q accepted", tok)
+		}
+	}
+	if _, err := normalizeServer(withToken(base, KindHiddify, ""), false); err != nil {
+		t.Errorf("hiddify edit without key: %v", err)
+	}
 }
 
 func withToken(in ServerInput, kind, token string) ServerInput {

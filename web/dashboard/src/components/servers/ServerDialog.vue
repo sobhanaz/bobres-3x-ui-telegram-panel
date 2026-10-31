@@ -19,7 +19,8 @@ import {
 } from '../../servers'
 import type { ServerItem, ServerTest } from '../../types'
 
-// Add a 3x-ui panel or edit one: its address, a write-only API token, where
+// Add a panel (3x-ui, Marzban, S-UI or Hiddify) or edit one: its address, a
+// write-only API token (a Marzban login, a Hiddify admin's UUID), where
 // subscription links point, its weight and switches. "Test" tries the typed
 // connection without saving; a save tests it too, unless staff skip that.
 const props = defineProps<{ server: ServerItem | null }>()
@@ -29,8 +30,22 @@ const { t, locale } = useI18n()
 const lang = computed(() => locale.value as Lang)
 const auth = useAuth()
 const kindOptions = computed(() => PANEL_KINDS.map((k) => ({ value: k, label: t('server.kind_' + k) })))
-const marzban = computed(() => form.value.kind === 'marzban')
 const panelName = computed(() => t('server.kind_' + form.value.kind))
+// The credential field, the address and the subscription address read differently for each kind of panel.
+const tokenLabel = computed(() => ({ xui: 'server.token', sui: 'server.token', marzban: 'server.login', hiddify: 'server.api_key' })[form.value.kind])
+const tokenHelp = computed(() => ({ xui: 'server.token_help', sui: 'server.token_help_sui', marzban: 'server.login_help', hiddify: 'server.api_key_help' })[form.value.kind])
+const tokenInvalid = computed(() => ({ xui: 'server.invalid.token', sui: 'server.invalid.token', marzban: 'server.invalid.login', hiddify: 'server.invalid.api_key' })[form.value.kind])
+const baseURLHelp = computed(() => ({ xui: 'server.base_url_help', marzban: 'server.base_url_help', sui: 'server.base_url_help_sui', hiddify: 'server.base_url_help_hiddify' })[form.value.kind])
+const baseURLPlaceholder = computed(
+  () =>
+    ({
+      xui: 'https://panel.example.com:2053/path',
+      marzban: 'https://panel.example.com:8000',
+      sui: 'https://panel.example.com:2095/app',
+      hiddify: 'https://panel.example.com/AdminProxyPath',
+    })[form.value.kind],
+)
+const subURLHelp = computed(() => ({ xui: 'server.sub_url_help', marzban: 'server.sub_url_help', sui: 'server.sub_url_help_sui', hiddify: 'server.sub_url_help_hiddify' })[form.value.kind])
 
 const form = ref(blankServer())
 // A new key for the token field each time the dialog opens: it starts as "set".
@@ -84,7 +99,7 @@ const urlProblem = computed(() => {
 })
 const subProblem = computed(() => (subURLProblem(form.value.subURL) ? t('server.invalid.sub_url') : ''))
 const tokenProblem = computed(() =>
-  problems.value.includes('token') && form.value.token.trim() ? t(marzban.value ? 'server.invalid.login' : 'server.invalid.token') : '',
+  problems.value.includes('token') && form.value.token.trim() ? t(tokenInvalid.value) : '',
 )
 const weightProblem = computed(() => (problems.value.includes('weight') && form.value.weight.trim() ? t('server.invalid.weight', { min: num(WEIGHT_MIN, lang.value), max: num(WEIGHT_MAX, lang.value) }) : ''))
 const maxClientsProblem = computed(() =>
@@ -184,12 +199,12 @@ async function save() {
           autocomplete="off"
           :spellcheck="false"
           maxlength="500"
-          placeholder="https://panel.example.com:2053/path"
+          :placeholder="baseURLPlaceholder"
           :invalid="issue('base_url')"
           aria-describedby="server-base-url-help"
           class="base-url"
         />
-        <small id="server-base-url-help" class="app-muted">{{ t('server.base_url_help') }}</small>
+        <small id="server-base-url-help" class="app-muted">{{ t(baseURLHelp) }}</small>
         <small v-if="urlProblem" class="field-error url-problem">{{ urlProblem }}</small>
         <small v-if="fieldErrors.base_url" class="app-ltr field-error">{{ fieldErrors.base_url }}</small>
       </label>
@@ -201,10 +216,10 @@ async function save() {
           :key="generation"
           id="server-token"
           v-model="form.token"
-          :label="marzban ? t('server.login') : t('server.token')"
+          :label="t(tokenLabel)"
           :set="!!props.server?.has_token"
           :force="tokenAgain"
-          :help="tokenAgain ? t('server.token_again') : marzban ? t('server.login_help') : t('server.token_help')"
+          :help="tokenAgain ? t('server.token_again') : t(tokenHelp)"
           :error="tokenProblem || fieldErrors.token || ''"
         />
       </div>
@@ -222,7 +237,7 @@ async function save() {
           aria-describedby="server-sub-url-help"
           class="sub-url"
         />
-        <small id="server-sub-url-help" class="app-muted">{{ t('server.sub_url_help') }}</small>
+        <small id="server-sub-url-help" class="app-muted">{{ t(subURLHelp) }}</small>
         <small v-if="subProblem" class="field-error">{{ subProblem }}</small>
         <small v-if="fieldErrors.sub_base_url" class="app-ltr field-error">{{ fieldErrors.sub_base_url }}</small>
       </label>
