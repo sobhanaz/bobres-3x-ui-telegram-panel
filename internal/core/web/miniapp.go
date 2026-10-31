@@ -500,7 +500,8 @@ func (s *Server) miniWallets(ctx context.Context, userID string) ([]map[string]a
 			m := map[string]any{"currency": w.Currency, "balance": w.Balance, "credit_limit": w.CreditLimit, "scale": bmoney.Scale(w.Currency)}
 			if w.Currency == domain.WalletCurrency {
 				// One wallet, in Toman: the same money in USDT at the live price, and the price, always beside it (0: no rate known).
-				m["usdt_equivalent"], m["usdt_rate"] = s.cfg.Domain.UsdtEquivalent(ctx, w.Balance), s.cfg.Domain.UsdtBaseRate(ctx)
+				rate := s.cfg.Domain.UsdtBaseRate(ctx)
+				m["usdt_equivalent"], m["usdt_rate"] = domain.UsdtEquivalentAt(w.Balance, rate), rate
 			}
 			out = append(out, m)
 		}

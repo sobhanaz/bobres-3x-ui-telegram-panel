@@ -2,7 +2,6 @@ package domain
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
@@ -45,7 +44,10 @@ var ErrNoUsdtRate = errors.New("domain: the USDT rate is not known")
 // UsdtBaseRate is the Toman price of one USDT without the owner's margin: the live price while it is fresh and automatic rates are on, else the
 // owner's own rate; 0 when none is known.
 func (s *Service) UsdtBaseRate(ctx context.Context) int64 {
-	info := s.UsdtRateInfo(ctx)
+	return usdtBaseRate(s.UsdtRateInfo(ctx))
+}
+
+func usdtBaseRate(info UsdtRateInfo) int64 {
 	switch info.Source {
 	case "live":
 		return info.Live.Rate
@@ -62,20 +64,7 @@ func (s *Service) usdtBaseRateIn(ctx context.Context, tx pgx.Tx) int64 {
 	if err != nil {
 		return 0
 	}
-	str := func(key string) string {
-		var v string
-		if raw, ok := m[key]; ok && json.Unmarshal(raw, &v) == nil {
-			return v
-		}
-		return ""
-	}
-	if str(SettingUSDTAuto) != "false" {
-		var l LiveRate
-		if raw, ok := m[liveRateKey]; ok && json.Unmarshal(raw, &l) == nil && l.Fresh(time.Now()) {
-			return l.Rate
-		}
-	}
-	return parseWholeSetting(str("payments.usdt_rate"))
+	return usdtBaseRate(usdtRateInfoFrom(m, time.Now()))
 }
 
 // mulDiv is a*b/c with a big intermediate, rounded up (ceil) or down, and a result that fits an int64 (false otherwise).
@@ -110,7 +99,11 @@ func (s *Service) TomanForUsdt(ctx context.Context, usdt int64) (toman, rate int
 // UsdtEquivalent is what a sum of Toman is worth in USDT (minor units) at the live price, rounded to the nearest 0.01 USDT: for showing a
 // balance. 0 when no rate is known.
 func (s *Service) UsdtEquivalent(ctx context.Context, toman int64) int64 {
-	rate := s.UsdtBaseRate(ctx)
+	return UsdtEquivalentAt(toman, s.UsdtBaseRate(ctx))
+}
+
+// UsdtEquivalentAt is UsdtEquivalent at a rate already read (UsdtBaseRate), for a caller that shows the rate beside it.
+func UsdtEquivalentAt(toman, rate int64) int64 {
 	if rate <= 0 || toman <= 0 {
 		return 0
 	}

@@ -21,6 +21,10 @@ What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 - The dashboard's server dialog shows the right credential field, help and address example for each kind, in Persian and English; the list shows the kind.
 - CI: an **S-UI integration** job runs the adapter and the provisioner (gRPC, real database) against the real `alireza7/s-ui:v1.6.6` image (pinned by digest): create, links, the subscription fetched from the panel, usage from real traffic through a mixed inbound, limits, renew, switch off and on, reset, a client deleted behind BOBRES's back (`client_missing`), RecreateClient, groups and delete. A **Hiddify integration** job does the same against `ghcr.io/hiddify/hiddify-manager:v14.0.5` (pinned by digest). Neither is a required check. Fakes of both panels (`internal/suifake`, `internal/hiddifyfake`) carry the unit and provisioner tests in every run. `tools/suidev` prepares a fresh S-UI panel (token and inbounds).
 
+### Fixed
+
+- **The wallet answers faster.** Showing a balance with its USDT equivalent read the store's settings eight times (the rate twice, four settings each); it reads them once now, in the bot, the Mini App and core's wallet call. Found by the v0.19.0 benchmark (`docs/21-benchmark.md`), where the wallet had become the slowest call from 100 customers up.
+
 ### Known limits
 - The bot's account settings have no screen of their own yet: the product news switch sits on the language screen (🌐 Language).
 - Telegram was faked in the tests; the channel post and the Buy flow were not tried against a real channel.

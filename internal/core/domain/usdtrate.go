@@ -87,11 +87,29 @@ type UsdtRateInfo struct {
 	HasLive, LiveFresh bool
 }
 
-// UsdtRateInfo works out the rate the store charges now.
+// UsdtRateInfo works out the rate the store charges now, from one read of the settings (a balance is shown on every wallet call).
 func (s *Service) UsdtRateInfo(ctx context.Context) UsdtRateInfo {
-	info := UsdtRateInfo{Auto: s.UsdtAutoOn(ctx), Margin: s.UsdtMargin(ctx), Manual: s.settingInt(ctx, "payments.usdt_rate")}
-	info.Live, info.HasLive = s.LastLiveRate(ctx)
-	info.LiveFresh = info.HasLive && info.Live.Fresh(time.Now())
+	m, _ := s.st.GetSettings(ctx, s.st.Conn())
+	return usdtRateInfoFrom(m, time.Now())
+}
+
+// usdtRateInfoFrom is UsdtRateInfo worked out from settings already read (nil when they could not be: no live rate, no rate typed).
+func usdtRateInfoFrom(m map[string]json.RawMessage, now time.Time) UsdtRateInfo {
+	str := func(key string) string {
+		var v string
+		if raw, ok := m[key]; ok && json.Unmarshal(raw, &v) == nil {
+			return v
+		}
+		return ""
+	}
+	info := UsdtRateInfo{Auto: str(SettingUSDTAuto) != "false", Margin: min(parseWholeSetting(str(SettingUSDTMargin)), MaxUSDTMargin),
+		Manual: parseWholeSetting(str("payments.usdt_rate"))}
+	if raw, ok := m[liveRateKey]; ok && json.Unmarshal(raw, &info.Live) == nil && info.Live.Rate > 0 {
+		info.HasLive = true
+	} else {
+		info.Live = LiveRate{}
+	}
+	info.LiveFresh = info.HasLive && info.Live.Fresh(now)
 	switch {
 	case info.Auto && info.LiveFresh:
 		// Rounded up to a whole Toman, so that a margin never rounds away.
