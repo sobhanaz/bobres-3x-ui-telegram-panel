@@ -8,6 +8,10 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+## [0.21.0] — 2026-10-31
+
+**S-UI and Hiddify panels, Arabic, Russian and Turkish (beta), new product announcements, the vendor's affiliate program and hosted-store tooling, and a benchmark baseline with a faster wallet.** Everything new is off or unchanged until the owner turns it on: the new languages are offered only once enabled in Settings (the default stays Persian and English), announcements and the affiliate program are off, and the affiliate program and hosted stores appear only in the vendor's own store. Four additive migrations (core 00053–00055, provisioner 00008); the bot and core must be updated together (the update does that).
+
 **The vendor's affiliate program and tooling for hosted stores, and new product announcements** ([docs/18-hosted-and-affiliate-plans.md](docs/18-hosted-and-affiliate-plans.md)). The affiliate program and hosted stores belong to the vendor's own store (a license with `private_features`) and are hidden everywhere else; the affiliate program and the announcements are off until the owner switches them on.
 
 ### Updating

@@ -2,7 +2,7 @@
 
 What has shipped, what is still open, and what was left out on purpose. Nothing here is promised for a date. The detailed, ordered list is [docs/ROADMAP.md](https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/blob/main/docs/ROADMAP.md), and each release's notes are in the [changelog](https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/blob/main/CHANGELOG.md).
 
-As of v0.20.0, 2026-10-29.
+As of v0.21.0, 2026-10-31.
 
 ## Shipped
 
@@ -30,6 +30,7 @@ As of v0.20.0, 2026-10-29.
 | v0.18.0 | 2026-10-29 | My codes; USDT plans paid from the wallet; Tether top-up in the Mini App; per-server capacity; Prometheus, uptime and a status page; sign-in approval in Telegram; `bobres rotate-key` |
 | v0.19.0 | 2026-10-29 | Cashback, reseller monthly targets and a daily wheel; Aqayepardakht and automatic TON payments |
 | v0.20.0 | 2026-10-29 | Messages and a weekly settlement reminder for resellers; bot and dashboard buttons for services the panel no longer has |
+| v0.21.0 | 2026-10-31 | S-UI and Hiddify panels; Arabic, Russian and Turkish (beta); new product announcements; the vendor's affiliate program and hosted-store tooling; a benchmark baseline and a faster wallet |
 
 ## New in v0.18.0
 

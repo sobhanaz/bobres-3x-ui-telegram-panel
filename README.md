@@ -12,7 +12,7 @@ dashboard**; and one **`bobres` command** on the server installs, updates, backs
 It is white-label and single-tenant: each operator runs it on their own server, with their own domain, bot, panels and
 brand. Nothing goes through anyone else's servers.
 
-Website: <https://bobresai.cv> · Latest release: **v0.20.0** · [Changelog](CHANGELOG.md) · [Docs](docs/README.md)
+Website: <https://bobresai.cv> · Latest release: **v0.21.0** · [Changelog](CHANGELOG.md) · [Docs](docs/README.md)
 
 ## At a glance
 
@@ -85,8 +85,8 @@ same server, S3 copies of the backups, Zarinpal, a different SSH port, hardening
 Run `sudo bobres` for the management menu, or use any item as a command. The header is a live status board (services, license, HTTPS certificate, newest backup, dashboard address); the numbers below are the menu's choices:
 
 ```text
-   n____n   BOBRES manager  bobres v0.20.0
-  ( o  o )  /opt/bobres  ·  shop.example.com  ·  version 0.20.0
+   n____n   BOBRES manager  bobres v0.21.0
+  ( o  o )  /opt/bobres  ·  shop.example.com  ·  version 0.21.0
    \_||_/   Store     running (9/9 services)
             License   Standard license, 214 days left
             HTTPS     auto, certificate expires in 79 days
