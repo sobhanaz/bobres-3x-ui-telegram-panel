@@ -87,7 +87,7 @@ func (h *Handler) onLanguage(r *req, lang string) {
 	if in.ReferralCode != "" || open != "" {
 		r.clearState()
 	}
-	r.user, r.lang = u, i18n.Normalize(u.GetLanguage())
+	r.user, r.lang = u, u.GetLanguage()
 	if isNew {
 		if h.gateNewUser(r) {
 			return // the bottom menu follows once the gates let them in (refreshMenu)

@@ -116,13 +116,19 @@ func (s *Service) AdminSettingSpecs(ctx context.Context, actorTelegramID int64) 
 	}
 	out := make([]AdminSettingView, 0, len(SettingSpecs))
 	for _, sp := range SettingSpecs {
-		// A list of rows (the tiers of the reseller targets, the wheel's prizes) is edited in the dashboard, not by typing JSON in a chat;
-		// so are the customers' languages (a list with a default and beta ones, which the dashboard explains).
-		if settingChangeable(actor.Role, sp) && sp.Kind != KindList && sp.Kind != KindLangs {
+		// A list of rows (the tiers of the reseller targets, the wheel's prizes) is edited in the dashboard, not by typing JSON in a chat.
+		if settingChangeable(actor.Role, sp) && sp.Kind != KindList {
 			out = append(out, AdminSettingView{SettingSpec: sp, Value: values[sp.Key]})
 		}
 	}
-	return out, nil
+	// The customers' languages are chosen in the dashboard too: a list with a default and beta languages, which its editor explains.
+	kept := out[:0]
+	for _, v := range out {
+		if v.Kind != KindLangs {
+			kept = append(kept, v)
+		}
+	}
+	return kept, nil
 }
 
 // AdminListServers lists the 3x-ui servers with their last health check.

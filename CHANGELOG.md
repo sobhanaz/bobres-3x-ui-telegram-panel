@@ -17,9 +17,9 @@ What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 - **Product news, asked once.** While announcements are on, the bot asks every customer **once** "Do you want news of new products?" (Yes / No): a newcomer right after their first /start, everyone else at their next interaction (never a mass message, never in the middle of a payment or under a gate). No answer is no. The answer changes later on the bot's language screen and in the Mini App's new **Product news** section. New gRPC calls `AskAnnounce` and `SetAnnounceOptIn`, `User.announce_asked`/`announce_optin`, `BroadcastBatch.buy_callback`; the bot's `POST /internal/announce/channel` and `can_post` in its channel check. In Persian and English.
 
 ### Known limits
+- **The Arabic, Russian and Turkish texts are machine-translated and need a native speaker's review** before a store relies on them (a pull request to `internal/bot/i18n/locales/`, `web/dashboard/src/locales/` and `web/miniapp/src/locales/`). The dashboard's text editor still edits the Persian and English bot texts only; the store's content, broadcasts' audience counts and the channel posts of announcements stay in Persian and English.
 - The bot's account settings have no screen of their own yet: the product news switch sits on the language screen (🌐 Language).
 - Telegram was faked in the tests; the channel post and the Buy flow were not tried against a real channel.
-- **The Arabic, Russian and Turkish texts are machine-translated and need a native speaker's review** before a store relies on them (a pull request to `internal/bot/i18n/locales/`, `web/dashboard/src/locales/` and `web/miniapp/src/locales/`). The dashboard's text editor still edits the Persian and English bot texts only; the store's content, broadcasts' audience counts and the channel posts of announcements stay in Persian and English.
 
 ## [0.20.0] — 2026-10-29
 
