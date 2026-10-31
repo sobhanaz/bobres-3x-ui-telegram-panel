@@ -1,0 +1,107 @@
+goos: darwin
+goarch: amd64
+pkg: github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/bot/i18n
+cpu: Intel(R) Core(TM) i9-9980HK CPU @ 2.40GHz
+BenchmarkMoney/fa-IRT-16         	 4561815	       253.7 ns/op	      88 B/op	       5 allocs/op
+BenchmarkMoney/fa-IRT-16         	 4822825	       253.5 ns/op	      88 B/op	       5 allocs/op
+BenchmarkMoney/fa-IRT-16         	 4725010	       255.7 ns/op	      88 B/op	       5 allocs/op
+BenchmarkMoney/fa-IRT-16         	 4699971	       259.2 ns/op	      88 B/op	       5 allocs/op
+BenchmarkMoney/fa-IRT-16         	 4812532	       255.9 ns/op	      88 B/op	       5 allocs/op
+BenchmarkMoney/en-IRT-16         	 5448694	       223.0 ns/op	      48 B/op	       4 allocs/op
+BenchmarkMoney/en-IRT-16         	 5177473	       231.1 ns/op	      48 B/op	       4 allocs/op
+BenchmarkMoney/en-IRT-16         	 5275147	       228.9 ns/op	      48 B/op	       4 allocs/op
+BenchmarkMoney/en-IRT-16         	 5184129	       232.2 ns/op	      48 B/op	       4 allocs/op
+BenchmarkMoney/en-IRT-16         	 4961068	       234.0 ns/op	      48 B/op	       4 allocs/op
+BenchmarkMoney/fa-USDT-16        	 3900667	       303.2 ns/op	      48 B/op	       5 allocs/op
+BenchmarkMoney/fa-USDT-16        	 3905522	       308.2 ns/op	      48 B/op	       5 allocs/op
+BenchmarkMoney/fa-USDT-16        	 3952317	       300.6 ns/op	      48 B/op	       5 allocs/op
+BenchmarkMoney/fa-USDT-16        	 3866940	       309.2 ns/op	      48 B/op	       5 allocs/op
+BenchmarkMoney/fa-USDT-16        	 3841078	       314.7 ns/op	      48 B/op	       5 allocs/op
+PASS
+ok  	github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/bot/i18n	19.113s
+goos: darwin
+goarch: amd64
+pkg: github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/domain
+cpu: Intel(R) Core(TM) i9-9980HK CPU @ 2.40GHz
+BenchmarkTierPrice-16         	34369495	        35.45 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTierPrice-16         	33399481	        35.22 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTierPrice-16         	35062989	        35.16 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTierPrice-16         	33567388	        35.72 ns/op	       0 B/op	       0 allocs/op
+BenchmarkTierPrice-16         	31497006	        36.37 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCashbackAmount-16    	804926228	         1.476 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCashbackAmount-16    	817206116	         1.472 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCashbackAmount-16    	821832634	         1.470 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCashbackAmount-16    	830552355	         1.457 ns/op	       0 B/op	       0 allocs/op
+BenchmarkCashbackAmount-16    	830383327	         1.456 ns/op	       0 B/op	       0 allocs/op
+PASS
+ok  	github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/domain	12.870s
+goos: darwin
+goarch: amd64
+pkg: github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/monitor
+cpu: Intel(R) Core(TM) i9-9980HK CPU @ 2.40GHz
+BenchmarkFoldRepeats-16    	    1012	   1160496 ns/op	  339979 B/op	    6004 allocs/op
+BenchmarkFoldRepeats-16    	    1006	   1167638 ns/op	  339698 B/op	    6004 allocs/op
+BenchmarkFoldRepeats-16    	    1016	   1181437 ns/op	  340394 B/op	    6004 allocs/op
+BenchmarkFoldRepeats-16    	    1022	   1219266 ns/op	  339790 B/op	    6004 allocs/op
+BenchmarkFoldRepeats-16    	    1071	   1171035 ns/op	  340102 B/op	    6004 allocs/op
+PASS
+ok  	github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/monitor	6.911s
+goos: darwin
+goarch: amd64
+pkg: github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/store
+cpu: Intel(R) Core(TM) i9-9980HK CPU @ 2.40GHz
+BenchmarkGetUserByTelegramID-16    	   14042	     89445 ns/op	    1331 B/op	      23 allocs/op
+BenchmarkGetUserByTelegramID-16    	   10000	    139953 ns/op	    1332 B/op	      23 allocs/op
+BenchmarkGetUserByTelegramID-16    	   10000	    132251 ns/op	    1332 B/op	      23 allocs/op
+BenchmarkGetUserByTelegramID-16    	    9936	    123510 ns/op	    1332 B/op	      23 allocs/op
+BenchmarkGetUserByTelegramID-16    	   14221	     94677 ns/op	    1332 B/op	      23 allocs/op
+BenchmarkListPlans-16              	    2947	    410074 ns/op	   15139 B/op	     167 allocs/op
+BenchmarkListPlans-16              	    2552	    407200 ns/op	   15137 B/op	     167 allocs/op
+BenchmarkListPlans-16              	    5680	    400524 ns/op	   15137 B/op	     167 allocs/op
+BenchmarkListPlans-16              	    2946	    407509 ns/op	   15144 B/op	     167 allocs/op
+BenchmarkListPlans-16              	    2416	    425145 ns/op	   15133 B/op	     167 allocs/op
+PASS
+ok  	github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/store	30.425s
+goos: darwin
+goarch: amd64
+pkg: github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/license
+cpu: Intel(R) Core(TM) i9-9980HK CPU @ 2.40GHz
+BenchmarkVerify-16         	   18092	     66942 ns/op	     954 B/op	      10 allocs/op
+BenchmarkVerify-16         	   18469	     65123 ns/op	     954 B/op	      10 allocs/op
+BenchmarkVerify-16         	   18572	     65521 ns/op	     954 B/op	      10 allocs/op
+BenchmarkVerify-16         	   18381	     64678 ns/op	     953 B/op	      10 allocs/op
+BenchmarkVerify-16         	   18471	     64693 ns/op	     954 B/op	      10 allocs/op
+BenchmarkSign-16           	   40431	     29450 ns/op	    3203 B/op	       8 allocs/op
+BenchmarkSign-16           	   40988	     29307 ns/op	    3203 B/op	       8 allocs/op
+BenchmarkSign-16           	   39235	     29754 ns/op	    3203 B/op	       8 allocs/op
+BenchmarkSign-16           	   41446	     29017 ns/op	    3203 B/op	       8 allocs/op
+BenchmarkSign-16           	   41769	     29070 ns/op	    3203 B/op	       8 allocs/op
+BenchmarkAdminVerify-16    	   20233	     59244 ns/op	     496 B/op	       6 allocs/op
+BenchmarkAdminVerify-16    	   20248	     59816 ns/op	     496 B/op	       6 allocs/op
+BenchmarkAdminVerify-16    	   20074	     59754 ns/op	     496 B/op	       6 allocs/op
+BenchmarkAdminVerify-16    	   19833	     59963 ns/op	     496 B/op	       6 allocs/op
+BenchmarkAdminVerify-16    	   20301	     59658 ns/op	     496 B/op	       6 allocs/op
+PASS
+ok  	github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/license	18.568s
+goos: darwin
+goarch: amd64
+pkg: github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/domain
+cpu: Intel(R) Core(TM) i9-9980HK CPU @ 2.40GHz
+BenchmarkTONNano-16    	13239603	        88.19 ns/op	      56 B/op	       2 allocs/op
+BenchmarkTONNano-16    	13733814	        89.00 ns/op	      56 B/op	       2 allocs/op
+BenchmarkTONNano-16    	13420585	        88.93 ns/op	      56 B/op	       2 allocs/op
+BenchmarkTONNano-16    	13932340	        88.24 ns/op	      56 B/op	       2 allocs/op
+BenchmarkTONNano-16    	13445664	        88.56 ns/op	      56 B/op	       2 allocs/op
+PASS
+ok  	github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/domain	6.812s
+goos: darwin
+goarch: amd64
+pkg: github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/release
+cpu: Intel(R) Core(TM) i9-9980HK CPU @ 2.40GHz
+BenchmarkVerify-16    	    5527	    187067 ns/op	    6472 B/op	      53 allocs/op
+BenchmarkVerify-16    	    6237	    183474 ns/op	    6472 B/op	      53 allocs/op
+BenchmarkVerify-16    	    7306	    196417 ns/op	    6472 B/op	      53 allocs/op
+BenchmarkVerify-16    	    6956	    190531 ns/op	    6472 B/op	      53 allocs/op
+BenchmarkVerify-16    	    5085	    219673 ns/op	    6472 B/op	      53 allocs/op
+PASS
+ok  	github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/release	6.678s

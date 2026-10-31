@@ -62,9 +62,14 @@ func TestLocalStack(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			res.Notes = append(res.Notes, afterLoad(db, func() string { return provisioning(t, db, res.Elapsed) })...)
-			res.Notes = append(res.Notes, "Postgres "+strings.Fields(version)[0])
+			res.Facts = map[string]any{}
+			res.Notes = append(res.Notes, afterLoad(db, func() string { return provisioning(t, db, res.Elapsed, res.Facts) }, res.Facts)...)
+			res.Notes = append(res.Notes, "Postgres "+strings.Fields(version)[0], dbSize(t, db, res.Facts))
+			res.Facts["postgres"] = strings.Fields(version)[0]
 			writeReport(os.Stdout, res)
+			if err := writeJSON(cfg.JSON, res, len(counts) > 1); err != nil {
+				t.Fatal(err)
+			}
 		})
 	}
 }
@@ -74,15 +79,15 @@ func TestLocalStack(t *testing.T) {
 // and core's pool. The pool is read before the drain, so its waits are the
 // load's: the drain's polls and deliveries find idle connections and would
 // dilute them.
-func afterLoad(db *pgxpool.Pool, drain func() string) []string {
+func afterLoad(db *pgxpool.Pool, drain func() string, facts map[string]any) []string {
 	st := db.Stat()
-	return []string{drain(), pool(st)}
+	return []string{drain(), pool(st, facts)}
 }
 
 // provisioning says how far core's provision worker kept up: the orders it
 // delivered while the load ran, the backlog left when it stopped and how
 // long that took to clear. The worker delivers one order at a time.
-func provisioning(t *testing.T, db *pgxpool.Pool, elapsed time.Duration) string {
+func provisioning(t *testing.T, db *pgxpool.Pool, elapsed time.Duration, facts map[string]any) string {
 	t.Helper()
 	count := func() (active, waiting, failed int) {
 		err := db.QueryRow(context.Background(), `SELECT count(*) FILTER (WHERE status = 'active'),
@@ -112,13 +117,64 @@ func provisioning(t *testing.T, db *pgxpool.Pool, elapsed time.Duration) string 
 	if failed > 0 {
 		note += fmt.Sprintf(", %d failed", failed)
 	}
+	facts["delivered_during_run"] = active
+	facts["delivered_per_s_during_run"] = float64(active) / elapsed.Seconds()
+	facts["backlog_at_end"] = backlog
+	facts["backlog_still_waiting"] = waiting
+	facts["backlog_drain_s"] = drain.Seconds()
+	if backlog > 0 && waiting == 0 {
+		facts["backlog_drain_per_s"] = float64(backlog) / drain.Seconds()
+	}
+	facts["provision_failed"] = failed
 	return note
 }
 
+// dbSize says how big the stack's database is after the run and its drain,
+// and which tables are the largest.
+func dbSize(t *testing.T, db *pgxpool.Pool, facts map[string]any) string {
+	t.Helper()
+	ctx := context.Background()
+	var size int64
+	if err := db.QueryRow(ctx, `SELECT pg_database_size(current_database())`).Scan(&size); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := db.Query(ctx, `SELECT n.nspname || '.' || c.relname, pg_total_relation_size(c.oid)
+		FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+		WHERE c.relkind = 'r' AND n.nspname IN ('core', 'payments', 'provisioner')
+		ORDER BY 2 DESC LIMIT 5`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	top := map[string]int64{}
+	var names []string
+	for rows.Next() {
+		var name string
+		var n int64
+		if err := rows.Scan(&name, &n); err != nil {
+			t.Fatal(err)
+		}
+		top[name] = n
+		names = append(names, fmt.Sprintf("%s %.1f MB", name, float64(n)/1e6))
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	var users int64
+	if err := db.QueryRow(ctx, `SELECT count(*) FROM core.users`).Scan(&users); err != nil {
+		t.Fatal(err)
+	}
+	facts["db_bytes"], facts["db_top_tables"], facts["db_users"] = size, top, users
+	return fmt.Sprintf("database: %.1f MB for %d users (largest: %s)", float64(size)/1e6, users, strings.Join(names, ", "))
+}
+
 // pool says how often a core query had to wait for a free connection.
-func pool(s *pgxpool.Stat) string {
+func pool(s *pgxpool.Stat, facts map[string]any) string {
 	note := fmt.Sprintf("core's DB pool: at most %d connections, %d acquires, %d waited", s.MaxConns(), s.AcquireCount(), s.EmptyAcquireCount())
+	facts["pool_max_conns"], facts["pool_acquires"], facts["pool_waited"] = s.MaxConns(), s.AcquireCount(), s.EmptyAcquireCount()
 	if n := s.EmptyAcquireCount(); n > 0 {
+		facts["pool_waited_share"] = float64(n) / float64(s.AcquireCount())
+		facts["pool_avg_wait_ms"] = float64((s.EmptyAcquireWaitTime() / time.Duration(n)).Microseconds()) / 1000
 		note += fmt.Sprintf(" (%.0f%%, %s on average)", 100*float64(n)/float64(s.AcquireCount()),
 			(s.EmptyAcquireWaitTime() / time.Duration(n)).Round(10*time.Microsecond))
 	}
@@ -142,7 +198,7 @@ func TestPoolIsReadBeforeTheDrain(t *testing.T) {
 		}
 	}
 	query(3) // the load
-	notes := afterLoad(db, func() string { query(5); return "drained" })
+	notes := afterLoad(db, func() string { query(5); return "drained" }, map[string]any{})
 	if len(notes) != 2 || notes[0] != "drained" || !strings.Contains(notes[1], ", 3 acquires,") {
 		t.Fatalf("notes = %q, want the drain's note, then the pool with the load's 3 acquires only", notes)
 	}

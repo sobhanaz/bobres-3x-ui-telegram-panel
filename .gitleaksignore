@@ -62,3 +62,8 @@ cd2b76a004815210000219395fffd3b4fb6837d5:web/dashboard/src/__tests__/initial-log
 # marker added in the next commit does not rewrite that one).
 781241b43e104d8666fe9b7d0825e370730cbbf0:web/dashboard/src/__tests__/servers.test.ts:generic-api-key:180
 781241b43e104d8666fe9b7d0825e370730cbbf0:web/dashboard/src/__tests__/servers.test.ts:generic-api-key:184
+
+# A benchmark metric's name in the summary (a CI job's time), not a secret; the field is called metric since.
+# The second line pins the first wording of this comment, which quoted that name and was flagged too.
+0d253afefcde4bdda3512a27de5c99749a4da9a4:docs/bench/2026-10-29/plain/summary.json:generic-api-key:1224
+6e3bbcc51c6f35a971fa0f9ee2ce5df8cb854b2f:.gitleaksignore:generic-api-key:61

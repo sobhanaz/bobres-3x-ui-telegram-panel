@@ -1,0 +1,27 @@
+{
+  "label": "web/miniapp",
+  "files": [
+    {
+      "path": "assets/index-BDRvfCyi.js",
+      "raw": 236724,
+      "gzip": 71464
+    },
+    {
+      "path": "favicon.svg",
+      "raw": 17518,
+      "gzip": 6603
+    },
+    {
+      "path": "assets/index-D7MZvKn0.css",
+      "raw": 8598,
+      "gzip": 2522
+    },
+    {
+      "path": "index.html",
+      "raw": 693,
+      "gzip": 388
+    }
+  ],
+  "total_raw": 263533,
+  "total_gzip": 80977
+}

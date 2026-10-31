@@ -4,6 +4,10 @@
 p50/p95/p99 per call and errors. This page has the numbers from 2026-10-12, what they mean, the limits they show and
 what to watch on a live server.
 
+> The same scenarios were run again on v0.19.0 (2026-10-29), three times each, with `tools/bench/run.sh`, together
+> with the real service binaries as separate processes: see [21-benchmark.md](21-benchmark.md). `-json FILE` writes a
+> run as JSON for that script.
+
 ## Summary
 
 - **Ceiling on this machine.** Core handled about 360–410 complete customer journeys a second (6,500–7,500 calls a

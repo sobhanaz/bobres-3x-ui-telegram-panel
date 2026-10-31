@@ -1,0 +1,622 @@
+{
+  "kind": "stack",
+  "variant": "plain",
+  "bin_dir": "/private/tmp/claude-501/-Users-macbook-Documents-BOBRES-3x-ui-TELEGRAm-Panel--claude-worktrees-codebase-plan-review-f6616b/3ab58b61-cc8c-42c5-a52a-43f672c09138/scratchpad/work-plain/bin/darwin-amd64",
+  "at": "2026-10-30T14:07:03Z",
+  "order": [
+    "payments",
+    "provisioner",
+    "core",
+    "bot",
+    "backup",
+    "tls-agent"
+  ],
+  "services": {
+    "backup": {
+      "first_exec_s": 0.015163359,
+      "cold_ready_s": 0.020635473,
+      "warm_ready_s": 0.038626924,
+      "idle_rss_mb": 9.8828125,
+      "idle_cpu_pct": 0,
+      "phases": {
+        "paced": {
+          "seconds": 77.799125115,
+          "cpu_s": 0,
+          "cpu_cores": 0,
+          "rss_max_mb": 9.8984375,
+          "rss_mean_mb": 9.8984375
+        },
+        "paced-drain": {
+          "seconds": 1.67638541,
+          "cpu_s": 0,
+          "cpu_cores": 0,
+          "rss_max_mb": 9.8984375,
+          "rss_mean_mb": 9.8984375
+        },
+        "stress": {
+          "seconds": 31.060227252,
+          "cpu_s": 0,
+          "cpu_cores": 0,
+          "rss_max_mb": 9.8828125,
+          "rss_mean_mb": 9.8828125
+        },
+        "stress-drain": {
+          "seconds": 250.302890848,
+          "cpu_s": 0,
+          "cpu_cores": 0,
+          "rss_max_mb": 9.8984375,
+          "rss_mean_mb": 9.898188496015937
+        }
+      },
+      "first_stop": {
+        "shutdown_s": 0.015935238,
+        "user_s": 0.011407,
+        "sys_s": 0.015705,
+        "max_rss_mb": 9.94921875,
+        "exit": 0
+      },
+      "stop": {
+        "shutdown_s": 0.001967701,
+        "user_s": 0.019544,
+        "sys_s": 0.014835,
+        "max_rss_mb": 10.0390625,
+        "exit": 0
+      }
+    },
+    "bot": {
+      "first_exec_s": 0.020567781,
+      "cold_ready_s": 0.042700607,
+      "warm_ready_s": 0.092731337,
+      "idle_rss_mb": 20.77734375,
+      "idle_cpu_pct": 0.15,
+      "phases": {
+        "paced": {
+          "seconds": 77.799125115,
+          "cpu_s": 10.829999999999998,
+          "cpu_cores": 0.13920465023213904,
+          "rss_max_mb": 31.4765625,
+          "rss_mean_mb": 31.319586338141026
+        },
+        "paced-drain": {
+          "seconds": 1.67638541,
+          "cpu_s": 0.14999999999999858,
+          "cpu_cores": 0.08947823042673617,
+          "rss_max_mb": 31.4765625,
+          "rss_mean_mb": 31.4765625
+        },
+        "stress": {
+          "seconds": 31.060227252,
+          "cpu_s": 1.15,
+          "cpu_cores": 0.037024841791070615,
+          "rss_max_mb": 23.859375,
+          "rss_mean_mb": 23.225570436507937
+        },
+        "stress-drain": {
+          "seconds": 250.302890848,
+          "cpu_s": 32.510000000000005,
+          "cpu_cores": 0.1298826389493926,
+          "rss_max_mb": 30.71875,
+          "rss_mean_mb": 29.32210221613546
+        }
+      },
+      "first_stop": {
+        "shutdown_s": 0.009068666,
+        "user_s": 24.874911,
+        "sys_s": 19.883656,
+        "max_rss_mb": 31.5234375,
+        "exit": 0
+      },
+      "stop": {
+        "shutdown_s": 0.00316491,
+        "user_s": 0.196373,
+        "sys_s": 0.143526,
+        "max_rss_mb": 23.5703125,
+        "exit": 0
+      }
+    },
+    "core": {
+      "first_exec_s": 0.028697305,
+      "cold_ready_s": 0.669768622,
+      "warm_ready_s": 0.160070489,
+      "idle_rss_mb": 32.84375,
+      "idle_cpu_pct": 0.3,
+      "phases": {
+        "paced": {
+          "seconds": 77.799125115,
+          "cpu_s": 55.01000000000002,
+          "cpu_cores": 0.7070773600433954,
+          "rss_max_mb": 57.77734375,
+          "rss_mean_mb": 57.73910757211539
+        },
+        "paced-drain": {
+          "seconds": 1.67638541,
+          "cpu_s": 0.39999999999997726,
+          "cpu_cores": 0.23860861447128515,
+          "rss_max_mb": 57.77734375,
+          "rss_mean_mb": 57.77734375
+        },
+        "stress": {
+          "seconds": 31.060227252,
+          "cpu_s": 76.08999999999999,
+          "cpu_cores": 2.449756705984837,
+          "rss_max_mb": 55.22265625,
+          "rss_mean_mb": 53.99193948412698
+        },
+        "stress-drain": {
+          "seconds": 250.302890848,
+          "cpu_s": 57.69,
+          "cpu_cores": 0.230480757951106,
+          "rss_max_mb": 57.71484375,
+          "rss_mean_mb": 57.30305341135458
+        }
+      },
+      "first_stop": {
+        "shutdown_s": 0.015559323,
+        "user_s": 108.44501,
+        "sys_s": 80.978641,
+        "max_rss_mb": 57.8359375,
+        "exit": 0
+      },
+      "stop": {
+        "shutdown_s": 0.006949654,
+        "user_s": 0.293417,
+        "sys_s": 0.223167,
+        "max_rss_mb": 30.65234375,
+        "exit": 0
+      }
+    },
+    "payments": {
+      "first_exec_s": 0.019682,
+      "cold_ready_s": 0.197345876,
+      "warm_ready_s": 0.121646779,
+      "idle_rss_mb": 18.03515625,
+      "idle_cpu_pct": 0.10000000000000002,
+      "phases": {
+        "paced": {
+          "seconds": 77.799125115,
+          "cpu_s": 0.11000000000000004,
+          "cpu_cores": 0.0014138976477871931,
+          "rss_max_mb": 20.421875,
+          "rss_mean_mb": 20.323993389423077
+        },
+        "paced-drain": {
+          "seconds": 1.67638541,
+          "cpu_s": 0,
+          "cpu_cores": 0,
+          "rss_max_mb": 20.421875,
+          "rss_mean_mb": 20.421875
+        },
+        "stress": {
+          "seconds": 31.060227252,
+          "cpu_s": 0.039999999999999994,
+          "cpu_cores": 0.0012878205840372386,
+          "rss_max_mb": 18.51953125,
+          "rss_mean_mb": 18.396019345238095
+        },
+        "stress-drain": {
+          "seconds": 250.302890848,
+          "cpu_s": 0.3,
+          "cpu_cores": 0.0011985478832610818,
+          "rss_max_mb": 20.2890625,
+          "rss_mean_mb": 19.770838520916335
+        }
+      },
+      "first_stop": {
+        "shutdown_s": 0.004025964,
+        "user_s": 0.273775,
+        "sys_s": 0.248552,
+        "max_rss_mb": 20.5078125,
+        "exit": 0
+      },
+      "stop": {
+        "shutdown_s": 0.003080315,
+        "user_s": 0.043685,
+        "sys_s": 0.037422,
+        "max_rss_mb": 17.22265625,
+        "exit": 0
+      }
+    },
+    "provisioner": {
+      "first_exec_s": 0.019192934,
+      "cold_ready_s": 0.12701101,
+      "warm_ready_s": 0.088043867,
+      "idle_rss_mb": 16.93359375,
+      "idle_cpu_pct": 0,
+      "phases": {
+        "paced": {
+          "seconds": 77.799125115,
+          "cpu_s": 56.96000000000001,
+          "cpu_cores": 0.7321419092541682,
+          "rss_max_mb": 37.16796875,
+          "rss_mean_mb": 36.87948217147436
+        },
+        "paced-drain": {
+          "seconds": 1.67638541,
+          "cpu_s": 1.4699999999999989,
+          "cpu_cores": 0.876886658182022,
+          "rss_max_mb": 37.16796875,
+          "rss_mean_mb": 37.16796875
+        },
+        "stress": {
+          "seconds": 31.060227252,
+          "cpu_s": 4.05,
+          "cpu_cores": 0.13039183413377042,
+          "rss_max_mb": 32.26171875,
+          "rss_mean_mb": 31.398065476190474
+        },
+        "stress-drain": {
+          "seconds": 250.302890848,
+          "cpu_s": 170.54999999999998,
+          "cpu_cores": 0.681374471633925,
+          "rss_max_mb": 36.58203125,
+          "rss_mean_mb": 34.93701755478088
+        }
+      },
+      "first_stop": {
+        "shutdown_s": 0.01163753,
+        "user_s": 199.268281,
+        "sys_s": 33.900928,
+        "max_rss_mb": 37.20703125,
+        "exit": 0
+      },
+      "stop": {
+        "shutdown_s": 0.00437754,
+        "user_s": 1.129441,
+        "sys_s": 0.175681,
+        "max_rss_mb": 21.78515625,
+        "exit": 0
+      }
+    },
+    "tls-agent": {
+      "first_exec_s": 0,
+      "cold_ready_s": 0.030387167,
+      "warm_ready_s": 0.056711821,
+      "idle_rss_mb": 17.41015625,
+      "idle_cpu_pct": 0.05000000000000001,
+      "phases": {
+        "paced": {
+          "seconds": 77.799125115,
+          "cpu_s": 0.03,
+          "cpu_cores": 0.0003856084493965071,
+          "rss_max_mb": 17.83203125,
+          "rss_mean_mb": 17.780824318910255
+        },
+        "paced-drain": {
+          "seconds": 1.67638541,
+          "cpu_s": 0,
+          "cpu_cores": 0,
+          "rss_max_mb": 17.83203125,
+          "rss_mean_mb": 17.83203125
+        },
+        "stress": {
+          "seconds": 31.060227252,
+          "cpu_s": 0.010000000000000002,
+          "cpu_cores": 0.00032195514600930975,
+          "rss_max_mb": 17.41796875,
+          "rss_mean_mb": 17.411024305555557
+        },
+        "stress-drain": {
+          "seconds": 250.302890848,
+          "cpu_s": 0.08,
+          "cpu_cores": 0.0003196127688696218,
+          "rss_max_mb": 17.7578125,
+          "rss_mean_mb": 17.62926419322709
+        }
+      },
+      "first_stop": {
+        "shutdown_s": 0.004687237,
+        "user_s": 0.054439,
+        "sys_s": 0.112335,
+        "max_rss_mb": 17.85546875,
+        "exit": 0
+      },
+      "stop": {
+        "shutdown_s": 0.00275489,
+        "user_s": 0.038794,
+        "sys_s": 0.024112,
+        "max_rss_mb": 17.7578125,
+        "exit": 0
+      }
+    }
+  },
+  "scenarios": [
+    {
+      "name": "stress",
+      "users": 200,
+      "duration_s": 30,
+      "think_s": 0,
+      "load_before": [
+        7.95,
+        6.71,
+        7.1
+      ],
+      "load_after": [
+        9.52,
+        7.35,
+        7.33
+      ],
+      "loadtest": {
+        "at": "2026-10-30T14:08:00Z",
+        "calls": 150714,
+        "calls_per_s": 4874.227418545193,
+        "duration_s": 30,
+        "elapsed_s": 30.920592549,
+        "errors": 0,
+        "go_version": "go1.27.1",
+        "goarch": "amd64",
+        "gomaxprocs": 16,
+        "goos": "darwin",
+        "journey": {
+          "calls": 8373,
+          "errors": 0,
+          "max_ms": 2689.862,
+          "name": "journey",
+          "p50_ms": 660.518,
+          "p95_ms": 864.146,
+          "p99_ms": 2630.125,
+          "per_s": 270.7904121413996
+        },
+        "journeys": 8373,
+        "journeys_failed": 0,
+        "journeys_per_s": 270.7904121413996,
+        "num_cpu": 16,
+        "rows": [
+          {
+            "calls": 66984,
+            "errors": 0,
+            "max_ms": 392.856,
+            "name": "GetUser",
+            "p50_ms": 13.569,
+            "p95_ms": 37.463,
+            "p99_ms": 81.627,
+            "per_s": 2166.323297131197
+          },
+          {
+            "calls": 8373,
+            "errors": 0,
+            "max_ms": 389.185,
+            "name": "UpsertUser",
+            "p50_ms": 15.867,
+            "p95_ms": 36.496,
+            "p99_ms": 49.175,
+            "per_s": 270.7904121413996
+          },
+          {
+            "calls": 8373,
+            "errors": 0,
+            "max_ms": 1094.449,
+            "name": "AdminAdjustBalance",
+            "p50_ms": 63.408,
+            "p95_ms": 106.058,
+            "p99_ms": 177.187,
+            "per_s": 270.7904121413996
+          },
+          {
+            "calls": 25119,
+            "errors": 0,
+            "max_ms": 971.907,
+            "name": "ListPlans",
+            "p50_ms": 39.472,
+            "p95_ms": 74.257,
+            "p99_ms": 108.31,
+            "per_s": 812.3712364241989
+          },
+          {
+            "calls": 8373,
+            "errors": 0,
+            "max_ms": 2120.555,
+            "name": "GetWallet",
+            "p50_ms": 98.661,
+            "p95_ms": 197.927,
+            "p99_ms": 281.476,
+            "per_s": 270.7904121413996
+          },
+          {
+            "calls": 8373,
+            "errors": 0,
+            "max_ms": 1780.748,
+            "name": "CreateOrder",
+            "p50_ms": 91.202,
+            "p95_ms": 154.051,
+            "p99_ms": 432.063,
+            "per_s": 270.7904121413996
+          },
+          {
+            "calls": 8373,
+            "errors": 0,
+            "max_ms": 628.743,
+            "name": "PayOrderWithWallet",
+            "p50_ms": 34.799,
+            "p95_ms": 67.288,
+            "p99_ms": 158.029,
+            "per_s": 270.7904121413996
+          },
+          {
+            "calls": 8373,
+            "errors": 0,
+            "max_ms": 640.099,
+            "name": "ListSubscriptions",
+            "p50_ms": 40.294,
+            "p95_ms": 67.383,
+            "p99_ms": 243.356,
+            "per_s": 270.7904121413996
+          },
+          {
+            "calls": 8373,
+            "errors": 0,
+            "max_ms": 879.931,
+            "name": "AddTicketMessage",
+            "p50_ms": 50.54,
+            "p95_ms": 95.638,
+            "p99_ms": 215.765,
+            "per_s": 270.7904121413996
+          }
+        ],
+        "think_s": 0,
+        "users": 200
+      },
+      "backlog_at_end": 8088,
+      "drain_s": 250.302890848,
+      "still_waiting": 0
+    },
+    {
+      "name": "paced",
+      "users": 500,
+      "duration_s": 60,
+      "think_s": 2,
+      "load_before": [
+        3.43,
+        5.63,
+        6.61
+      ],
+      "load_after": [
+        6.31,
+        5.84,
+        6.6
+      ],
+      "loadtest": {
+        "at": "2026-10-30T14:13:28Z",
+        "calls": 43398,
+        "calls_per_s": 558.5145069626215,
+        "duration_s": 60,
+        "elapsed_s": 77.702547488,
+        "errors": 0,
+        "go_version": "go1.27.1",
+        "goarch": "amd64",
+        "gomaxprocs": 16,
+        "goos": "darwin",
+        "journey": {
+          "calls": 2411,
+          "errors": 0,
+          "max_ms": 19035.503,
+          "name": "journey",
+          "p50_ms": 14083.746,
+          "p95_ms": 16661.038,
+          "p99_ms": 17678.135,
+          "per_s": 31.02858372014564
+        },
+        "journeys": 2411,
+        "journeys_failed": 0,
+        "journeys_per_s": 31.02858372014564,
+        "num_cpu": 16,
+        "rows": [
+          {
+            "calls": 19288,
+            "errors": 0,
+            "max_ms": 92.544,
+            "name": "GetUser",
+            "p50_ms": 0.687,
+            "p95_ms": 14.975,
+            "p99_ms": 17.156,
+            "per_s": 248.22866976116512
+          },
+          {
+            "calls": 2411,
+            "errors": 0,
+            "max_ms": 109.469,
+            "name": "UpsertUser",
+            "p50_ms": 1.104,
+            "p95_ms": 1.972,
+            "p99_ms": 17.81,
+            "per_s": 31.02858372014564
+          },
+          {
+            "calls": 2411,
+            "errors": 0,
+            "max_ms": 149.531,
+            "name": "AdminAdjustBalance",
+            "p50_ms": 3.417,
+            "p95_ms": 20.235,
+            "p99_ms": 34.406,
+            "per_s": 31.02858372014564
+          },
+          {
+            "calls": 7233,
+            "errors": 0,
+            "max_ms": 115.804,
+            "name": "ListPlans",
+            "p50_ms": 1.225,
+            "p95_ms": 2.593,
+            "p99_ms": 18.289,
+            "per_s": 93.08575116043691
+          },
+          {
+            "calls": 2411,
+            "errors": 0,
+            "max_ms": 146.464,
+            "name": "GetWallet",
+            "p50_ms": 2.073,
+            "p95_ms": 5.312,
+            "p99_ms": 19.649,
+            "per_s": 31.02858372014564
+          },
+          {
+            "calls": 2411,
+            "errors": 0,
+            "max_ms": 80.149,
+            "name": "CreateOrder",
+            "p50_ms": 2.702,
+            "p95_ms": 17.959,
+            "p99_ms": 20.737,
+            "per_s": 31.02858372014564
+          },
+          {
+            "calls": 2411,
+            "errors": 0,
+            "max_ms": 171.716,
+            "name": "PayOrderWithWallet",
+            "p50_ms": 3.753,
+            "p95_ms": 20.275,
+            "p99_ms": 22.464,
+            "per_s": 31.02858372014564
+          },
+          {
+            "calls": 2411,
+            "errors": 0,
+            "max_ms": 74.489,
+            "name": "ListSubscriptions",
+            "p50_ms": 0.838,
+            "p95_ms": 1.594,
+            "p99_ms": 17.133,
+            "per_s": 31.02858372014564
+          },
+          {
+            "calls": 2411,
+            "errors": 0,
+            "max_ms": 104.509,
+            "name": "AddTicketMessage",
+            "p50_ms": 3.33,
+            "p95_ms": 17.58,
+            "p99_ms": 21.623,
+            "per_s": 31.02858372014564
+          }
+        ],
+        "think_s": 2,
+        "users": 500
+      },
+      "backlog_at_end": 55,
+      "drain_s": 1.67638541,
+      "still_waiting": 0
+    }
+  ],
+  "db": {
+    "bytes": 74433039,
+    "orders": 10784,
+    "top_tables": {
+      "core.audit_log": 5226496,
+      "core.ledger_entries": 9248768,
+      "core.orders": 4956160,
+      "core.outbox_core": 20013056,
+      "core.subscriptions": 7708672,
+      "core.ticket_messages": 3457024,
+      "core.tickets": 3940352,
+      "core.users": 3416064
+    },
+    "users": 10785
+  },
+  "load_before": [
+    8,
+    6.64,
+    7.1
+  ]
+}

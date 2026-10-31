@@ -1,0 +1,167 @@
+{
+  "runs": [
+    {
+      "workflow": "CI",
+      "id": 40933572561,
+      "ref": "main",
+      "wall_s": 692,
+      "jobs": [
+        {
+          "name": "Test (race)",
+          "conclusion": "success",
+          "startedAt": "2026-10-29T18:44:02Z",
+          "completedAt": "2026-10-29T18:55:34Z",
+          "seconds": 692
+        },
+        {
+          "name": "Vulnerability scan",
+          "conclusion": "success",
+          "startedAt": "2026-10-29T18:44:03Z",
+          "completedAt": "2026-10-29T18:44:23Z",
+          "seconds": 20
+        },
+        {
+          "name": "Dashboard (types, tests, build)",
+          "conclusion": "success",
+          "startedAt": "2026-10-29T18:44:03Z",
+          "completedAt": "2026-10-29T18:47:09Z",
+          "seconds": 186
+        },
+        {
+          "name": "Shell lint + signing tests",
+          "conclusion": "success",
+          "startedAt": "2026-10-29T18:44:03Z",
+          "completedAt": "2026-10-29T18:45:19Z",
+          "seconds": 76
+        },
+        {
+          "name": "Build binaries",
+          "conclusion": "success",
+          "startedAt": "2026-10-29T18:44:03Z",
+          "completedAt": "2026-10-29T18:45:12Z",
+          "seconds": 69
+        },
+        {
+          "name": "Mini App (types, tests, build)",
+          "conclusion": "success",
+          "startedAt": "2026-10-29T18:44:03Z",
+          "completedAt": "2026-10-29T18:44:47Z",
+          "seconds": 44
+        },
+        {
+          "name": "Secret scan",
+          "conclusion": "success",
+          "startedAt": "2026-10-29T18:44:03Z",
+          "completedAt": "2026-10-29T18:44:14Z",
+          "seconds": 11
+        },
+        {
+          "name": "3x-ui integration (v3.8.5)",
+          "conclusion": "success",
+          "startedAt": "2026-10-29T18:44:03Z",
+          "completedAt": "2026-10-29T18:45:03Z",
+          "seconds": 60
+        },
+        {
+          "name": "3x-ui integration (v3.10.2)",
+          "conclusion": "success",
+          "startedAt": "2026-10-29T18:44:03Z",
+          "completedAt": "2026-10-29T18:45:06Z",
+          "seconds": 63
+        },
+        {
+          "name": "Lint",
+          "conclusion": "success",
+          "startedAt": "2026-10-29T18:44:03Z",
+          "completedAt": "2026-10-29T18:46:34Z",
+          "seconds": 151
+        },
+        {
+          "name": "Docker images + compose + e2e install",
+          "conclusion": "success",
+          "startedAt": "2026-10-29T18:44:03Z",
+          "completedAt": "2026-10-29T18:48:59Z",
+          "seconds": 296
+        },
+        {
+          "name": "Marzban integration",
+          "conclusion": "success",
+          "startedAt": "2026-10-29T18:44:03Z",
+          "completedAt": "2026-10-29T18:47:41Z",
+          "seconds": 218
+        },
+        {
+          "name": "3x-ui integration (v3.10.0)",
+          "conclusion": "success",
+          "startedAt": "2026-10-29T18:44:02Z",
+          "completedAt": "2026-10-29T18:44:58Z",
+          "seconds": 56
+        },
+        {
+          "name": "3x-ui integration (v3.9.0)",
+          "conclusion": "success",
+          "startedAt": "2026-10-29T18:44:02Z",
+          "completedAt": "2026-10-29T18:45:07Z",
+          "seconds": 65
+        }
+      ]
+    },
+    {
+      "workflow": "Release",
+      "id": 40906669599,
+      "ref": "v0.19.0",
+      "wall_s": 1292,
+      "jobs": [
+        {
+          "name": "Verify before publishing",
+          "conclusion": "success",
+          "startedAt": "2026-10-29T15:56:58Z",
+          "completedAt": "2026-10-29T16:06:37Z",
+          "seconds": 579
+        },
+        {
+          "name": "Image core",
+          "conclusion": "success",
+          "startedAt": "2026-10-29T16:06:39Z",
+          "completedAt": "2026-10-29T16:13:36Z",
+          "seconds": 417
+        },
+        {
+          "name": "Image bot",
+          "conclusion": "success",
+          "startedAt": "2026-10-29T16:06:39Z",
+          "completedAt": "2026-10-29T16:17:07Z",
+          "seconds": 628
+        },
+        {
+          "name": "Image payments",
+          "conclusion": "success",
+          "startedAt": "2026-10-29T16:06:39Z",
+          "completedAt": "2026-10-29T16:15:00Z",
+          "seconds": 501
+        },
+        {
+          "name": "Image provisioner",
+          "conclusion": "success",
+          "startedAt": "2026-10-29T16:06:39Z",
+          "completedAt": "2026-10-29T16:12:56Z",
+          "seconds": 377
+        },
+        {
+          "name": "Image backup",
+          "conclusion": "success",
+          "startedAt": "2026-10-29T16:06:39Z",
+          "completedAt": "2026-10-29T16:13:30Z",
+          "seconds": 411
+        },
+        {
+          "name": "CLI binaries + release",
+          "conclusion": "success",
+          "startedAt": "2026-10-29T16:17:10Z",
+          "completedAt": "2026-10-29T16:18:30Z",
+          "seconds": 80
+        }
+      ]
+    }
+  ]
+}
