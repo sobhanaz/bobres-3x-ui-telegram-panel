@@ -18,6 +18,11 @@ func (s *Store) InstallID(ctx context.Context, q querier) (string, error) {
 		err = q.QueryRow(ctx, `
 			WITH made AS (INSERT INTO core.install DEFAULT VALUES ON CONFLICT DO NOTHING RETURNING id)
 			SELECT id::text FROM made UNION ALL SELECT id::text FROM core.install LIMIT 1`).Scan(&id)
+		if errors.Is(err, pgx.ErrNoRows) {
+			// Another caller inserted the row at the same moment: the insert above did nothing, and the
+			// statement's snapshot is older than that row. A new statement sees it.
+			err = q.QueryRow(ctx, `SELECT id::text FROM core.install`).Scan(&id)
+		}
 	}
 	if err != nil {
 		return "", fmt.Errorf("install id: %w", err)
