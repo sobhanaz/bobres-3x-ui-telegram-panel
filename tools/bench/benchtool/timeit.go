@@ -42,7 +42,7 @@ func timeit(args []string) error {
 	}
 	cmdArgs := fs.Args()
 	if *out == "" || *label == "" || len(cmdArgs) == 0 {
-		return errors.New("usage: timeit -out F.jsonl -label L [-rep N] [-log F] [-dir D] -- cmd args...")
+		return errors.New("usage: timeit -out F.jsonl -label L [-rep N] [-log F] [-dir D] -- CMD [ARG]")
 	}
 	var w io.Writer = os.Stdout
 	var ew io.Writer = os.Stderr

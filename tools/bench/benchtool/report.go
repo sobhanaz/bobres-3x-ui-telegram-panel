@@ -17,7 +17,7 @@ import (
 // metric is one headline number of a run, as summary.json keeps it for
 // compare.
 type metric struct {
-	Key    string  `json:"key"`
+	Key    string  `json:"metric"`
 	Value  float64 `json:"value"`
 	Unit   string  `json:"unit"`
 	Spread float64 `json:"spread,omitempty"`

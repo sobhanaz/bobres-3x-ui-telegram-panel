@@ -71,7 +71,7 @@ func (p *proc) start(timeout time.Duration) error {
 	for time.Now().Before(deadline) {
 		select {
 		case <-p.done:
-			return fmt.Errorf("%s exited before it was ready (%v): see %s", p.Name, p.err, p.Log)
+			return fmt.Errorf("%s exited before it was ready (%w): see %s", p.Name, p.err, p.Log)
 		default:
 		}
 		if p.isReady(hc) {

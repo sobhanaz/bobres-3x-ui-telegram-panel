@@ -36,7 +36,7 @@ func sizes(args []string) error {
 		return err
 	}
 	if *out == "" || fs.NArg() == 0 {
-		return errors.New("usage: sizes -out F.json -label L [-gzip] paths...")
+		return errors.New("usage: sizes -out F.json -label L [-gzip] PATH [PATH]")
 	}
 	set := sizeSet{Label: *label}
 	for _, root := range fs.Args() {
