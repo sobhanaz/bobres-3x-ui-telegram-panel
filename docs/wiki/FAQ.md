@@ -66,6 +66,9 @@ It is shown once at the end of the install, and again in `sudo bobres`, under **
 **How do I move to a new server?**
 Install on the new server with the same domain and bot token, then restore a backup with its key. See [Updates, Backups, Restore](Updates-Backups-Restore).
 
+**How many customers can one server handle?**
+More than Telegram lets one bot serve. In the load test core finished about 380 complete purchases a second on a laptop, while Telegram allows a bot about 30 messages a second, which is about 4 purchases. The six services use about 120 MB of memory idle and under 200 MB under that load. Deliveries to the panel go one at a time, so a sales burst is delivered a little later, never lost. The numbers are in [docs/21-benchmark.md](https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/blob/main/docs/21-benchmark.md).
+
 **Will customers lose service if BOBRES is down?**
 Active VPN services depend on your panel's host, not on BOBRES. While BOBRES is down nobody can buy or renew.
 

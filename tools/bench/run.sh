@@ -22,6 +22,9 @@
 #   BENCH_WORK     scratch for binaries, caches and logs (default $TMPDIR/bobres-bench-$BENCH_VARIANT).
 #   BENCH_REDIS    a throwaway Redis for the tests and the bot (default 127.0.0.1:6391;
 #                  started under BENCH_WORK when nothing answers there, stopped at the end).
+#   BENCH_REPS     which repetitions to run (default all: "1 2 3"); "2" re-runs an outlier.
+#   BENCH_STRESS_USERS, BENCH_PACED_USERS  the in-process load test's user counts
+#                  (default "50 100 250 500" and "500 2000"; empty: none), to re-run some.
 #   BENCH_QUICK=1  short load runs and one repetition: checks the script, measures nothing.
 #   BENCH_RELEASE  the release whose images and workflow runs are read (default 0.19.0).
 #   BENCH_VERSION  the version stamped into the binaries (default: describe --tags).
@@ -56,6 +59,8 @@ fi
 REPEAT="${BENCH_REPEAT:-3}"
 QUICK="${BENCH_QUICK:-0}"
 [[ "$QUICK" == 1 ]] && REPEAT=1
+# Which repetitions to run: all of them, or some again (an outlier: BENCH_REPS="1 2").
+REPS="${BENCH_REPS:-$(seq -s " " 1 "$REPEAT")}"
 DATE="${BENCH_DATE:-$(date +%F)}"
 OUT="${BENCH_OUT:-$ROOT/docs/bench/$DATE/$VARIANT}"
 WORK="${BENCH_WORK:-${TMPDIR:-/tmp}/bobres-bench-$VARIANT}"
@@ -138,7 +143,7 @@ step_web() {
   for app in dashboard miniapp; do
     log "web/$app"
     MDIR="$ROOT/web/$app" measure "web/$app/npm-ci" 1 -- npm ci --no-audit --no-fund || true
-    for rep in $(seq "$REPEAT"); do
+    for rep in $REPS; do
       MDIR="$ROOT/web/$app" measure "web/$app/build" "$rep" -- npm run build || true
     done
     "$BT" sizes -out "$OUT/sizes/web-$app.json" -label "web/$app" -gzip -strip-prefix "web/$app/dist/app/" "web/$app/dist/app"
@@ -165,7 +170,7 @@ step_build() {
     echo "  warning: the web apps are not built (run the web step first): core embeds a notice instead" >&2
   local dest="$WORK/bin/linux-amd64" cache="$WORK/gocache-clean"
   mkdir -p "$dest"
-  for rep in $(seq "$REPEAT"); do
+  for rep in $REPS; do
     for bin in "${BINARIES[@]}"; do
       log "build linux-amd64/$bin #$rep"
       rm -rf "$cache"
@@ -178,15 +183,18 @@ step_build() {
   done
   rm -rf "$cache"
   "$BT" sizes -out "$OUT/sizes/bin-linux-amd64.json" -label "bin/linux-amd64" -strip-prefix "$dest/" "$dest"
-  if [[ "$HOST" != linux-amd64 ]]; then
-    log "build $HOST (to run the stack here)"
-    mkdir -p "$WORK/bin/$HOST"
-    for bin in "${BINARIES[@]}"; do
-      build_cmd "$HOST" "$bin" "$WORK/bin/$HOST" "$(go env GOCACHE)"
-      "${BUILD_ARGV[@]}"
-    done
-    "$BT" sizes -out "$OUT/sizes/bin-$HOST.json" -label "bin/$HOST" -strip-prefix "$WORK/bin/$HOST/" "$WORK/bin/$HOST"
-  fi
+  [[ "$HOST" == linux-amd64 ]] || build_host
+}
+
+# build_host: the binaries for this machine, untimed, for the stack step.
+build_host() {
+  log "build $HOST (to run the stack here)"
+  mkdir -p "$WORK/bin/$HOST"
+  for bin in "${BINARIES[@]}"; do
+    build_cmd "$HOST" "$bin" "$WORK/bin/$HOST" "$(go env GOCACHE)"
+    "${BUILD_ARGV[@]}"
+  done
+  "$BT" sizes -out "$OUT/sizes/bin-$HOST.json" -label "bin/$HOST" -strip-prefix "$WORK/bin/$HOST/" "$WORK/bin/$HOST"
 }
 
 # The real binaries as separate processes, under the load test. The load
@@ -194,8 +202,9 @@ step_build() {
 step_stack() {
   local scen="stress:200:30s,paced:500:60s:2s"
   [[ "$QUICK" == 1 ]] && scen="stress:20:5s,paced:20:5s:200ms"
+  [[ -x "$WORK/bin/$HOST/core" ]] || build_host
   go build -o "$WORK/loadtest" ./tools/loadtest
-  for rep in $(seq "$REPEAT"); do
+  for rep in $REPS; do
     log "stack #$rep ($scen)"
     rm -rf "$WORK/stack-r$rep"
     measure "stack/run" "$rep" -- "$BT" stack -bin-dir "$WORK/bin/$HOST" -loadtest "$WORK/loadtest" -variant "$VARIANT" \
@@ -207,17 +216,19 @@ step_stack() {
 # 50/100/250/500 users for 30 s, then 500 and 2,000 customers 2 s apart for 60 s.
 # Each run is a fresh stack and waits for its delivery backlog to clear.
 step_loadtest() {
-  local dur=30s pdur=60s stress=(50 100 250 500) paced=(500 2000)
+  local dur=30s pdur=60s stress paced
+  read -ra stress <<< "${BENCH_STRESS_USERS-50 100 250 500}"
+  read -ra paced <<< "${BENCH_PACED_USERS-500 2000}"
   if [[ "$QUICK" == 1 ]]; then dur=3s pdur=5s stress=(5) paced=(20); fi
   mkdir -p "$OUT/loadtest"
   go test -c -o "$WORK/loadtest.test" ./tools/loadtest
-  for rep in $(seq "$REPEAT"); do
-    for n in "${stress[@]}"; do
+  for rep in $REPS; do
+    for n in ${stress[@]+"${stress[@]}"}; do
       log "load test: stress $n users #$rep"
       measure "loadtest/inproc/stress-$n" "$rep" -- env BOBRES_TEST_REQUIRE_DB=1 "$WORK/loadtest.test" -test.run TestLocalStack \
         -test.count=1 -test.timeout 60m -test.v -users "$n" -duration "$dur" -json "$OUT/loadtest/inproc-stress-$n-r$rep.json" || true
     done
-    for n in "${paced[@]}"; do
+    for n in ${paced[@]+"${paced[@]}"}; do
       log "load test: paced $n users #$rep"
       measure "loadtest/inproc/paced-$n" "$rep" -- env BOBRES_TEST_REQUIRE_DB=1 "$WORK/loadtest.test" -test.run TestLocalStack \
         -test.count=1 -test.timeout 60m -test.v -users "$n" -duration "$pdur" -think 2s -json "$OUT/loadtest/inproc-paced-$n-r$rep.json" || true
@@ -234,7 +245,7 @@ step_tests() {
   local env=(BOBRES_TEST_REQUIRE_DB=1 "BOBRES_TEST_REDIS_ADDR=$REDIS")
   local pkgs=./...
   [[ "$QUICK" == 1 ]] && pkgs=./internal/money/...
-  for rep in $(seq "$REPEAT"); do
+  for rep in $REPS; do
     log "go test #$rep"
     measure test/go/default "$rep" -- env "${env[@]}" go test -count=1 -timeout 30m "$pkgs" || true
     measure test/go/p2 "$rep" -- env "${env[@]}" go test -count=1 -p 2 -timeout 30m "$pkgs" || true

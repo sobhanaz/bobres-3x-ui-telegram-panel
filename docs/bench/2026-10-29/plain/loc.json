@@ -1,0 +1,64 @@
+{
+  "kind": "loc",
+  "count": {
+    "docs": {
+      "files": 87,
+      "lines": 18870,
+      "non_blank": 15715
+    },
+    "docs_wiki": {
+      "files": 39,
+      "lines": 3416,
+      "non_blank": 2241
+    },
+    "go": {
+      "files": 494,
+      "lines": 140077,
+      "non_blank": 130708
+    },
+    "go_generated": {
+      "files": 14,
+      "lines": 26070,
+      "non_blank": 23119
+    },
+    "go_test": {
+      "files": 518,
+      "lines": 153999,
+      "non_blank": 145148
+    },
+    "proto": {
+      "files": 9,
+      "lines": 2488,
+      "non_blank": 2195
+    },
+    "shell": {
+      "files": 15,
+      "lines": 2239,
+      "non_blank": 2045
+    },
+    "sql_migrations": {
+      "files": 65,
+      "lines": 2727,
+      "non_blank": 2552
+    },
+    "ts": {
+      "files": 95,
+      "lines": 13833,
+      "non_blank": 12428
+    },
+    "ts_test": {
+      "files": 80,
+      "lines": 29021,
+      "non_blank": 27284
+    },
+    "vue": {
+      "files": 180,
+      "lines": 37372,
+      "non_blank": 35678
+    }
+  },
+  "go_test_funcs": {
+    "Benchmark": 11,
+    "Test": 2985
+  }
+}

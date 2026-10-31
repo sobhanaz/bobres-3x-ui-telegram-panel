@@ -69,6 +69,10 @@ A separate CI job, "Marzban integration", starts the `gozargah/marzban:v0.8.4` i
 
 `deploy/lab` has two throwaway Ubuntu 24.04 containers that behave like fresh VPSes: one for the BOBRES stack and one for a 3x-ui panel. You install both as on real servers. The README there explains starting, stopping and wiping them.
 
+## Load test and benchmarks
+
+`tools/loadtest` drives core's gRPC API as the bot does, with many customers at once ([docs/12-load-test.md](https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/blob/main/docs/12-load-test.md)). `tools/bench/run.sh` measures everything else as well, three times each: the load test, each binary's size, build time, start and memory as a separate process under load, the migrations, the test suites, the web bundles, the release images and CI times, and a few Go micro-benchmarks. It writes JSON and a summary to `docs/bench/<date>/<variant>/`. The v0.19.0 baseline, taken before code protection, is in [docs/21-benchmark.md](https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/blob/main/docs/21-benchmark.md). After a change to how the binaries are built, run `BENCH_VARIANT=<name> tools/bench/run.sh`, then `benchtool compare` against the baseline. Everything runs on 127.0.0.1 against a throwaway database, with fakes for 3x-ui and Telegram.
+
 ## CI
 
 `.github/workflows` has four workflows:

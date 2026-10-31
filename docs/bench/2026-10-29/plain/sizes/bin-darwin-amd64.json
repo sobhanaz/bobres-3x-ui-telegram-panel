@@ -1,0 +1,30 @@
+{
+  "label": "bin/darwin-amd64",
+  "files": [
+    {
+      "path": "core",
+      "raw": 39211664
+    },
+    {
+      "path": "bot",
+      "raw": 25888128
+    },
+    {
+      "path": "payments",
+      "raw": 19711952
+    },
+    {
+      "path": "provisioner",
+      "raw": 19435296
+    },
+    {
+      "path": "backup",
+      "raw": 14455152
+    },
+    {
+      "path": "bobres",
+      "raw": 10173968
+    }
+  ],
+  "total_raw": 128876160
+}

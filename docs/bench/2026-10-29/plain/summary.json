@@ -1,0 +1,1579 @@
+{
+  "kind": "summary",
+  "variant": "plain",
+  "dir": "/Users/macbook/Documents/BOBRES 3x-ui TELEGRAm Panel/.claude/worktrees/agent-aca1c3990dda45c94/docs/bench/2026-10-29/plain",
+  "metrics": [
+    {
+      "key": "loadtest/inproc/stress-50/journeys_per_s",
+      "value": 170.7339049965784,
+      "unit": "1/s",
+      "spread": 1.6293919866858202,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/stress-50/calls_per_s",
+      "value": 3070.72917331862,
+      "unit": "1/s",
+      "spread": 1.6307442756009045,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/stress-50/journey_p95_ms",
+      "value": 444.813,
+      "unit": "ms",
+      "spread": 2.201322803065558,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/stress-50/journey_p99_ms",
+      "value": 540.681,
+      "unit": "ms",
+      "spread": 3.074735380011504,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/stress-100/journeys_per_s",
+      "value": 190.03089618446546,
+      "unit": "1/s",
+      "spread": 1.3448344605071922,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/stress-100/calls_per_s",
+      "value": 3418.2483307074513,
+      "unit": "1/s",
+      "spread": 1.345732825749748,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/stress-100/journey_p95_ms",
+      "value": 777.127,
+      "unit": "ms",
+      "spread": 1.7759941425275407,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/stress-100/journey_p99_ms",
+      "value": 937.651,
+      "unit": "ms",
+      "spread": 1.747633181215612,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/stress-250/journeys_per_s",
+      "value": 97.75194117391236,
+      "unit": "1/s",
+      "spread": 2.746542347483018,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/stress-250/calls_per_s",
+      "value": 1757.1153386261178,
+      "unit": "1/s",
+      "spread": 2.7503072440125806,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/stress-250/journey_p95_ms",
+      "value": 3696.009,
+      "unit": "ms",
+      "spread": 0.8966119941807501,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/stress-250/journey_p99_ms",
+      "value": 3837.897,
+      "unit": "ms",
+      "spread": 1.0025857911246707,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/stress-500/journeys_per_s",
+      "value": 385.498210858734,
+      "unit": "1/s",
+      "spread": 0.2262468356927936,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/stress-500/calls_per_s",
+      "value": 6936.545512798499,
+      "unit": "1/s",
+      "spread": 0.22630727860136104,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/stress-500/journey_p95_ms",
+      "value": 1413.427,
+      "unit": "ms",
+      "spread": 0.07486272725793416,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/stress-500/journey_p99_ms",
+      "value": 1471.821,
+      "unit": "ms",
+      "spread": 0.09381100011482381,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/paced-500/journeys_per_s",
+      "value": 31.024014623003545,
+      "unit": "1/s",
+      "spread": 0.02630499004204015,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/paced-500/calls_per_s",
+      "value": 558.4322632140638,
+      "unit": "1/s",
+      "spread": 0.02630499004204012,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/paced-500/journey_p95_ms",
+      "value": 16622.031,
+      "unit": "ms",
+      "spread": 0.008378458685343556,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/paced-500/journey_p99_ms",
+      "value": 17590.426,
+      "unit": "ms",
+      "spread": 0.016587887069932274,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/paced-2000/journeys_per_s",
+      "value": 121.78216140614497,
+      "unit": "1/s",
+      "spread": 0.04241675858526138,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/paced-2000/calls_per_s",
+      "value": 2192.078905310609,
+      "unit": "1/s",
+      "spread": 0.04241675858526144,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/paced-2000/journey_p95_ms",
+      "value": 16579.318,
+      "unit": "ms",
+      "spread": 0.043736539705674225,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/paced-2000/journey_p99_ms",
+      "value": 17549.717,
+      "unit": "ms",
+      "spread": 0.04906215866614819,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/stress-50/quiet_journeys_per_s",
+      "value": 384.9731770048667,
+      "unit": "1/s",
+      "n": 1
+    },
+    {
+      "key": "loadtest/inproc/stress-100/quiet_journeys_per_s",
+      "value": 379.1079472749441,
+      "unit": "1/s",
+      "n": 1
+    },
+    {
+      "key": "loadtest/inproc/stress-250/quiet_journeys_per_s",
+      "value": 366.15947328676845,
+      "unit": "1/s",
+      "n": 1
+    },
+    {
+      "key": "loadtest/inproc/stress-500/quiet_journeys_per_s",
+      "value": 385.498210858734,
+      "unit": "1/s",
+      "spread": 0.2262468356927936,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/paced-500/quiet_journeys_per_s",
+      "value": 31.024014623003545,
+      "unit": "1/s",
+      "spread": 0.02630499004204015,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/paced-2000/quiet_journeys_per_s",
+      "value": 122.80694505118285,
+      "unit": "1/s",
+      "spread": 0.016689343499437896,
+      "n": 2
+    },
+    {
+      "key": "loadtest/inproc/stress-50/GetUser/p95_ms",
+      "value": 20.774,
+      "unit": "ms",
+      "spread": 0.27529604313083667,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/stress-50/UpsertUser/p95_ms",
+      "value": 21.834,
+      "unit": "ms",
+      "spread": 0.46775670971878724,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/stress-50/AdminAdjustBalance/p95_ms",
+      "value": 53.361,
+      "unit": "ms",
+      "spread": 2.0921084687318454,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/stress-50/ListPlans/p95_ms",
+      "value": 31.688,
+      "unit": "ms",
+      "spread": 0.8661638475132544,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/stress-50/GetWallet/p95_ms",
+      "value": 79.573,
+      "unit": "ms",
+      "spread": 2.0364696567931335,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/stress-50/CreateOrder/p95_ms",
+      "value": 50.693,
+      "unit": "ms",
+      "spread": 2.0488035823486475,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/stress-50/PayOrderWithWallet/p95_ms",
+      "value": 43.747,
+      "unit": "ms",
+      "spread": 1.9267606921617482,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/stress-50/ListSubscriptions/p95_ms",
+      "value": 20.822,
+      "unit": "ms",
+      "spread": 0.28191336086831226,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/stress-50/AddTicketMessage/p95_ms",
+      "value": 46.962,
+      "unit": "ms",
+      "spread": 2.1699459137174735,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/stress-100/GetUser/p95_ms",
+      "value": 28.62,
+      "unit": "ms",
+      "spread": 1.0145702306079665,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/stress-100/UpsertUser/p95_ms",
+      "value": 29.727,
+      "unit": "ms",
+      "spread": 1.3285901705520236,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/stress-100/AdminAdjustBalance/p95_ms",
+      "value": 94.093,
+      "unit": "ms",
+      "spread": 2.015080824290861,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/stress-100/ListPlans/p95_ms",
+      "value": 53.707,
+      "unit": "ms",
+      "spread": 1.888878544696222,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/stress-100/GetWallet/p95_ms",
+      "value": 174.862,
+      "unit": "ms",
+      "spread": 1.2882673193718477,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/stress-100/CreateOrder/p95_ms",
+      "value": 113.278,
+      "unit": "ms",
+      "spread": 1.8113402425890286,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/stress-100/PayOrderWithWallet/p95_ms",
+      "value": 50.978,
+      "unit": "ms",
+      "spread": 2.2535015104554903,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/stress-100/ListSubscriptions/p95_ms",
+      "value": 28.981,
+      "unit": "ms",
+      "spread": 1.07729201890894,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/stress-100/AddTicketMessage/p95_ms",
+      "value": 74.019,
+      "unit": "ms",
+      "spread": 2.039827611829395,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/stress-250/GetUser/p95_ms",
+      "value": 224.597,
+      "unit": "ms",
+      "spread": 0.9495140184419203,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/stress-250/UpsertUser/p95_ms",
+      "value": 199.928,
+      "unit": "ms",
+      "spread": 1.2563722940258493,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/stress-250/AdminAdjustBalance/p95_ms",
+      "value": 493.285,
+      "unit": "ms",
+      "spread": 1.0871240763453176,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/stress-250/ListPlans/p95_ms",
+      "value": 258.386,
+      "unit": "ms",
+      "spread": 0.8604413551817822,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/stress-250/GetWallet/p95_ms",
+      "value": 394.324,
+      "unit": "ms",
+      "spread": 0.6818048102575546,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/stress-250/CreateOrder/p95_ms",
+      "value": 648.798,
+      "unit": "ms",
+      "spread": 0.9118492966994349,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/stress-250/PayOrderWithWallet/p95_ms",
+      "value": 336.08,
+      "unit": "ms",
+      "spread": 0.9821381813853844,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/stress-250/ListSubscriptions/p95_ms",
+      "value": 159.299,
+      "unit": "ms",
+      "spread": 1.35046045486789,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/stress-250/AddTicketMessage/p95_ms",
+      "value": 363.923,
+      "unit": "ms",
+      "spread": 1.0172261714703386,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/stress-500/GetUser/p95_ms",
+      "value": 110.129,
+      "unit": "ms",
+      "spread": 0.4341817323320833,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/stress-500/UpsertUser/p95_ms",
+      "value": 88.182,
+      "unit": "ms",
+      "spread": 0.22577169943979503,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/stress-500/AdminAdjustBalance/p95_ms",
+      "value": 220.733,
+      "unit": "ms",
+      "spread": 0.2993435508057246,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/stress-500/ListPlans/p95_ms",
+      "value": 148.498,
+      "unit": "ms",
+      "spread": 0.09979258979918915,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/stress-500/GetWallet/p95_ms",
+      "value": 201.866,
+      "unit": "ms",
+      "spread": 0.048438072780953655,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/stress-500/CreateOrder/p95_ms",
+      "value": 348.172,
+      "unit": "ms",
+      "spread": 0.174502831933642,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/stress-500/PayOrderWithWallet/p95_ms",
+      "value": 163.336,
+      "unit": "ms",
+      "spread": 0.46505363177744036,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/stress-500/ListSubscriptions/p95_ms",
+      "value": 85.892,
+      "unit": "ms",
+      "spread": 0.25344618823639,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/stress-500/AddTicketMessage/p95_ms",
+      "value": 190.523,
+      "unit": "ms",
+      "spread": 0.3492439233058477,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/paced-500/GetUser/p95_ms",
+      "value": 14.568,
+      "unit": "ms",
+      "spread": 0.113948380010983,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/paced-500/UpsertUser/p95_ms",
+      "value": 1.876,
+      "unit": "ms",
+      "spread": 0.0756929637526652,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/paced-500/AdminAdjustBalance/p95_ms",
+      "value": 12.779,
+      "unit": "ms",
+      "spread": 1.0055559902965803,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/paced-500/ListPlans/p95_ms",
+      "value": 1.78,
+      "unit": "ms",
+      "spread": 0.05449438202247202,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/paced-500/GetWallet/p95_ms",
+      "value": 2.391,
+      "unit": "ms",
+      "spread": 0.024257632789627885,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/paced-500/CreateOrder/p95_ms",
+      "value": 3.215,
+      "unit": "ms",
+      "spread": 0.05412130637636079,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/paced-500/PayOrderWithWallet/p95_ms",
+      "value": 3.817,
+      "unit": "ms",
+      "spread": 0.07335603877390627,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/paced-500/ListSubscriptions/p95_ms",
+      "value": 1.124,
+      "unit": "ms",
+      "spread": 0.035587188612099675,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/paced-500/AddTicketMessage/p95_ms",
+      "value": 5.007,
+      "unit": "ms",
+      "spread": 0.29139205112842015,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/paced-2000/GetUser/p95_ms",
+      "value": 14.37,
+      "unit": "ms",
+      "spread": 7.596033402922756,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/paced-2000/UpsertUser/p95_ms",
+      "value": 1.832,
+      "unit": "ms",
+      "spread": 75.47925764192141,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/paced-2000/AdminAdjustBalance/p95_ms",
+      "value": 8.037,
+      "unit": "ms",
+      "spread": 41.40400647007589,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/paced-2000/ListPlans/p95_ms",
+      "value": 2.009,
+      "unit": "ms",
+      "spread": 109.88053758088601,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/paced-2000/GetWallet/p95_ms",
+      "value": 3.347,
+      "unit": "ms",
+      "spread": 170.12339408425456,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/paced-2000/CreateOrder/p95_ms",
+      "value": 4.028,
+      "unit": "ms",
+      "spread": 78.55436941410129,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/paced-2000/PayOrderWithWallet/p95_ms",
+      "value": 6.761,
+      "unit": "ms",
+      "spread": 7.440763200709954,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/paced-2000/ListSubscriptions/p95_ms",
+      "value": 1.035,
+      "unit": "ms",
+      "spread": 64.8144927536232,
+      "n": 3
+    },
+    {
+      "key": "loadtest/inproc/paced-2000/AddTicketMessage/p95_ms",
+      "value": 6.468,
+      "unit": "ms",
+      "spread": 41.08147804576376,
+      "n": 3
+    },
+    {
+      "key": "stack/payments/ready_cold_ms",
+      "value": 241.76751,
+      "unit": "ms",
+      "spread": 0.6703183814897213,
+      "n": 3
+    },
+    {
+      "key": "stack/payments/ready_warm_ms",
+      "value": 71.071497,
+      "unit": "ms",
+      "spread": 0.7903847023230706,
+      "n": 3
+    },
+    {
+      "key": "stack/payments/rss_idle_mb",
+      "value": 18.03515625,
+      "unit": "MB",
+      "spread": 0.023824994585228503,
+      "n": 3
+    },
+    {
+      "key": "stack/payments/rss_peak_mb",
+      "value": 20.87109375,
+      "unit": "MB",
+      "spread": 0.027699794123151787,
+      "n": 3
+    },
+    {
+      "key": "stack/provisioner/ready_cold_ms",
+      "value": 127.01101000000001,
+      "unit": "ms",
+      "spread": 0.44208173763833564,
+      "n": 3
+    },
+    {
+      "key": "stack/provisioner/ready_warm_ms",
+      "value": 63.56118299999999,
+      "unit": "ms",
+      "spread": 0.4204741280539098,
+      "n": 3
+    },
+    {
+      "key": "stack/provisioner/rss_idle_mb",
+      "value": 16.890625,
+      "unit": "MB",
+      "spread": 0.0030064754856614245,
+      "n": 3
+    },
+    {
+      "key": "stack/provisioner/rss_peak_mb",
+      "value": 37.20703125,
+      "unit": "MB",
+      "spread": 0.04199475065616798,
+      "n": 3
+    },
+    {
+      "key": "stack/core/ready_cold_ms",
+      "value": 687.7986860000001,
+      "unit": "ms",
+      "spread": 0.12085116428966246,
+      "n": 3
+    },
+    {
+      "key": "stack/core/ready_warm_ms",
+      "value": 98.27076199999999,
+      "unit": "ms",
+      "spread": 0.8475648942256092,
+      "n": 3
+    },
+    {
+      "key": "stack/core/rss_idle_mb",
+      "value": 32.84375,
+      "unit": "MB",
+      "spread": 0.009276879162702189,
+      "n": 3
+    },
+    {
+      "key": "stack/core/rss_peak_mb",
+      "value": 62.2890625,
+      "unit": "MB",
+      "spread": 0.15721811112504702,
+      "n": 3
+    },
+    {
+      "key": "stack/bot/ready_cold_ms",
+      "value": 42.700607000000005,
+      "unit": "ms",
+      "spread": 0.0869116216544652,
+      "n": 3
+    },
+    {
+      "key": "stack/bot/ready_warm_ms",
+      "value": 62.793589999999995,
+      "unit": "ms",
+      "spread": 0.6846876249629937,
+      "n": 3
+    },
+    {
+      "key": "stack/bot/rss_idle_mb",
+      "value": 20.8046875,
+      "unit": "MB",
+      "spread": 0.007134810364250845,
+      "n": 3
+    },
+    {
+      "key": "stack/bot/rss_peak_mb",
+      "value": 31.1796875,
+      "unit": "MB",
+      "spread": 0.022174893510398395,
+      "n": 3
+    },
+    {
+      "key": "stack/backup/ready_cold_ms",
+      "value": 20.635473,
+      "unit": "ms",
+      "spread": 0.13034714542283557,
+      "n": 3
+    },
+    {
+      "key": "stack/backup/ready_warm_ms",
+      "value": 23.97691,
+      "unit": "ms",
+      "spread": 0.7043875128196252,
+      "n": 3
+    },
+    {
+      "key": "stack/backup/rss_idle_mb",
+      "value": 9.73828125,
+      "unit": "MB",
+      "spread": 0.02807862013638187,
+      "n": 3
+    },
+    {
+      "key": "stack/backup/rss_peak_mb",
+      "value": 9.7734375,
+      "unit": "MB",
+      "spread": 0.029176658673061552,
+      "n": 3
+    },
+    {
+      "key": "stack/tls-agent/ready_cold_ms",
+      "value": 29.561072,
+      "unit": "ms",
+      "spread": 0.16949703312518574,
+      "n": 3
+    },
+    {
+      "key": "stack/tls-agent/ready_warm_ms",
+      "value": 32.440833000000005,
+      "unit": "ms",
+      "spread": 0.8053474767432758,
+      "n": 3
+    },
+    {
+      "key": "stack/tls-agent/rss_idle_mb",
+      "value": 17.67578125,
+      "unit": "MB",
+      "spread": 0.027624309392265192,
+      "n": 3
+    },
+    {
+      "key": "stack/tls-agent/rss_peak_mb",
+      "value": 18.12109375,
+      "unit": "MB",
+      "spread": 0.025220952791549903,
+      "n": 3
+    },
+    {
+      "key": "stack/stress/payments/cpu_cores",
+      "value": 0.0009873030879872363,
+      "unit": "cores",
+      "spread": 0.3315706052906032,
+      "n": 3
+    },
+    {
+      "key": "stack/stress/payments/rss_max_mb",
+      "value": 18.51953125,
+      "unit": "MB",
+      "spread": 0.013288335794136259,
+      "n": 3
+    },
+    {
+      "key": "stack/stress/provisioner/cpu_cores",
+      "value": 0.1357449994187881,
+      "unit": "cores",
+      "spread": 0.086778964874055,
+      "n": 3
+    },
+    {
+      "key": "stack/stress/provisioner/rss_max_mb",
+      "value": 31.69140625,
+      "unit": "MB",
+      "spread": 0.02687045482558856,
+      "n": 3
+    },
+    {
+      "key": "stack/stress/core/cpu_cores",
+      "value": 2.721943360987114,
+      "unit": "cores",
+      "spread": 0.13217717405663978,
+      "n": 3
+    },
+    {
+      "key": "stack/stress/core/rss_max_mb",
+      "value": 59.3125,
+      "unit": "MB",
+      "spread": 0.16003688092729187,
+      "n": 3
+    },
+    {
+      "key": "stack/stress/bot/cpu_cores",
+      "value": 0.04001916256450121,
+      "unit": "cores",
+      "spread": 0.07809967992307375,
+      "n": 3
+    },
+    {
+      "key": "stack/stress/bot/rss_max_mb",
+      "value": 25.375,
+      "unit": "MB",
+      "spread": 0.06973522167487685,
+      "n": 3
+    },
+    {
+      "key": "stack/stress/backup/cpu_cores",
+      "value": 0,
+      "unit": "cores",
+      "n": 3
+    },
+    {
+      "key": "stack/stress/backup/rss_max_mb",
+      "value": 9.73828125,
+      "unit": "MB",
+      "spread": 0.02807862013638187,
+      "n": 3
+    },
+    {
+      "key": "stack/stress/tls-agent/cpu_cores",
+      "value": 0.00032195514600930975,
+      "unit": "cores",
+      "spread": 0.027791849032319505,
+      "n": 3
+    },
+    {
+      "key": "stack/stress/tls-agent/rss_max_mb",
+      "value": 17.6953125,
+      "unit": "MB",
+      "spread": 0.027152317880794703,
+      "n": 3
+    },
+    {
+      "key": "stack/stress/journeys_per_s",
+      "value": 326.546542776304,
+      "unit": "1/s",
+      "spread": 0.17538571823655524,
+      "n": 3
+    },
+    {
+      "key": "stack/stress/journey_p95_ms",
+      "value": 673.006,
+      "unit": "ms",
+      "spread": 0.3053479463778926,
+      "n": 3
+    },
+    {
+      "key": "stack/paced/payments/cpu_cores",
+      "value": 0.001175004952013655,
+      "unit": "cores",
+      "spread": 0.5432780315280616,
+      "n": 3
+    },
+    {
+      "key": "stack/paced/payments/rss_max_mb",
+      "value": 20.8046875,
+      "unit": "MB",
+      "spread": 0.027975966954562524,
+      "n": 3
+    },
+    {
+      "key": "stack/paced/provisioner/cpu_cores",
+      "value": 0.6102192384124244,
+      "unit": "cores",
+      "spread": 0.46605369004325375,
+      "n": 3
+    },
+    {
+      "key": "stack/paced/provisioner/rss_max_mb",
+      "value": 37.16796875,
+      "unit": "MB",
+      "spread": 0.04161849710982659,
+      "n": 3
+    },
+    {
+      "key": "stack/paced/core/cpu_cores",
+      "value": 0.5919413836033232,
+      "unit": "cores",
+      "spread": 0.4066573933913657,
+      "n": 3
+    },
+    {
+      "key": "stack/paced/core/rss_max_mb",
+      "value": 62.21875,
+      "unit": "MB",
+      "spread": 0.15739578101456556,
+      "n": 3
+    },
+    {
+      "key": "stack/paced/bot/cpu_cores",
+      "value": 0.11397548034532448,
+      "unit": "cores",
+      "spread": 0.5341041751710919,
+      "n": 3
+    },
+    {
+      "key": "stack/paced/bot/rss_max_mb",
+      "value": 31.15234375,
+      "unit": "MB",
+      "spread": 0.022068965517241378,
+      "n": 3
+    },
+    {
+      "key": "stack/paced/backup/cpu_cores",
+      "value": 0,
+      "unit": "cores",
+      "n": 3
+    },
+    {
+      "key": "stack/paced/backup/rss_max_mb",
+      "value": 9.75390625,
+      "unit": "MB",
+      "spread": 0.030036043251902282,
+      "n": 3
+    },
+    {
+      "key": "stack/paced/tls-agent/cpu_cores",
+      "value": 0.0003856084493965071,
+      "unit": "cores",
+      "spread": 0.3284664115902599,
+      "n": 3
+    },
+    {
+      "key": "stack/paced/tls-agent/rss_max_mb",
+      "value": 18.0625,
+      "unit": "MB",
+      "spread": 0.024653979238754325,
+      "n": 3
+    },
+    {
+      "key": "stack/paced/journeys_per_s",
+      "value": 31.181525323910627,
+      "unit": "1/s",
+      "spread": 0.013836744428038075,
+      "n": 3
+    },
+    {
+      "key": "stack/paced/journey_p95_ms",
+      "value": 16625.774,
+      "unit": "ms",
+      "spread": 0.006668621863860243,
+      "n": 3
+    },
+    {
+      "key": "stack/db_bytes",
+      "value": 82115607,
+      "unit": "B",
+      "spread": 0.09706822236606008,
+      "n": 3
+    },
+    {
+      "key": "bin/darwin-amd64/backup/bytes",
+      "value": 14455152,
+      "unit": "B",
+      "n": 1
+    },
+    {
+      "key": "bin/darwin-amd64/bobres/bytes",
+      "value": 10173968,
+      "unit": "B",
+      "n": 1
+    },
+    {
+      "key": "bin/darwin-amd64/bot/bytes",
+      "value": 25888128,
+      "unit": "B",
+      "n": 1
+    },
+    {
+      "key": "bin/darwin-amd64/core/bytes",
+      "value": 39211664,
+      "unit": "B",
+      "n": 1
+    },
+    {
+      "key": "bin/darwin-amd64/payments/bytes",
+      "value": 19711952,
+      "unit": "B",
+      "n": 1
+    },
+    {
+      "key": "bin/darwin-amd64/provisioner/bytes",
+      "value": 19435296,
+      "unit": "B",
+      "n": 1
+    },
+    {
+      "key": "bin/linux-amd64/backup/bytes",
+      "value": 14065824,
+      "unit": "B",
+      "n": 1
+    },
+    {
+      "key": "build/linux-amd64/backup/clean_s",
+      "value": 15.217389035,
+      "unit": "s",
+      "spread": 0.1446270032223041,
+      "n": 3
+    },
+    {
+      "key": "build/linux-amd64/backup/warm_s",
+      "value": 1.016048901,
+      "unit": "s",
+      "spread": 0.027824707031497538,
+      "n": 3
+    },
+    {
+      "key": "bin/linux-amd64/bobres/bytes",
+      "value": 9973920,
+      "unit": "B",
+      "n": 1
+    },
+    {
+      "key": "build/linux-amd64/bobres/clean_s",
+      "value": 13.815156005,
+      "unit": "s",
+      "spread": 0.02734746418087952,
+      "n": 3
+    },
+    {
+      "key": "build/linux-amd64/bobres/warm_s",
+      "value": 0.821495237,
+      "unit": "s",
+      "spread": 0.15700691153246446,
+      "n": 3
+    },
+    {
+      "key": "bin/linux-amd64/bot/bytes",
+      "value": 25292960,
+      "unit": "B",
+      "n": 1
+    },
+    {
+      "key": "build/linux-amd64/bot/clean_s",
+      "value": 26.5468026,
+      "unit": "s",
+      "spread": 0.0964377206014257,
+      "n": 3
+    },
+    {
+      "key": "build/linux-amd64/bot/warm_s",
+      "value": 1.478563837,
+      "unit": "s",
+      "spread": 0.11707477192951252,
+      "n": 3
+    },
+    {
+      "key": "bin/linux-amd64/core/bytes",
+      "value": 38359200,
+      "unit": "B",
+      "n": 1
+    },
+    {
+      "key": "build/linux-amd64/core/clean_s",
+      "value": 28.451371521,
+      "unit": "s",
+      "spread": 0.45603270729579104,
+      "n": 3
+    },
+    {
+      "key": "build/linux-amd64/core/warm_s",
+      "value": 1.735469613,
+      "unit": "s",
+      "spread": 0.4022044844642289,
+      "n": 3
+    },
+    {
+      "key": "bin/linux-amd64/payments/bytes",
+      "value": 19165344,
+      "unit": "B",
+      "n": 1
+    },
+    {
+      "key": "build/linux-amd64/payments/clean_s",
+      "value": 18.578074476,
+      "unit": "s",
+      "spread": 0.17604587850183828,
+      "n": 3
+    },
+    {
+      "key": "build/linux-amd64/payments/warm_s",
+      "value": 1.234791208,
+      "unit": "s",
+      "spread": 0.08957575279398972,
+      "n": 3
+    },
+    {
+      "key": "bin/linux-amd64/provisioner/bytes",
+      "value": 18903200,
+      "unit": "B",
+      "n": 1
+    },
+    {
+      "key": "build/linux-amd64/provisioner/clean_s",
+      "value": 17.735453013,
+      "unit": "s",
+      "spread": 0.09792070615433573,
+      "n": 3
+    },
+    {
+      "key": "build/linux-amd64/provisioner/warm_s",
+      "value": 1.22523279,
+      "unit": "s",
+      "spread": 0.1903803806948391,
+      "n": 3
+    },
+    {
+      "key": "migrate/total_s",
+      "value": 1.030159708,
+      "unit": "s",
+      "spread": 0.059818785884799865,
+      "n": 3
+    },
+    {
+      "key": "migrate/noop_s",
+      "value": 0.049758353,
+      "unit": "s",
+      "spread": 0.009923037444587425,
+      "n": 3
+    },
+    {
+      "key": "test/go/default/wall_s",
+      "value": 482.423831925,
+      "unit": "s",
+      "n": 1
+    },
+    {
+      "key": "test/go/p2/wall_s",
+      "value": 797.4557027660001,
+      "unit": "s",
+      "spread": 0.5546498517044126,
+      "n": 2
+    },
+    {
+      "key": "tests/go_test_funcs",
+      "value": 2985,
+      "unit": "",
+      "n": 1
+    },
+    {
+      "key": "web/dashboard/raw_bytes",
+      "value": 4679189,
+      "unit": "B",
+      "n": 1
+    },
+    {
+      "key": "web/dashboard/gzip_bytes",
+      "value": 2357247,
+      "unit": "B",
+      "n": 1
+    },
+    {
+      "key": "web/dashboard/build_s",
+      "value": 18.100545701,
+      "unit": "s",
+      "spread": 0.15576358064410395,
+      "n": 3
+    },
+    {
+      "key": "web/miniapp/raw_bytes",
+      "value": 263533,
+      "unit": "B",
+      "n": 1
+    },
+    {
+      "key": "web/miniapp/gzip_bytes",
+      "value": 80977,
+      "unit": "B",
+      "n": 1
+    },
+    {
+      "key": "web/miniapp/build_s",
+      "value": 5.208682312,
+      "unit": "s",
+      "spread": 0.5030506087813023,
+      "n": 3
+    },
+    {
+      "key": "image/core/amd64_bytes",
+      "value": 13955958,
+      "unit": "B",
+      "n": 1
+    },
+    {
+      "key": "image/bot/amd64_bytes",
+      "value": 8843825,
+      "unit": "B",
+      "n": 1
+    },
+    {
+      "key": "image/payments/amd64_bytes",
+      "value": 7136734,
+      "unit": "B",
+      "n": 1
+    },
+    {
+      "key": "image/provisioner/amd64_bytes",
+      "value": 7040144,
+      "unit": "B",
+      "n": 1
+    },
+    {
+      "key": "image/backup/amd64_bytes",
+      "value": 121415993,
+      "unit": "B",
+      "n": 1
+    },
+    {
+      "key": "ci/CI/Test (race)/s",
+      "value": 692,
+      "unit": "s",
+      "n": 1
+    },
+    {
+      "key": "ci/CI/Vulnerability scan/s",
+      "value": 20,
+      "unit": "s",
+      "n": 1
+    },
+    {
+      "key": "ci/CI/Dashboard (types, tests, build)/s",
+      "value": 186,
+      "unit": "s",
+      "n": 1
+    },
+    {
+      "key": "ci/CI/Shell lint + signing tests/s",
+      "value": 76,
+      "unit": "s",
+      "n": 1
+    },
+    {
+      "key": "ci/CI/Build binaries/s",
+      "value": 69,
+      "unit": "s",
+      "n": 1
+    },
+    {
+      "key": "ci/CI/Mini App (types, tests, build)/s",
+      "value": 44,
+      "unit": "s",
+      "n": 1
+    },
+    {
+      "key": "ci/CI/Secret scan/s",
+      "value": 11,
+      "unit": "s",
+      "n": 1
+    },
+    {
+      "key": "ci/CI/3x-ui integration (v3.8.5)/s",
+      "value": 60,
+      "unit": "s",
+      "n": 1
+    },
+    {
+      "key": "ci/CI/3x-ui integration (v3.10.2)/s",
+      "value": 63,
+      "unit": "s",
+      "n": 1
+    },
+    {
+      "key": "ci/CI/Lint/s",
+      "value": 151,
+      "unit": "s",
+      "n": 1
+    },
+    {
+      "key": "ci/CI/Docker images + compose + e2e install/s",
+      "value": 296,
+      "unit": "s",
+      "n": 1
+    },
+    {
+      "key": "ci/CI/Marzban integration/s",
+      "value": 218,
+      "unit": "s",
+      "n": 1
+    },
+    {
+      "key": "ci/CI/3x-ui integration (v3.10.0)/s",
+      "value": 56,
+      "unit": "s",
+      "n": 1
+    },
+    {
+      "key": "ci/CI/3x-ui integration (v3.9.0)/s",
+      "value": 65,
+      "unit": "s",
+      "n": 1
+    },
+    {
+      "key": "ci/Release/Verify before publishing/s",
+      "value": 579,
+      "unit": "s",
+      "n": 1
+    },
+    {
+      "key": "ci/Release/Image core/s",
+      "value": 417,
+      "unit": "s",
+      "n": 1
+    },
+    {
+      "key": "ci/Release/Image bot/s",
+      "value": 628,
+      "unit": "s",
+      "n": 1
+    },
+    {
+      "key": "ci/Release/Image payments/s",
+      "value": 501,
+      "unit": "s",
+      "n": 1
+    },
+    {
+      "key": "ci/Release/Image provisioner/s",
+      "value": 377,
+      "unit": "s",
+      "n": 1
+    },
+    {
+      "key": "ci/Release/Image backup/s",
+      "value": 411,
+      "unit": "s",
+      "n": 1
+    },
+    {
+      "key": "ci/Release/CLI binaries + release/s",
+      "value": 80,
+      "unit": "s",
+      "n": 1
+    },
+    {
+      "key": "loc/go",
+      "value": 140077,
+      "unit": "lines",
+      "n": 1
+    },
+    {
+      "key": "loc/go_test",
+      "value": 153999,
+      "unit": "lines",
+      "n": 1
+    },
+    {
+      "key": "loc/go_generated",
+      "value": 26070,
+      "unit": "lines",
+      "n": 1
+    },
+    {
+      "key": "loc/proto",
+      "value": 2488,
+      "unit": "lines",
+      "n": 1
+    },
+    {
+      "key": "loc/ts",
+      "value": 13833,
+      "unit": "lines",
+      "n": 1
+    },
+    {
+      "key": "loc/ts_test",
+      "value": 29021,
+      "unit": "lines",
+      "n": 1
+    },
+    {
+      "key": "loc/vue",
+      "value": 37372,
+      "unit": "lines",
+      "n": 1
+    },
+    {
+      "key": "loc/sql_migrations",
+      "value": 2727,
+      "unit": "lines",
+      "n": 1
+    },
+    {
+      "key": "loc/shell",
+      "value": 2239,
+      "unit": "lines",
+      "n": 1
+    },
+    {
+      "key": "loc/docs",
+      "value": 18870,
+      "unit": "lines",
+      "n": 1
+    },
+    {
+      "key": "loc/docs_wiki",
+      "value": 3416,
+      "unit": "lines",
+      "n": 1
+    },
+    {
+      "key": "gobench/internal/bot/i18n/BenchmarkMoney/en-IRT/ns_op",
+      "value": 231.1,
+      "unit": "ns",
+      "spread": 0.04759844223279965,
+      "n": 5
+    },
+    {
+      "key": "gobench/internal/bot/i18n/BenchmarkMoney/en-IRT/allocs_op",
+      "value": 4,
+      "unit": "",
+      "n": 1
+    },
+    {
+      "key": "gobench/internal/bot/i18n/BenchmarkMoney/fa-IRT/ns_op",
+      "value": 255.7,
+      "unit": "ns",
+      "spread": 0.022291748142354278,
+      "n": 5
+    },
+    {
+      "key": "gobench/internal/bot/i18n/BenchmarkMoney/fa-IRT/allocs_op",
+      "value": 5,
+      "unit": "",
+      "n": 1
+    },
+    {
+      "key": "gobench/internal/bot/i18n/BenchmarkMoney/fa-USDT/ns_op",
+      "value": 308.2,
+      "unit": "ns",
+      "spread": 0.04574951330304986,
+      "n": 5
+    },
+    {
+      "key": "gobench/internal/bot/i18n/BenchmarkMoney/fa-USDT/allocs_op",
+      "value": 5,
+      "unit": "",
+      "n": 1
+    },
+    {
+      "key": "gobench/internal/core/domain/BenchmarkCashbackAmount/ns_op",
+      "value": 1.47,
+      "unit": "ns",
+      "spread": 0.01360544217687076,
+      "n": 5
+    },
+    {
+      "key": "gobench/internal/core/domain/BenchmarkCashbackAmount/allocs_op",
+      "value": 0,
+      "unit": "",
+      "n": 1
+    },
+    {
+      "key": "gobench/internal/core/domain/BenchmarkTierPrice/ns_op",
+      "value": 35.45,
+      "unit": "ns",
+      "spread": 0.034132581100141064,
+      "n": 5
+    },
+    {
+      "key": "gobench/internal/core/domain/BenchmarkTierPrice/allocs_op",
+      "value": 0,
+      "unit": "",
+      "n": 1
+    },
+    {
+      "key": "gobench/internal/core/monitor/BenchmarkFoldRepeats/ns_op",
+      "value": 1171035,
+      "unit": "ns",
+      "spread": 0.05018637359259117,
+      "n": 5
+    },
+    {
+      "key": "gobench/internal/core/monitor/BenchmarkFoldRepeats/allocs_op",
+      "value": 6004,
+      "unit": "",
+      "n": 1
+    },
+    {
+      "key": "gobench/internal/core/store/BenchmarkGetUserByTelegramID/ns_op",
+      "value": 123510,
+      "unit": "ns",
+      "spread": 0.40893854748603353,
+      "n": 5
+    },
+    {
+      "key": "gobench/internal/core/store/BenchmarkGetUserByTelegramID/allocs_op",
+      "value": 23,
+      "unit": "",
+      "n": 1
+    },
+    {
+      "key": "gobench/internal/core/store/BenchmarkListPlans/ns_op",
+      "value": 407509,
+      "unit": "ns",
+      "spread": 0.06041829750999365,
+      "n": 5
+    },
+    {
+      "key": "gobench/internal/core/store/BenchmarkListPlans/allocs_op",
+      "value": 167,
+      "unit": "",
+      "n": 1
+    },
+    {
+      "key": "gobench/internal/license/BenchmarkAdminVerify/ns_op",
+      "value": 59754,
+      "unit": "ns",
+      "spread": 0.012032667269136795,
+      "n": 5
+    },
+    {
+      "key": "gobench/internal/license/BenchmarkAdminVerify/allocs_op",
+      "value": 6,
+      "unit": "",
+      "n": 1
+    },
+    {
+      "key": "gobench/internal/license/BenchmarkSign/ns_op",
+      "value": 29307,
+      "unit": "ns",
+      "spread": 0.02514757566451701,
+      "n": 5
+    },
+    {
+      "key": "gobench/internal/license/BenchmarkSign/allocs_op",
+      "value": 8,
+      "unit": "",
+      "n": 1
+    },
+    {
+      "key": "gobench/internal/license/BenchmarkVerify/ns_op",
+      "value": 65123,
+      "unit": "ns",
+      "spread": 0.03476498318566405,
+      "n": 5
+    },
+    {
+      "key": "gobench/internal/license/BenchmarkVerify/allocs_op",
+      "value": 10,
+      "unit": "",
+      "n": 1
+    },
+    {
+      "key": "gobench/internal/payments/domain/BenchmarkTONNano/ns_op",
+      "value": 88.56,
+      "unit": "ns",
+      "spread": 0.00914634146341466,
+      "n": 5
+    },
+    {
+      "key": "gobench/internal/payments/domain/BenchmarkTONNano/allocs_op",
+      "value": 2,
+      "unit": "",
+      "n": 1
+    },
+    {
+      "key": "gobench/internal/release/BenchmarkVerify/ns_op",
+      "value": 190531,
+      "unit": "ns",
+      "spread": 0.18999008035437803,
+      "n": 5
+    },
+    {
+      "key": "gobench/internal/release/BenchmarkVerify/allocs_op",
+      "value": 53,
+      "unit": "",
+      "n": 1
+    }
+  ]
+}

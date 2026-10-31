@@ -1,0 +1,265 @@
+{
+  "kind": "gobench",
+  "benchmarks": [
+    {
+      "pkg": "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/bot/i18n",
+      "name": "BenchmarkMoney/en-IRT",
+      "ns_op_runs": [
+        223,
+        231.1,
+        228.9,
+        232.2,
+        234
+      ],
+      "ns_op": {
+        "n": 5,
+        "median": 231.1,
+        "min": 223,
+        "max": 234,
+        "spread": 0.04759844223279965
+      },
+      "bytes_op": 48,
+      "allocs_op": 4
+    },
+    {
+      "pkg": "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/bot/i18n",
+      "name": "BenchmarkMoney/fa-IRT",
+      "ns_op_runs": [
+        253.7,
+        253.5,
+        255.7,
+        259.2,
+        255.9
+      ],
+      "ns_op": {
+        "n": 5,
+        "median": 255.7,
+        "min": 253.5,
+        "max": 259.2,
+        "spread": 0.022291748142354278
+      },
+      "bytes_op": 88,
+      "allocs_op": 5
+    },
+    {
+      "pkg": "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/bot/i18n",
+      "name": "BenchmarkMoney/fa-USDT",
+      "ns_op_runs": [
+        303.2,
+        308.2,
+        300.6,
+        309.2,
+        314.7
+      ],
+      "ns_op": {
+        "n": 5,
+        "median": 308.2,
+        "min": 300.6,
+        "max": 314.7,
+        "spread": 0.04574951330304986
+      },
+      "bytes_op": 48,
+      "allocs_op": 5
+    },
+    {
+      "pkg": "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/domain",
+      "name": "BenchmarkCashbackAmount",
+      "ns_op_runs": [
+        1.476,
+        1.472,
+        1.47,
+        1.457,
+        1.456
+      ],
+      "ns_op": {
+        "n": 5,
+        "median": 1.47,
+        "min": 1.456,
+        "max": 1.476,
+        "spread": 0.01360544217687076
+      },
+      "bytes_op": 0,
+      "allocs_op": 0
+    },
+    {
+      "pkg": "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/domain",
+      "name": "BenchmarkTierPrice",
+      "ns_op_runs": [
+        35.45,
+        35.22,
+        35.16,
+        35.72,
+        36.37
+      ],
+      "ns_op": {
+        "n": 5,
+        "median": 35.45,
+        "min": 35.16,
+        "max": 36.37,
+        "spread": 0.034132581100141064
+      },
+      "bytes_op": 0,
+      "allocs_op": 0
+    },
+    {
+      "pkg": "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/monitor",
+      "name": "BenchmarkFoldRepeats",
+      "ns_op_runs": [
+        1160496,
+        1167638,
+        1181437,
+        1219266,
+        1171035
+      ],
+      "ns_op": {
+        "n": 5,
+        "median": 1171035,
+        "min": 1160496,
+        "max": 1219266,
+        "spread": 0.05018637359259117
+      },
+      "bytes_op": 340102,
+      "allocs_op": 6004
+    },
+    {
+      "pkg": "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/store",
+      "name": "BenchmarkGetUserByTelegramID",
+      "ns_op_runs": [
+        89445,
+        139953,
+        132251,
+        123510,
+        94677
+      ],
+      "ns_op": {
+        "n": 5,
+        "median": 123510,
+        "min": 89445,
+        "max": 139953,
+        "spread": 0.40893854748603353
+      },
+      "bytes_op": 1332,
+      "allocs_op": 23
+    },
+    {
+      "pkg": "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/store",
+      "name": "BenchmarkListPlans",
+      "ns_op_runs": [
+        410074,
+        407200,
+        400524,
+        407509,
+        425145
+      ],
+      "ns_op": {
+        "n": 5,
+        "median": 407509,
+        "min": 400524,
+        "max": 425145,
+        "spread": 0.06041829750999365
+      },
+      "bytes_op": 15133,
+      "allocs_op": 167
+    },
+    {
+      "pkg": "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/license",
+      "name": "BenchmarkAdminVerify",
+      "ns_op_runs": [
+        59244,
+        59816,
+        59754,
+        59963,
+        59658
+      ],
+      "ns_op": {
+        "n": 5,
+        "median": 59754,
+        "min": 59244,
+        "max": 59963,
+        "spread": 0.012032667269136795
+      },
+      "bytes_op": 496,
+      "allocs_op": 6
+    },
+    {
+      "pkg": "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/license",
+      "name": "BenchmarkSign",
+      "ns_op_runs": [
+        29450,
+        29307,
+        29754,
+        29017,
+        29070
+      ],
+      "ns_op": {
+        "n": 5,
+        "median": 29307,
+        "min": 29017,
+        "max": 29754,
+        "spread": 0.02514757566451701
+      },
+      "bytes_op": 3203,
+      "allocs_op": 8
+    },
+    {
+      "pkg": "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/license",
+      "name": "BenchmarkVerify",
+      "ns_op_runs": [
+        66942,
+        65123,
+        65521,
+        64678,
+        64693
+      ],
+      "ns_op": {
+        "n": 5,
+        "median": 65123,
+        "min": 64678,
+        "max": 66942,
+        "spread": 0.03476498318566405
+      },
+      "bytes_op": 954,
+      "allocs_op": 10
+    },
+    {
+      "pkg": "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/payments/domain",
+      "name": "BenchmarkTONNano",
+      "ns_op_runs": [
+        88.19,
+        89,
+        88.93,
+        88.24,
+        88.56
+      ],
+      "ns_op": {
+        "n": 5,
+        "median": 88.56,
+        "min": 88.19,
+        "max": 89,
+        "spread": 0.00914634146341466
+      },
+      "bytes_op": 56,
+      "allocs_op": 2
+    },
+    {
+      "pkg": "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/release",
+      "name": "BenchmarkVerify",
+      "ns_op_runs": [
+        187067,
+        183474,
+        196417,
+        190531,
+        219673
+      ],
+      "ns_op": {
+        "n": 5,
+        "median": 190531,
+        "min": 183474,
+        "max": 219673,
+        "spread": 0.18999008035437803
+      },
+      "bytes_op": 6472,
+      "allocs_op": 53
+    }
+  ]
+}

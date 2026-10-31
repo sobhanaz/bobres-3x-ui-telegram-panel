@@ -1,0 +1,30 @@
+{
+  "label": "bin/linux-amd64",
+  "files": [
+    {
+      "path": "core",
+      "raw": 38359200
+    },
+    {
+      "path": "bot",
+      "raw": 25292960
+    },
+    {
+      "path": "payments",
+      "raw": 19165344
+    },
+    {
+      "path": "provisioner",
+      "raw": 18903200
+    },
+    {
+      "path": "backup",
+      "raw": 14065824
+    },
+    {
+      "path": "bobres",
+      "raw": 9973920
+    }
+  ],
+  "total_raw": 125760448
+}

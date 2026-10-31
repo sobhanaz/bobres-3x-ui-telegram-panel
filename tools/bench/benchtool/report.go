@@ -69,6 +69,15 @@ func med(s stats, f func(float64) string) string {
 	return fmt.Sprintf("%s (±%.0f%%)", f(s.Median), 100*s.Spread/2)
 }
 
+// rng is "median (min–max)": for throughput, where a busy machine pulls
+// single runs far down and the best run is worth seeing.
+func rng(s stats, f func(float64) string) string {
+	if s.N < 2 {
+		return med(s, f)
+	}
+	return fmt.Sprintf("%s (%s–%s)", f(s.Median), f(s.Min), f(s.Max))
+}
+
 func g(v float64) string { return strconv.FormatFloat(v, 'g', 4, 64) }
 func f1(v float64) string {
 	return strconv.FormatFloat(v, 'f', 1, 64)
@@ -225,8 +234,14 @@ type ltGroup struct {
 	name  string
 	users int
 	runs  []jsonRunR
+	quiet []jsonRunR // the runs that started with the 1-minute load average below quietLoad
 	label string
 }
+
+// quietLoad: a run that starts with a 1-minute load average below this had
+// the machine (and its Postgres) mostly to itself. On a shared machine other
+// work pulls the load test far down, so those runs are shown apart.
+const quietLoad = 4.0
 
 // jsonRunR is the load test's -json output, as read back.
 type jsonRunR struct {
@@ -302,6 +317,12 @@ func reportLoadtest(m *md, dir string, timings map[string][]timing) {
 			groups[key] = gr
 		}
 		gr.runs = append(gr.runs, r)
+		rep, _ := strconv.Atoi(sm[3])
+		for _, t := range timings[gr.label] {
+			if t.Rep == rep && len(t.LoadBef) > 0 && t.LoadBef[0] < quietLoad {
+				gr.quiet = append(gr.quiet, r)
+			}
+		}
 	}
 	if len(groups) == 0 {
 		return
@@ -361,7 +382,7 @@ func reportLoadtest(m *md, dir string, timings map[string][]timing) {
 		if backlog.Median > 0 {
 			drainText = fmt.Sprintf("%s in %s s", f0(backlog.Median), f0(drain.Median))
 		}
-		m.p("| %s | %d | %s | %s | %s / %s / %s | %s %s ms | %s | %s | %s | %s MB | %s |", gr.name, gr.users, med(js, f0), med(cs, f0),
+		m.p("| %s | %d | %s | %s | %s / %s / %s | %s %s ms | %s | %s | %s | %s MB | %s |", gr.name, gr.users, rng(js, f0), rng(cs, f0),
 			ms3(p50.Median), ms3(p95.Median), ms3(p99.Median), slow, ms3(slowV), errText, poolText, drainText, mb(dbb.Median), loads(timings[gr.label]))
 		key := "loadtest/inproc/" + k
 		m.add(key+"/journeys_per_s", "1/s", js)
@@ -369,6 +390,26 @@ func reportLoadtest(m *md, dir string, timings map[string][]timing) {
 		m.add(key+"/journey_p95_ms", "ms", p95)
 		m.add(key+"/journey_p99_ms", "ms", p99)
 		m.check("in-process "+k+" journeys/s", js)
+	}
+	m.p("")
+	m.p("Quiet runs only (1-minute load average below %s when the run started):", g(quietLoad))
+	m.p("")
+	m.p("| Run | Users | Quiet runs | Journeys/s | Calls/s | Journey p50 / p95 / p99 ms |")
+	m.p("|---|---:|---:|---:|---:|---|")
+	for _, k := range keys {
+		gr := groups[k]
+		if len(gr.quiet) == 0 {
+			m.p("| %s | %d | 0 of %d | – | – | – |", gr.name, gr.users, len(gr.runs))
+			continue
+		}
+		js := collect(gr.quiet, func(r jsonRunR) (float64, bool) { return r.JourneysPerS, true })
+		cs := collect(gr.quiet, func(r jsonRunR) (float64, bool) { return r.CallsPerS, true })
+		p50 := collect(gr.quiet, func(r jsonRunR) (float64, bool) { return r.Journey.P50, true })
+		p95 := collect(gr.quiet, func(r jsonRunR) (float64, bool) { return r.Journey.P95, true })
+		p99 := collect(gr.quiet, func(r jsonRunR) (float64, bool) { return r.Journey.P99, true })
+		m.p("| %s | %d | %d of %d | %s | %s | %s / %s / %s |", gr.name, gr.users, len(gr.quiet), len(gr.runs), rng(js, f0), rng(cs, f0),
+			ms3(p50.Median), ms3(p95.Median), ms3(p99.Median))
+		m.add("loadtest/inproc/"+k+"/quiet_journeys_per_s", "1/s", js)
 	}
 	m.p("")
 	for _, k := range keys {
@@ -466,7 +507,7 @@ func reportStack(m *md, dir string) {
 		cpu := svc(name, func(s *svcResult) float64 { return s.IdleCPUPct })
 		sd := svc(name, func(s *svcResult) float64 { return s.FirstStop.ShutdownS * 1000 })
 		peak := svc(name, func(s *svcResult) float64 { return s.FirstStop.MaxRSSMB })
-		m.p("| %s | %s | %s ms | %s ms | %s MB | %s%% | %s ms | %s MB |", name, fe, med(cold, f0), med(warm, f0), med(rss, f1), med(cpu, f2), med(sd, f0), med(peak, f1))
+		m.p("| %s | %s | %s ms | %s ms | %s MB | %s | %s ms | %s MB |", name, fe, med(cold, f0), med(warm, f0), med(rss, f1), med(cpu, func(v float64) string { return f2(v) + "%" }), med(sd, f0), med(peak, f1))
 		m.add("stack/"+name+"/ready_cold_ms", "ms", cold)
 		m.add("stack/"+name+"/ready_warm_ms", "ms", warm)
 		m.add("stack/"+name+"/rss_idle_mb", "MB", rss)
@@ -501,7 +542,7 @@ func reportStack(m *md, dir string) {
 		m.p("### %s: %d users for %.0f s%s", sc.Name, sc.Users, sc.DurationS, think)
 		m.p("")
 		m.p("%s journeys/s, %s calls/s, journey p95 %s ms, errors %s (worst run); %s orders waiting at the end, delivered in %s s.",
-			med(js, f0), med(cs, f0), ms3(p95.Median), f0(errs.Max), f0(summarize(bl).Median), f0(summarize(dr).Median))
+			rng(js, f0), rng(cs, f0), ms3(p95.Median), f0(errs.Max), f0(summarize(bl).Median), f0(summarize(dr).Median))
 		m.p("")
 		m.p("| Service | CPU under load (cores) | RSS under load, mean / max | CPU in the drain (cores) | RSS in the drain, max |")
 		m.p("|---|---:|---:|---:|---:|")

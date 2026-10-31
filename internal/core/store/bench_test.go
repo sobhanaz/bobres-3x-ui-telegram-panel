@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/pressly/goose/v3"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/migrate"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/testdb"
 )
@@ -16,6 +17,9 @@ func benchStore(b *testing.B) *Store {
 	b.Helper()
 	dsn := testdb.DSN(b)
 	ctx := context.Background()
+	// goose's "no migrations to run" would land in the middle of a result
+	// line (-count runs each benchmark again) and spoil its parsing.
+	goose.SetLogger(goose.NopLogger())
 	if err := migrate.Up(ctx, dsn, "core"); err != nil {
 		b.Fatalf("migrate: %v", err)
 	}

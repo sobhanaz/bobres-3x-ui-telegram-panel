@@ -1,0 +1,156 @@
+{
+  "users": 50,
+  "think_s": 0,
+  "duration_s": 30,
+  "elapsed_s": 30.069627422,
+  "journeys": 11576,
+  "journeys_failed": 12,
+  "journeys_per_s": 384.9731770048667,
+  "calls": 208308,
+  "calls_per_s": 6927.521817167396,
+  "errors": 12,
+  "journey": {
+    "name": "journey",
+    "calls": 11576,
+    "per_s": 384.9731770048667,
+    "p50_ms": 133.041,
+    "p95_ms": 142.1,
+    "p99_ms": 190.375,
+    "max_ms": 286.737,
+    "errors": 12,
+    "codes": {
+      "Internal": 12
+    }
+  },
+  "rows": [
+    {
+      "name": "GetUser",
+      "calls": 92584,
+      "per_s": 3078.9872684708516,
+      "p50_ms": 1.649,
+      "p95_ms": 18.442,
+      "p99_ms": 19.543,
+      "max_ms": 128.293,
+      "errors": 0
+    },
+    {
+      "name": "UpsertUser",
+      "calls": 11576,
+      "per_s": 384.9731770048667,
+      "p50_ms": 2.037,
+      "p95_ms": 19.182,
+      "p99_ms": 20.08,
+      "max_ms": 99.146,
+      "errors": 0
+    },
+    {
+      "name": "AdminAdjustBalance",
+      "calls": 11576,
+      "per_s": 384.9731770048667,
+      "p50_ms": 11.025,
+      "p95_ms": 29.672,
+      "p99_ms": 32.073,
+      "max_ms": 145.523,
+      "errors": 0
+    },
+    {
+      "name": "ListPlans",
+      "calls": 34728,
+      "per_s": 1154.9195310146001,
+      "p50_ms": 4.765,
+      "p95_ms": 22.771,
+      "p99_ms": 23.994,
+      "max_ms": 137.217,
+      "errors": 0
+    },
+    {
+      "name": "GetWallet",
+      "calls": 11576,
+      "per_s": 384.9731770048667,
+      "p50_ms": 15.949,
+      "p95_ms": 34.045,
+      "p99_ms": 36.74,
+      "max_ms": 149.725,
+      "errors": 0
+    },
+    {
+      "name": "CreateOrder",
+      "calls": 11576,
+      "per_s": 384.9731770048667,
+      "p50_ms": 10.371,
+      "p95_ms": 28.882,
+      "p99_ms": 31.148,
+      "max_ms": 143.767,
+      "errors": 12,
+      "codes": {
+        "Internal": 12
+      }
+    },
+    {
+      "name": "PayOrderWithWallet",
+      "calls": 11564,
+      "per_s": 384.57410322082575,
+      "p50_ms": 8.376,
+      "p95_ms": 26.775,
+      "p99_ms": 27.948,
+      "max_ms": 142.991,
+      "errors": 0
+    },
+    {
+      "name": "ListSubscriptions",
+      "calls": 11564,
+      "per_s": 384.57410322082575,
+      "p50_ms": 1.672,
+      "p95_ms": 18.594,
+      "p99_ms": 19.62,
+      "max_ms": 49.042,
+      "errors": 0
+    },
+    {
+      "name": "AddTicketMessage",
+      "calls": 11564,
+      "per_s": 384.57410322082575,
+      "p50_ms": 9.339,
+      "p95_ms": 27.851,
+      "p99_ms": 29.384,
+      "max_ms": 142.959,
+      "errors": 0
+    }
+  ],
+  "notes": [
+    "provisioning: 622 orders delivered during the run (20.7/s), 10942 waiting when it ended, delivered in 259.4s more (42.2/s)",
+    "core's DB pool: at most 16 connections, 476415 acquires, 476380 waited (100%, 2.08ms on average)",
+    "Postgres 16.15",
+    "database: 76.7 MB for 11577 users (largest: core.outbox_core 21.3 MB, core.ledger_entries 9.2 MB, core.subscriptions 8.8 MB, core.audit_log 5.5 MB, core.orders 5.2 MB)"
+  ],
+  "facts": {
+    "backlog_at_end": 10942,
+    "backlog_drain_per_s": 42.17621816883347,
+    "backlog_drain_s": 259.435304422,
+    "backlog_still_waiting": 0,
+    "db_bytes": 76717079,
+    "db_top_tables": {
+      "core.audit_log": 5455872,
+      "core.ledger_entries": 9158656,
+      "core.orders": 5226496,
+      "core.outbox_core": 21323776,
+      "core.subscriptions": 8806400
+    },
+    "db_users": 11577,
+    "delivered_during_run": 622,
+    "delivered_per_s_during_run": 20.685324472790867,
+    "pool_acquires": 476415,
+    "pool_avg_wait_ms": 2.075,
+    "pool_max_conns": 16,
+    "pool_waited": 476380,
+    "pool_waited_share": 0.9999265346389178,
+    "postgres": "16.15",
+    "provision_failed": 0
+  },
+  "go_version": "go1.27.1",
+  "goos": "darwin",
+  "goarch": "amd64",
+  "num_cpu": 16,
+  "gomaxprocs": 16,
+  "at": "2026-10-29T18:01:55Z"
+}
