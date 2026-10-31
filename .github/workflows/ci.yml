@@ -601,7 +601,7 @@ jobs:
   hiddify:
     name: Hiddify integration
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     continue-on-error: true
     services:
       postgres:
@@ -636,15 +636,25 @@ jobs:
           # On a runner the install's firewall step fails ("Finished with errors in: Firewall"),
           # and the image's entrypoint (set -e) then exits and stops the container with the
           # panel it has just started. The panel does not need the firewall: keep the
-          # container up after the entrypoint ends.
+          # container up after the entrypoint ends, and mark the end so the next step
+          # waits for the whole install (see there).
           docker run -d --name hiddify --network host --privileged --cap-add NET_ADMIN \
             -e SQLALCHEMY_DATABASE_URI="mysql+mysqldb://hiddifypanel:${dbpw}@127.0.0.1:3306/hiddifypanel?charset=utf8mb4" \
             -e REDIS_URI_MAIN="redis://:${redispw}@127.0.0.1:6379/1" \
             --entrypoint bash "ghcr.io/hiddify/hiddify-manager:${HIDDIFY_VERSION}@${HIDDIFY_DIGEST}" \
-            -c './scripts/docker-init.sh || echo "docker-init.sh exited with $?"; exec sleep infinity'
+            -c './scripts/docker-init.sh || echo "docker-init.sh exited with $?"; touch /tmp/bobres-init-done; exec sleep infinity'
       - name: Wait for the panel and read its admin path and key
         run: |
           set -euo pipefail
+          # Wait for the install to end first. The panel's CLI below seeds the database as
+          # the panel does when it starts; run while the install is still at work (its
+          # certificates step can take minutes) the two deadlocked in MariaDB, the panel's
+          # only worker exited, and nothing started it again (run 41193558922).
+          for _ in $(seq 120); do
+            docker exec hiddify test -e /tmp/bobres-init-done && break
+            sleep 10
+          done
+          docker exec hiddify test -e /tmp/bobres-init-done || { echo "the install did not end in 20 minutes"; exit 1; }
           # The panel's CLI, as the manager's own scripts run it (their helpers, the venv and
           # the panel's configuration file); expanded inside the container.
           # shellcheck disable=SC2016
@@ -665,10 +675,16 @@ jobs:
           read -r path key < <(python3 -c 'import json; t=open("all-configs.out").read(); d=json.loads(t[t.index("{"):]); print(d["api_path"], d["api_key"])')
           rm -f all-configs.out all-configs.err
           echo "::add-mask::$path"; echo "::add-mask::$key"
+          # The container has no init to restart a panel that exited (the systemctl in the
+          # image only runs units): start it again when it has not answered for a minute.
           code=""
-          for _ in $(seq 30); do
+          for i in $(seq 60); do
             code=$(curl -s -o /dev/null -w '%{http_code}' -H "Hiddify-API-Key: $key" "http://127.0.0.1:9000/$path/api/v2/panel/info/" || true)
             [ "$code" = 200 ] && break
+            if [ "$i" = 12 ] || [ "$i" = 36 ]; then
+              echo "No answer yet (HTTP $code): starting the panel again"
+              docker exec hiddify bash -c 'systemctl restart hiddify-panel' || true
+            fi
             sleep 5
           done
           echo "The panel's info answered HTTP $code"
