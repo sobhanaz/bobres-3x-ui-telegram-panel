@@ -75,6 +75,7 @@
   "ledger.license": "BOBRES lisansı",
   "ledger.digital": "Dijital hesap",
   "ledger.convert": "USDT’den Toman’a çevrildi",
+  "ledger.affiliate": "Ortaklık programı",
   "ledger.other": "Hareket",
   "checkout.title": "Satın almayı onayla",
   "checkout.summary_new": "{plan} satın al",

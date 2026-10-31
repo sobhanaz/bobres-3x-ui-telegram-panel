@@ -132,6 +132,14 @@
     "audit": {
       "title": "Denetim kaydı",
       "desc": "Personelin yaptığı her değişiklik, aranabilir ve dışa aktarılabilir."
+    },
+    "affiliates": {
+      "title": "Ortaklar",
+      "desc": "Lisans mağazanızın ortaklık programı: yeni lisans alıcılarını kim getiriyor, ne kazandılar ve onlara ne ödediniz."
+    },
+    "hosted": {
+      "title": "Barındırılan mağazalar",
+      "desc": "Müşteriler için işlettiğiniz mağazalar: kayıt ve her mağazanın ölçümlerinden okunan durumu."
     }
   },
   "placeholder": {
@@ -691,7 +699,10 @@
       "cashback": "Cashback",
       "cashback_reversal": "Geri alınan cashback",
       "target_bonus": "Aylık hedef bonusu",
-      "wheel_prize": "Şans çarkı ödülü"
+      "wheel_prize": "Şans çarkı ödülü",
+      "affiliate_commission": "Ortaklık komisyonu",
+      "affiliate_reversal": "Ortaklık komisyonu geri alındı",
+      "affiliate_payout": "Ortaklık ödemesi"
     },
     "balance_after": "Sonraki bakiye",
     "reference": "Şunun için",
@@ -1158,7 +1169,10 @@
       "tier_help": "Yeni bir kademe, o kademenin sınırlarını ve özelliklerini alır.",
       "extend": "Veya şu kadar yenile",
       "extend_go": "Yenile"
-    }
+    },
+    "refund": "İade",
+    "refund_help": "Alıcı ödediğini cüzdanına geri alır ve lisans iptal edilir. Ödemeden sonraki 30 gün içinde, bir ortağın bu ödemeden aldığı komisyon da geri alınır.",
+    "refunded": "İade edildi"
   },
   "supplier": {
     "category": "Kategori",
@@ -2443,6 +2457,17 @@
         "tls": {
           "set": "HTTPS ayarı değiştirildi"
         }
+      },
+      "affiliate": {
+        "update": "Ortak değiştirildi",
+        "payout": "Ortak ödemesi kaydedildi",
+        "reversal": "Ortaklık komisyonu geri alındı"
+      },
+      "hosted": {
+        "add": "Barındırılan mağaza kaydedildi",
+        "update": "Barındırılan mağaza değiştirildi",
+        "delete": "Barındırılan mağaza kaldırıldı",
+        "license": "Hosted lisansı oluşturuldu"
       }
     }
   },
@@ -4586,5 +4611,117 @@
     "limit": "Mağazanın günlük duyuru sınırına ({n}) {day} için ulaşıldı. Yarın deneyin ya da sınırı Ayarlar'dan yükseltin.",
     "license_term": "Duyur ({term})",
     "license_aria": "{tier} lisansını {term} için duyur"
+  },
+  "affiliates": {
+    "intro": "Müşteriler botta /affiliate ile bir bağlantı alır. Bunu ilk lisansından önce açıp sonra bir lisans satın alan kişi, ortağa o ilk ödemeden bir payı ortağın cüzdanına kazandırır. Ortaklara elle ödeme yapar ve burada kaydedersiniz.",
+    "program": "Program",
+    "needs_sales": "Lisans satışı kapalı (Lisanslar sayfası), bu yüzden program açık olsa bile çalışmaz.",
+    "enabled": "Ortaklık programı açık",
+    "percent": "Komisyon (%)",
+    "percent_help": "Getirilen alıcının ilk lisans ödemesinden pay, 1 ile 100 arası. Bir ortağın kendine özel yüzdesi olabilir.",
+    "min_payout": "En düşük ödeme (Toman)",
+    "min_payout_help": "Tek ödeme olarak kaydettiğiniz en düşük tutar; 0 alt sınır yok demektir.",
+    "save": "Kaydet",
+    "saved": "Kaydedildi",
+    "on": "Çalışıyor",
+    "off": "Çalışmıyor",
+    "rules": "Yalnızca ilk ödeme: aynı alıcının yenilemeleri ve sonraki lisansları bir şey kazandırmaz. Kendini davet yok. 30 gün içindeki bir iade komisyonu geri alır, asla sıfırın altına düşürmez (eksik kalan denetim kaydına yazılır).",
+    "none": "Henüz ortak yok.",
+    "who": "Ortak",
+    "percent_col": "Yüzde",
+    "own": "kendi",
+    "status_col": "Durum",
+    "status": {
+      "active": "Etkin",
+      "disabled": "Duraklatıldı"
+    },
+    "referred": "Getirilen",
+    "licenses": "Lisanslar",
+    "earned": "Kazanılan",
+    "paid": "Ödenen",
+    "balance": "Cüzdan",
+    "actions": "İşlemler",
+    "details": "Komisyonlar ve ödemeler",
+    "edit": "Ortağı değiştir",
+    "pay": "Ödeme kaydet",
+    "paid_ok": "Ödeme kaydedildi",
+    "detail_line": "Kazanç oranı {percent}% · kazanılan {earned} · ödenen {paid}",
+    "commissions": "Komisyonlar",
+    "no_commissions": "Henüz komisyon yok.",
+    "buyer": "Alıcı",
+    "tier": "Seviye",
+    "base": "Ödenen",
+    "amount": "Tutar",
+    "reversed_all": "Geri alındı: {amount}",
+    "reversed_part": "Kısmen geri alındı: {amount}",
+    "date": "Tarih",
+    "payouts": "Ödemeler",
+    "no_payouts": "Henüz ödeme yok.",
+    "note": "Not",
+    "note_placeholder": "Örneğin: USDT TRC20, işlem kimliği",
+    "own_percent": "Kendi yüzdesi",
+    "own_percent_help": "Boş: programın yüzdesi. 0: hiçbir şey kazanmaz.",
+    "pay_help": "Ödenecek kalan: {open}. Cüzdanı: {balance}. Tutar cüzdanından düşülür.",
+    "amount_toman": "Tutar (Toman)",
+    "problem": {
+      "amount": "0'dan büyük, tam sayı bir Toman tutarı",
+      "min": "En düşük ödemenin ({min}) altında",
+      "open": "Kazandığı ve henüz ödenmemiş tutardan fazla",
+      "wallet": "Cüzdanındakinden fazla"
+    }
+  },
+  "hosted": {
+    "add": "Mağaza ekle",
+    "intro": "Bir müşterinin mağazasını bilgisayarınızdan tools/hosted ile kurun; buraya yapıştıracağınız bir kayıt kodu yazdırır. Sayfa her mağazanın /metrics adresini bot üzerinden 5 dakikada bir okur.",
+    "custody": "Burada asla tutulmaz: müşterinin bot belirteci ve yedek anahtarı. Yedek anahtarını müşteri saklar. Ölçüm belirteci şifreli saklanır ve bir daha asla gösterilmez.",
+    "none": "Henüz barındırılan mağaza yok.",
+    "store": "Mağaza",
+    "state": "Durum",
+    "states": {
+      "up": "Çalışıyor",
+      "warn": "Bakılmalı",
+      "down": "Çalışmıyor",
+      "unknown": "Henüz okunmadı"
+    },
+    "no_token": "Ölçüm belirteci yok",
+    "version": "Sürüm",
+    "behind": "geride",
+    "channel": {
+      "stable": "stable",
+      "beta": "beta"
+    },
+    "figures": "Rakamlar",
+    "services": "Çalışan hizmetler: {up} / {total}",
+    "orders": "24 saatte siparişler: {n}",
+    "alerts": "Uyarılar: {critical} kritik, {warning} uyarı",
+    "license_days": "Lisans: {n} gün kaldı",
+    "backup": "En yeni yedek: {n} saat önce",
+    "license": "Lisans",
+    "make_license": "Hosted lisansını oluştur",
+    "actions": "İşlemler",
+    "check": "Şimdi oku",
+    "edit": "Değiştir",
+    "delete": "Kaldır",
+    "delete_confirm": "{domain} kayıttan kaldırılsın mı? Mağazanın kendisi çalışmaya devam eder.",
+    "registration": "Kayıt kodu",
+    "registration_help": "tools/hosted'ın yazdırdığı satır (bobres-hosted:v1:…). Yoksa aşağıdaki alanları doldurun.",
+    "customer": "Müşteri",
+    "domain": "Alan adı",
+    "channel_label": "Güncelleme kanalı",
+    "license_id": "Lisans kimliği",
+    "token": "Ölçüm belirteci",
+    "token_help": "Mağazanın /metrics belirteci (mağazada: sudo bobres admin metrics-token generate).",
+    "token_kept": "Bir belirteç saklı. Değiştirmek için yenisini yazın.",
+    "new_token": "Yeni ölçüm belirteci",
+    "clear_token": "Belirteci unut (mağaza artık okunmaz)",
+    "notes": "Notlar",
+    "added": "Mağaza kaydedildi",
+    "saved": "Kaydedildi",
+    "save": "Kaydet",
+    "version_installed": "Kurulu sürüm",
+    "license_help": "Bu mağaza için lisans sunucusunda, adında müşteri ve alan adı olan bir pro lisans. Anahtarı bir kez gösterilir: tools/hosted'a --license-key-file ile verin ya da mağazada etkinleştirin.",
+    "key_once": "Etkinleştirme anahtarı, bir kez gösterilir:",
+    "key_next": "Yalnızca sizin okuyabileceğiniz bir dosyaya kaydedin ve tools/hosted'ı --license-key-file ile çalıştırın ya da mağazada: sudo bobres license activate.",
+    "done": "Tamam"
   }
 }

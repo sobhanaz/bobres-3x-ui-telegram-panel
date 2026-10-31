@@ -37,6 +37,7 @@ What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 - **The wallet answers faster.** Showing a balance with its USDT equivalent read the store's settings eight times (the rate twice, four settings each); it reads them once now, in the bot, the Mini App and core's wallet call. Found by the v0.19.0 benchmark (`docs/21-benchmark.md`), where the wallet had become the slowest call from 100 customers up.
 
 ### Known limits
+- **The Arabic, Russian and Turkish texts are machine-translated and need a native speaker's review** before a store relies on them (a pull request to `internal/bot/i18n/locales/`, `web/dashboard/src/locales/` and `web/miniapp/src/locales/`). The dashboard's text editor still edits the Persian and English bot texts only; the store's content, broadcasts' audience counts and the channel posts of announcements stay in Persian and English.
 - The bot's account settings have no screen of their own yet: the product news switch sits on the language screen (🌐 Language).
 - Telegram was faked in the tests; the channel post and the Buy flow were not tried against a real channel.
 - **Versions tested:** S-UI v1.6.6, Hiddify Manager v14.0.5. The Servers page's "Untested" flag is for 3x-ui versions only.
@@ -44,7 +45,6 @@ What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 - **Hiddify's real-panel CI job is allowed to fail** (`continue-on-error`): Hiddify's Docker image is experimental upstream, about 700 MB, needs a privileged container on the host network with MariaDB and Redis, and runs its whole install on every start. The fake and the unit tests are the checks that always run.
 - **S-UI** builds a client's share links from the host BOBRES calls the panel at: give the panel's public domain as its address (or give the inbounds their own addresses in S-UI). "Start on first use" is S-UI's delayed start, in whole days. S-UI has no call that moves many clients between groups: the backfill edits them one by one. S-UI has no per-client reset call: a reset is an edit that sends both counters as zero (the panel adds them to the client's totals).
 - On both, a name another client already has on the panel is refused for a new service (`ALREADY_EXISTS`), as on 3x-ui and Marzban, although Hiddify itself allows duplicate names.
-- **The Arabic, Russian and Turkish texts are machine-translated and need a native speaker's review** before a store relies on them (a pull request to `internal/bot/i18n/locales/`, `web/dashboard/src/locales/` and `web/miniapp/src/locales/`). The dashboard's text editor still edits the Persian and English bot texts only; the store's content, broadcasts' audience counts and the channel posts of announcements stay in Persian and English.
 - The affiliate program and the hosted tooling were tested against fakes (the license server, Telegram, SSH and the stores' `/metrics`); `tools/hosted` has not run against a real server yet. Creating the VPS and DNS through a cloud provider's API (the plan's step 2) is not built.
 - "Same payment address" is not a self-referral guard: licenses are paid from the wallet, so the guard is the Telegram account.
 

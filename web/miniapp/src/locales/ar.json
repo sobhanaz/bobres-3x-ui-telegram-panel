@@ -75,6 +75,7 @@
   "ledger.license": "ترخيص BOBRES",
   "ledger.digital": "حساب رقمي",
   "ledger.convert": "تحويل USDT إلى تومان",
+  "ledger.affiliate": "برنامج التسويق بالعمولة",
   "ledger.other": "حركة",
   "checkout.title": "تأكيد الشراء",
   "checkout.summary_new": "شراء {plan}",

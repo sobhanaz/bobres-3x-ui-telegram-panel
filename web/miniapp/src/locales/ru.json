@@ -75,6 +75,7 @@
   "ledger.license": "Лицензия BOBRES",
   "ledger.digital": "Цифровой аккаунт",
   "ledger.convert": "USDT переведены в томаны",
+  "ledger.affiliate": "Партнёрская программа",
   "ledger.other": "Операция",
   "checkout.title": "Подтверждение покупки",
   "checkout.summary_new": "Покупка: {plan}",
