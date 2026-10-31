@@ -8,6 +8,9 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+### Fixed
+- Callers that find the install's id missing at the same moment no longer fail with "no rows": one makes it and the others read it. A real install has the id from its first migration; the v0.19.0 benchmark hit this in its test setup, where most of 320 concurrent orders failed.
+
 ## [0.21.0] — 2026-10-31
 
 **S-UI and Hiddify panels, Arabic, Russian and Turkish (beta), new product announcements, the vendor's affiliate program and hosted-store tooling, and a benchmark baseline with a faster wallet.** Everything new is off or unchanged until the owner turns it on: the new languages are offered only once enabled in Settings (the default stays Persian and English), announcements and the affiliate program are off, and the affiliate program and hosted stores appear only in the vendor's own store. Four additive migrations (core 00053–00055, provisioner 00008); the bot and core must be updated together (the update does that).
