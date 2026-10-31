@@ -17,6 +17,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/bot/i18n"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/botfiles"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/domain"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/store"
@@ -197,7 +198,7 @@ func (s *Server) miniPaymentExtras(ctx context.Context, u *store.User, res *doma
 }
 
 // miniPlanTitle is a plan's name for an invoice's title, as the bot picks it:
-// in the customer's language, else Persian, else English, else "" (the bot
+// in the customer's language, else as i18n.ContentOrder falls back, else "" (the bot
 // then uses the store's own title).
 func (s *Server) miniPlanTitle(ctx context.Context, planID, lang string) string {
 	if planID == "" {
@@ -207,7 +208,7 @@ func (s *Server) miniPlanTitle(ctx context.Context, planID, lang string) string 
 	if err != nil {
 		return ""
 	}
-	for _, l := range []string{lang, "fa", "en"} {
+	for _, l := range i18n.ContentOrder(lang) {
 		if n := p.NameI18n[l]; n != "" {
 			return n
 		}

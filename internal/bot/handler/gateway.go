@@ -302,7 +302,7 @@ func (h *Handler) onStarsPaid(parent context.Context, m *tg.Message) {
 func (h *Handler) userLang(ctx context.Context, telegramID int64) string {
 	u, err := h.core.GetUser(ctx, &corev1.GetUserRequest{Lookup: &corev1.GetUserRequest_TelegramId{TelegramId: telegramID}})
 	if err != nil || u.GetLanguage() == "" {
-		return i18n.Languages[0]
+		return i18n.Default()
 	}
 	return u.GetLanguage()
 }

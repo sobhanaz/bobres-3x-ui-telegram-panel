@@ -8,11 +8,14 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/bot/i18n"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/store"
 	bcrypto "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/crypto"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/eventbus"
@@ -135,10 +138,8 @@ func (s *Service) UpsertUser(ctx context.Context, p UpsertUserParams) (*store.Us
 	if p.TelegramID <= 0 {
 		return nil, invalid("telegram id required")
 	}
-	switch p.Language {
-	case "", "fa", "en":
-	default:
-		return nil, invalid("language must be fa or en")
+	if p.Language != "" && !slices.Contains(i18n.All, p.Language) {
+		return nil, invalid("language must be one of %s", strings.Join(i18n.All, ", "))
 	}
 	if len(p.Username) > 64 {
 		return nil, invalid("username too long")

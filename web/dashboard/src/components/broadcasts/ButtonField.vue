@@ -3,13 +3,13 @@ import { computed, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 import ToggleSwitch from 'primevue/toggleswitch'
 import InputText from 'primevue/inputtext'
-import { isolate, num, type Lang } from '../../format'
+import { isolate, num, type ContentLang, type Lang } from '../../format'
 import { MAX_LABEL, labelProblem, urlProblem, utf16Length, type Draft } from '../../broadcasts'
 
 // An optional link button under the message: an https link and its text in
 // each language the audience needs (plain text, no markup).
 const button = defineModel<Draft['button']>('button', { required: true })
-const props = withDefaults(defineProps<{ langs: Lang[]; errors?: Record<string, string>; showAll?: boolean; disabled?: boolean }>(), {
+const props = withDefaults(defineProps<{ langs: ContentLang[]; errors?: Record<string, string>; showAll?: boolean; disabled?: boolean }>(), {
   errors: () => ({}),
   showAll: false,
   disabled: false,
@@ -29,14 +29,14 @@ const urlError = computed(() => {
 })
 const urlServer = computed(() => (urlError.value ? '' : (props.errors['button.url'] ?? '')))
 
-function labelError(l: Lang): string {
+function labelError(l: ContentLang): string {
   const p = labelProblem(button.value.labels[l])
   if (!p || (p === 'empty' && !props.showAll)) return ''
   if (p === 'empty') return t('broadcasts.button.label_empty')
   if (p === 'chars') return t('broadcasts.button.label_chars', { chars: isolate('< > &') })
   return t('broadcasts.button.label_long', { n: num(MAX_LABEL, viewer.value) }, MAX_LABEL)
 }
-const labelServer = (l: Lang) => (labelError(l) ? '' : (props.errors['button.labels.' + l] ?? ''))
+const labelServer = (l: ContentLang) => (labelError(l) ? '' : (props.errors['button.labels.' + l] ?? ''))
 </script>
 
 <template>

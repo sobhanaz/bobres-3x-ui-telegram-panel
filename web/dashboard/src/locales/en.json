@@ -25,7 +25,10 @@
     "light": "Theme: light"
   },
   "lang": {
-    "switch": "فارسی"
+    "switch": "فارسی",
+    "menu": "Language",
+    "beta": "beta",
+    "beta_note": "Machine-translated: a native speaker has not reviewed it yet."
   },
   "role": {
     "owner": "Owner",
@@ -1492,7 +1495,8 @@
       "too_long": "Too long: at most {arg} character. | Too long: at most {arg} characters.",
       "lang_unused": "This text is not used in this language.",
       "unknown_key": "This text no longer exists.",
-      "other": "Not accepted ({code}): {arg}"
+      "other": "Not accepted ({code}): {arg}",
+      "plural_forms": "{arg}: the plural choice has the wrong number of forms for this language."
     },
     "owner_only": "Only the store owner can change the payment texts (where customers are told to send money)."
   },
@@ -1679,7 +1683,9 @@
       "prizes": "Each prize needs a whole amount of Toman (at least 1) and a weight from 1 to 1,000,000.",
       "prizes_dup": "Two prizes have the same amount.",
       "prizes_many": "At most 12 prizes.",
-      "percent": "A percent from 0.01 to 20, for example 2.5."
+      "percent": "A percent from 0.01 to 20, for example 2.5.",
+      "langs": "Use the language codes fa, en, ar, ru and tr, each once.",
+      "langs_empty": "Choose at least one language."
     },
     "option": {
       "bot": {
@@ -2062,6 +2068,12 @@
           "help": "How many paid orders a customer needs before they may spin, at least 1: an account made only to spin earns nothing. Refunded orders and orders that cost nothing do not count."
         }
       },
+      "languages": {
+        "enabled": {
+          "label": "Customer languages",
+          "help": "The languages customers can pick in the bot and the Mini App. A customer whose Telegram language is one of them gets it; anyone else gets the default. Turning a language off moves its customers to the default (their choice comes back when you turn it on again). The bot's own texts exist in every language; plan names, broadcasts and help pages stay in Persian and English (a customer of another language reads the English ones)."
+        }
+      },
       "announce": {
         "enabled": {
           "label": "Product announcements",
@@ -2110,6 +2122,12 @@
       "add": "Add a prize",
       "max": "The wheel holds at most {n} prize. | The wheel holds at most {n} prizes.",
       "sorted": "Prizes are saved in order of amount."
+    },
+    "langs": {
+      "default": "Default",
+      "default_aria": "Make {lang} the default",
+      "enable_aria": "Customers can pick {lang}",
+      "beta_note": "Arabic, Russian and Turkish are in beta: they are machine-translated, and a native speaker should review them before you rely on them."
     }
   },
   "staff": {

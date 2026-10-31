@@ -41,8 +41,23 @@ func (h *Handler) onStart(r *req, param string) {
 	h.showHome(r)
 }
 
+// languageNames are the picker's buttons: each language in its own words.
+var languageNames = map[string]string{
+	"fa": "فارسی 🇮🇷", "en": "English 🇬🇧", "ar": "العربية", "ru": "Русский 🇷🇺", "tr": "Türkçe 🇹🇷",
+}
+
+// askLanguage shows the languages the store enabled (languages.enabled), in
+// its order, two to a row.
 func (h *Handler) askLanguage(r *req) {
-	kb := (&tg.Keyboard{}).Row(tg.CB("فارسی 🇮🇷", "lang:fa"), tg.CB("English 🇬🇧", "lang:en"))
+	langs := i18n.ParseEnabled(h.setting("languages.enabled"))
+	kb := &tg.Keyboard{}
+	for i := 0; i < len(langs); i += 2 {
+		row := []tg.Button{tg.CB(languageNames[langs[i]], "lang:"+langs[i])}
+		if i+1 < len(langs) {
+			row = append(row, tg.CB(languageNames[langs[i+1]], "lang:"+langs[i+1]))
+		}
+		kb.Row(row...)
+	}
 	if b := h.announceToggle(r); b != nil { // the customer's own switch of product news (announce.go)
 		kb.Row(*b).Row(r.button("btn.home", "home"))
 	}
@@ -72,7 +87,7 @@ func (h *Handler) onLanguage(r *req, lang string) {
 	if in.ReferralCode != "" || open != "" {
 		r.clearState()
 	}
-	r.user, r.lang = u, u.GetLanguage()
+	r.user, r.lang = u, i18n.Normalize(u.GetLanguage())
 	if isNew {
 		if h.gateNewUser(r) {
 			return // the bottom menu follows once the gates let them in (refreshMenu)
@@ -321,12 +336,12 @@ func (h *Handler) loadMenuLabels() {
 			labels[text] = data
 		}
 	}
-	for _, lang := range i18n.Languages {
+	for _, lang := range i18n.All {
 		for _, it := range menuItems {
 			add(h.cat.T(lang, it.key), it.data)
 		}
 	}
-	for _, lang := range i18n.Languages {
+	for _, lang := range i18n.All {
 		for _, it := range menuItems {
 			add(h.cat.Default(lang, it.key), it.data)
 		}

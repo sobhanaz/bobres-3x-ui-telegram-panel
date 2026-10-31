@@ -205,6 +205,9 @@ func (h *Handler) RefreshSettings(ctx context.Context) error {
 	h.settingsLoaded.Store(true)
 	h.applyTimezone(m["general.timezone"])
 	i18n.SetCurrencyNames(map[string]string{"fa": m["branding.currency.fa"], "en": m["branding.currency.en"]})
+	// The languages customers may pick: any other one (switched off since a
+	// customer chose it) is read in the store's default.
+	i18n.SetEnabled(i18n.ParseEnabled(m["languages.enabled"]))
 	// Prices and rates may have changed (e.g. payments.stars_rate): the usable
 	// payment methods are asked again on the next screen.
 	h.gwMu.Lock()
@@ -480,7 +483,7 @@ func (h *Handler) Handle(ctx context.Context, u tg.Update) {
 	}
 
 	if user, err := h.core.GetUser(ctx, &corev1.GetUserRequest{Lookup: &corev1.GetUserRequest_TelegramId{TelegramId: from.ID}}); err == nil {
-		r.user, r.lang = user, user.GetLanguage()
+		r.user, r.lang = user, i18n.Normalize(user.GetLanguage())
 		if user.GetBotBlocked() { // writing again: they no longer block the bot
 			h.setBotBlocked(ctx, from.ID, false)
 		}

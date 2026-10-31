@@ -103,8 +103,17 @@ func wantedProfile(cat *i18n.Catalog, set *settings.Store, photo string, whiteLa
 	if miniApp != "" {
 		p.Menu = &menuButton{Text: cat.T(i18n.Normalize(""), "profile.menu_button"), URL: miniApp}
 	}
-	for _, code := range append([]string{""}, i18n.Languages...) {
-		lang := i18n.Normalize(code) // "" is the first language
+	// Persian and English, and the beta languages the store enabled (sync
+	// takes back one switched off): a Telegram user in another language sees
+	// the store's default.
+	codes := append([]string{""}, i18n.Languages...)
+	for _, l := range i18n.ParseEnabled(set.Get("languages.enabled")) {
+		if !slices.Contains(codes, l) {
+			codes = append(codes, l)
+		}
+	}
+	for _, code := range codes {
+		lang := i18n.Normalize(code) // "" is the store's default language
 		p.Langs[code] = profileLang{Commands: menu(lang), Description: cat.T(lang, "profile.description"), About: branding.AboutWithCredit(cat.T(lang, "profile.about"), whiteLabel)}
 	}
 	for _, c := range set.Staff() {
@@ -260,6 +269,30 @@ func (s *profileSync) sync(ctx context.Context, want profile, on bool) error {
 			return fmt.Errorf("short description (%q): %w", code, err)
 		}
 		s.applied[key], changed = fp, true
+	}
+	// A language the store switched off: Telegram shows that language's
+	// users the default profile again.
+	stale := []string{}
+	for key := range s.applied {
+		if code, ok := strings.CutPrefix(key, "lang:"); ok && code != "" {
+			if _, still := want.Langs[code]; !still {
+				stale = append(stale, code)
+			}
+		}
+	}
+	slices.Sort(stale)
+	for _, code := range stale {
+		if err := s.api.DeleteMyCommands(ctx, 0, code); err != nil {
+			return fmt.Errorf("commands (%q): %w", code, err)
+		}
+		if err := s.api.SetMyDescription(ctx, "", code); err != nil {
+			return fmt.Errorf("description (%q): %w", code, err)
+		}
+		if err := s.api.SetMyShortDescription(ctx, "", code); err != nil {
+			return fmt.Errorf("short description (%q): %w", code, err)
+		}
+		delete(s.applied, langPart(code))
+		changed = true
 	}
 
 	chats := make([]int64, 0, len(want.Staff))

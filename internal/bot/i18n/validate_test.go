@@ -6,12 +6,21 @@ import (
 	"testing"
 )
 
+// readIn are the languages a text is read in: every language of the catalog
+// (the machine-translated ones are checked as hard), or its onlyLangs.
+func readIn(key string) []string {
+	if only := onlyLangs[key]; only != nil {
+		return only
+	}
+	return All
+}
+
 // Every built-in text must pass the checks its overrides get, or the
 // contexts and limits are wrong.
 func TestDefaultsPassValidation(t *testing.T) {
 	c := MustLoad()
 	for _, info := range c.Infos() {
-		for _, lang := range info.Langs {
+		for _, lang := range readIn(info.Key) {
 			def := c.Default(lang, info.Key)
 			got, probs := c.ValidateOverride(lang, info.Key, def)
 			if len(probs) > 0 {
@@ -277,7 +286,7 @@ func TestValidateMessageAndLabel(t *testing.T) {
 func TestNoLiteralBackslashN(t *testing.T) {
 	c := MustLoad()
 	for _, info := range c.Infos() {
-		for _, lang := range info.Langs {
+		for _, lang := range readIn(info.Key) {
 			if def := c.Default(lang, info.Key); strings.Contains(def, `\n`) {
 				t.Errorf("%s/%s has a literal \\n instead of a line break", lang, info.Key)
 			}

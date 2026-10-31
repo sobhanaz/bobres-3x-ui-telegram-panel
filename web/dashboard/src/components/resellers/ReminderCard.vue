@@ -15,7 +15,7 @@ import Tab from 'primevue/tab'
 import BroadcastText from '../broadcasts/BroadcastText.vue'
 import { api, ApiError } from '../../api'
 import { errorText } from '../../errors'
-import { dateTime, isolate, num, type Lang } from '../../format'
+import { contentLang, dateTime, isolate, num, type ContentLang, type Lang } from '../../format'
 import { splitProblems, testOutcome, type TestOutcome } from '../../broadcasts'
 import { reminderChanges, reminderForm, reminderProblems, timeOf, type ReminderForm, type ReminderReply } from '../../resellerMessages'
 import type { TextProblem } from '../../types'
@@ -28,14 +28,14 @@ const { t, locale } = useI18n()
 const viewer = computed(() => locale.value as Lang)
 const toast = useToast()
 const uid = useId()
-const LANGS: readonly Lang[] = ['fa', 'en']
+const LANGS: readonly ContentLang[] = ['fa', 'en']
 
 const reply = ref<ReminderReply | null>(null)
 const form = ref<ReminderForm | null>(null)
 const loading = ref(true)
 const loadError = ref('')
-const tab = ref<Lang>(viewer.value)
-const textProblems = ref<Record<Lang, TextProblem[]>>({ fa: [], en: [] })
+const tab = ref<ContentLang>(contentLang(viewer.value))
+const textProblems = ref<Record<ContentLang, TextProblem[]>>({ fa: [], en: [] })
 const saveError = ref('')
 const showAll = ref(false)
 
@@ -63,8 +63,8 @@ const changes = computed(() => (reply.value && form.value ? reminderChanges(remi
 const dirty = computed(() => Object.keys(changes.value).length > 0)
 const problems = computed(() => (form.value ? reminderProblems(form.value) : []))
 const timeBad = computed(() => !!form.value && !timeOf(form.value.time))
-const isDefault = (l: Lang) => !!reply.value && !!form.value && form.value.texts[l].trim() === reply.value.defaults[l].trim()
-function resetText(l: Lang) {
+const isDefault = (l: ContentLang) => !!reply.value && !!form.value && form.value.texts[l].trim() === reply.value.defaults[l].trim()
+function resetText(l: ContentLang) {
   if (form.value && reply.value) form.value.texts[l] = reply.value.defaults[l]
 }
 
@@ -156,7 +156,7 @@ const last = computed(() => reply.value?.last ?? null)
         </label>
 
         <div class="texts">
-          <Tabs :value="tab" @update:value="(v: string | number) => (tab = v as Lang)">
+          <Tabs :value="tab" @update:value="(v: string | number) => (tab = v as ContentLang)">
             <TabList>
               <Tab v-for="l in LANGS" :key="l" :value="l">{{ t('texts.' + l) }}</Tab>
             </TabList>

@@ -50,6 +50,8 @@ export interface UsdtTopUp { currency: string; min: number; max: number; step: n
 
 export interface Me {
   user: { id: string; username: string; language: string }
+  /** the languages the store lets customers pick, its default first (an older core sends none: Persian and English) */
+  languages?: string[]
   wallets: Wallet[]
   brand: { name: string; color: string; support: string; support_url: string; bot_url: string }
   maintenance: boolean

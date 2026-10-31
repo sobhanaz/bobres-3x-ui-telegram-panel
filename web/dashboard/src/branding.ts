@@ -1,7 +1,7 @@
 // Branding and bot-text helpers for the Branding page: colour checks, link
 // checks, the text filter, the import reader and the preview tokenizer.
 // Pure functions only (no DOM, no API), so they are unit-tested.
-import { latinDigits, type Lang } from './format'
+import { latinDigits, type ContentLang } from './format'
 import type { TextItem } from './types'
 
 /** A brand colour as stored: #rrggbb. */
@@ -113,10 +113,10 @@ export function botPhotoUploadProblem(e: { status: number; code: string; message
 // Bot texts
 
 /** The languages bot texts have. */
-export const TEXT_LANGS: readonly Lang[] = ['fa', 'en']
+export const TEXT_LANGS: readonly ContentLang[] = ['fa', 'en']
 
 /** textLangs are the languages of a text that the bot reads. */
-export function textLangs(it: TextItem): Lang[] {
+export function textLangs(it: TextItem): ContentLang[] {
   return TEXT_LANGS.filter((l) => it.langs.includes(l))
 }
 
@@ -126,7 +126,7 @@ export function isChanged(it: TextItem): boolean {
 }
 
 /** currentText is what the bot sends now: the override, else the default. */
-export function currentText(it: TextItem, lang: Lang): string {
+export function currentText(it: TextItem, lang: ContentLang): string {
   return it.override[lang] || it.default[lang] || ''
 }
 
@@ -217,7 +217,7 @@ export function problemArg(p: { code: string; arg: string }): string {
 export const ENTITY_FOR: Record<string, string> = { '<': '&lt;', '>': '&gt;', '&': '&amp;' }
 
 export type ImportResult =
-  | { ok: true; lang: Lang | null; texts: Record<string, string> }
+  | { ok: true; lang: ContentLang | null; texts: Record<string, string> }
   | { ok: false; error: 'not_json' | 'shape' | 'empty' }
 
 /** parseImport reads an import file: an export ({"lang","texts"}) or a plain
@@ -231,11 +231,11 @@ export function parseImport(raw: string): ImportResult {
   }
   const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v)
   if (!isObject(data)) return { ok: false, error: 'shape' }
-  let lang: Lang | null = null
+  let lang: ContentLang | null = null
   let texts: unknown = data
   if ('texts' in data && isObject(data.texts)) {
     if (data.lang !== undefined && data.lang !== 'fa' && data.lang !== 'en') return { ok: false, error: 'shape' }
-    lang = (data.lang as Lang | undefined) ?? null
+    lang = (data.lang as ContentLang | undefined) ?? null
     texts = data.texts
   }
   if (!isObject(texts)) return { ok: false, error: 'shape' }
@@ -354,7 +354,7 @@ export function parsePreview(src: string, html: boolean, placeholders: readonly 
 
 // Sample values for the placeholders, in the text's own language (data, not
 // dashboard messages: a Persian text previews with Persian values).
-const samples: Record<Lang, Record<string, string>> = {
+const samples: Record<ContentLang, Record<string, string>> = {
   fa: {
     brand: 'فروشگاه شما', name: 'ماهانه', plan: 'ماهانه', limits: '۳۰ روز · ۵۰ گیگابایت', price: '۱۵۰٬۰۰۰ تومان',
     amount: '۱۵۰٬۰۰۰ تومان', balance: '۲۰۰٬۰۰۰ تومان', earned: '۴۵٬۰۰۰ تومان', wallets: '۲۰۰٬۰۰۰ تومان',
@@ -392,7 +392,7 @@ const samples: Record<Lang, Record<string, string>> = {
 }
 
 /** sampleValue is what the preview shows for {name}; the store's own name for {brand}. */
-export function sampleValue(name: string, lang: Lang, brand = ''): string {
+export function sampleValue(name: string, lang: ContentLang, brand = ''): string {
   if (name === 'brand' && brand) return brand
   return samples[lang][name] ?? name
 }

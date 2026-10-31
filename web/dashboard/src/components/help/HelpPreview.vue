@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import TextPreview from '../branding/TextPreview.vue'
 import { BOT_WORDS, readIn } from '../../help'
-import type { Lang } from '../../format'
+import type { ContentLang } from '../../format'
 import type { HelpDraft, HelpLimits } from '../../types'
 
 // Roughly how the bot shows an entry to a customer of one language: the message
@@ -11,7 +11,7 @@ import type { HelpDraft, HelpLimits } from '../../types'
 // customer whose language has no translation reads the other one, which this
 // says. Nothing here is HTML for the browser: the text goes through the same
 // reader as the bot texts' preview, the title as plain text.
-const props = defineProps<{ draft: HelpDraft; lang: Lang; limits: HelpLimits }>()
+const props = defineProps<{ draft: HelpDraft; lang: ContentLang; limits: HelpLimits }>()
 const { t } = useI18n()
 
 const reading = computed(() => readIn(props.draft, props.lang, props.limits))

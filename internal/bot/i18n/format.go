@@ -2,6 +2,7 @@ package i18n
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -38,10 +39,32 @@ var persianDigits = strings.NewReplacer(
 	",", "٬", ".", "٫",
 )
 
-// Digits renders ASCII digits (and separators) in the language's script.
+var arabicDigits = strings.NewReplacer(
+	"0", "٠", "1", "١", "2", "٢", "3", "٣", "4", "٤",
+	"5", "٥", "6", "٦", "7", "٧", "8", "٨", "9", "٩",
+	",", "٬", ".", "٫",
+)
+
+// Russian groups thousands with a no-break space and writes a decimal comma;
+// Turkish groups with a dot and writes a decimal comma.
+var (
+	russianSeparators = strings.NewReplacer(",", "\u00a0", ".", ",")
+	turkishSeparators = strings.NewReplacer(",", ".", ".", ",")
+)
+
+// Digits renders ASCII digits (and the "," and "." separators of "1,234.5")
+// as the language writes them: Persian or Arabic-Indic digits, and the
+// separators of Russian and Turkish.
 func Digits(lang, s string) string {
-	if Normalize(lang) == "fa" {
+	switch Normalize(lang) {
+	case "fa":
 		return persianDigits.Replace(s)
+	case "ar":
+		return arabicDigits.Replace(s)
+	case "ru":
+		return russianSeparators.Replace(s)
+	case "tr":
+		return turkishSeparators.Replace(s)
 	}
 	return s
 }
@@ -60,7 +83,7 @@ func ParseNumber(s string) (int64, bool) {
 			b.WriteRune('0' + (r - '٠'))
 		case r == '-' && b.Len() == 0:
 			b.WriteRune(r)
-		case r == ',' || r == '٬' || r == '،' || r == ' ' || r == '_':
+		case r == ',' || r == '٬' || r == '،' || r == ' ' || r == '_' || r == '\u00a0' || r == '\u202f':
 		default:
 			return 0, false
 		}
@@ -101,9 +124,23 @@ func Number(lang string, n int64) string {
 	return Digits(lang, s)
 }
 
+// currencyNames are the built-in names; "a|b|c" are the plural forms of a
+// name (PluralForms), chosen by the amount's whole number.
 var currencyNames = map[string]map[string]string{
 	"fa": {"IRT": "تومان", "USDT": "تتر", "TON": "TON"},
 	"en": {"IRT": "Toman", "USDT": "USDT", "TON": "TON"},
+	"ar": {"IRT": "تومان", "USDT": "USDT", "TON": "TON"},
+	"ru": {"IRT": "томан|томана|томанов", "USDT": "USDT", "TON": "TON"},
+	"tr": {"IRT": "Toman", "USDT": "USDT", "TON": "TON"},
+}
+
+// pluralName picks the form of a currency name for an amount.
+func pluralName(lang, name string, whole int64, integer bool) string {
+	forms := strings.Split(name, "|")
+	if len(forms) == 1 {
+		return name
+	}
+	return forms[min(PluralIndex(lang, whole, integer), len(forms)-1)]
 }
 
 var currencyScale = map[string]int{"IRT": 0, "USDT": 6, "TON": 9}
@@ -124,10 +161,28 @@ func SetCurrencyNames(names map[string]string) {
 	irtNames.Store(&m)
 }
 
+// storeIRTName is the store's own name for the Toman in lang from names (its
+// branding settings, written in Persian and English): a beta language takes
+// the English one, since a name like "thousand Toman" changes what a price
+// means. "" when the store set none.
+func storeIRTName(names map[string]string, lang string) string {
+	if n := strings.TrimSpace(names[lang]); n != "" {
+		return n
+	}
+	if slices.Contains(Beta, lang) {
+		return strings.TrimSpace(names["en"])
+	}
+	return ""
+}
+
+// currencyName is the name of the currency in lang, with its plural forms
+// still joined by '|' (pluralName picks one).
 func currencyName(lang, currency string) string {
 	if currency == "IRT" {
-		if m := irtNames.Load(); m != nil && (*m)[lang] != "" {
-			return (*m)[lang]
+		if m := irtNames.Load(); m != nil {
+			if n := storeIRTName(*m, lang); n != "" {
+				return n
+			}
 		}
 	}
 	if name := currencyNames[lang][currency]; name != "" {
@@ -137,8 +192,12 @@ func currencyName(lang, currency string) string {
 }
 
 // CurrencyName is the currency's name in the language (the store's own name
-// for the Toman, when it set one; an unknown currency is its code).
-func CurrencyName(lang, currency string) string { return currencyName(Normalize(lang), currency) }
+// for the Toman, when it set one; an unknown currency is its code), in the
+// form that goes with "many" where the language has plural forms.
+func CurrencyName(lang, currency string) string {
+	forms := strings.Split(currencyName(Normalize(lang), currency), "|")
+	return forms[len(forms)-1]
+}
 
 // Money formats minor units in the currency's major unit, e.g. "150,000 Toman",
 // "۱۵۰٬۰۰۰ تومان", "25.5 USDT".
@@ -157,7 +216,7 @@ func MoneyNamed(irtNames map[string]string, lang string, minor int64, currency s
 	if name == "" {
 		name = currency
 	}
-	if n := strings.TrimSpace(irtNames[lang]); currency == "IRT" && n != "" && !strings.ContainsAny(n, "<>&") {
+	if n := storeIRTName(irtNames, lang); currency == "IRT" && n != "" && !strings.ContainsAny(n, "<>&") {
 		name = n
 	}
 	return money(lang, minor, currency, name)
@@ -166,7 +225,11 @@ func MoneyNamed(irtNames map[string]string, lang string, minor int64, currency s
 func money(lang string, minor int64, currency, name string) string {
 	scale := currencyScale[currency]
 	if scale == 0 {
-		return Number(lang, minor) + " " + name
+		w := minor
+		if w < 0 {
+			w = -w
+		}
+		return Number(lang, minor) + " " + pluralName(lang, name, w, true)
 	}
 	neg := minor < 0
 	if neg {
@@ -185,7 +248,7 @@ func money(lang string, minor int64, currency, name string) string {
 	if neg {
 		s = "-" + s
 	}
-	return Digits(lang, s) + " " + name
+	return Digits(lang, s) + " " + pluralName(lang, name, minor/div, frac == "")
 }
 
 // Exact writes minor units with every decimal of the currency, in Latin
@@ -216,10 +279,16 @@ func Bytes(lang string, b int64) string {
 	} else {
 		s = strconv.FormatFloat(gb, 'f', 1, 64)
 	}
-	if Normalize(lang) == "fa" {
-		return Digits(lang, s) + " گیگابایت"
-	}
-	return s + " GB"
+	return Digits(lang, s) + " " + sizeUnits[Normalize(lang)][1]
+}
+
+// sizeUnits are MB and GB in each language.
+var sizeUnits = map[string][2]string{
+	"fa": {"مگابایت", "گیگابایت"},
+	"en": {"MB", "GB"},
+	"ar": {"ميغابايت", "غيغابايت"},
+	"ru": {"МБ", "ГБ"},
+	"tr": {"MB", "GB"},
 }
 
 // FileSize formats a file's size in MB (binary, one decimal) below 1 GB and
@@ -229,15 +298,21 @@ func FileSize(lang string, b int64) string {
 		return Bytes(lang, b)
 	}
 	s := strconv.FormatFloat(float64(b)/float64(1<<20), 'f', 1, 64)
-	if Normalize(lang) == "fa" {
-		return Digits(lang, s) + " مگابایت"
-	}
-	return s + " MB"
+	return Digits(lang, s) + " " + sizeUnits[Normalize(lang)][0]
 }
 
 var persianMonths = [...]string{"فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور", "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند"}
 
-// Date formats a day: Jalali in Persian ("۱۱ آبان ۱۴۰۵"), "2 Nov 2026" in English.
+// gregorianMonths are the months of the Gregorian calendar the beta languages
+// use, as a date writes them ("2 ноября 2026" takes the genitive).
+var gregorianMonths = map[string][12]string{
+	"ar": {"يناير", "فبراير", "مارس", "أبريل", "مايو", "يونيو", "يوليو", "أغسطس", "سبتمبر", "أكتوبر", "نوفمبر", "ديسمبر"},
+	"ru": {"января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"},
+	"tr": {"Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"},
+}
+
+// Date formats a day: Jalali in Persian ("۱۱ آبان ۱۴۰۵"), Gregorian in the
+// others: "2 Nov 2026", "٢ نوفمبر ٢٠٢٦", "2 ноября 2026", "2 Kasım 2026".
 func Date(lang string, t time.Time) string {
 	t = t.In(CurrentLocation())
 	return CalendarDay(lang, t.Year(), t.Month(), t.Day())
@@ -246,19 +321,33 @@ func Date(lang string, t time.Time) string {
 // CalendarDay formats a calendar date as Date does, with no clock to move it
 // across a day's edge: the day a report names stays that day.
 func CalendarDay(lang string, y int, m time.Month, d int) string {
-	if Normalize(lang) == "fa" {
+	switch lang = Normalize(lang); lang {
+	case "fa":
 		jy, jm, jd := GregorianToJalali(y, int(m), d)
 		return Digits(lang, strconv.Itoa(jd)) + " " + persianMonths[jm-1] + " " + Digits(lang, strconv.Itoa(jy))
+	case "ar", "ru", "tr":
+		return Digits(lang, strconv.Itoa(d)) + " " + gregorianMonths[lang][m-1] + " " + Digits(lang, strconv.Itoa(y))
 	}
 	return time.Date(y, m, d, 0, 0, 0, 0, time.UTC).Format("2 Jan 2006")
 }
 
-// Percent formats a whole percent: "12%", "۱۲٪".
+// Percent formats a whole percent: "12%", "۱۲٪", "١٢٪", "12 %", "%12".
 func Percent(lang string, n int64) string {
-	if Normalize(lang) == "fa" {
-		return Digits(lang, strconv.FormatInt(n, 10)) + "٪"
+	return PercentText(lang, Digits(lang, strconv.FormatInt(n, 10)))
+}
+
+// PercentText puts the percent sign where the language writes it, round a
+// number already written in the language (Digits).
+func PercentText(lang, number string) string {
+	switch Normalize(lang) {
+	case "fa", "ar":
+		return number + "٪"
+	case "ru":
+		return number + "\u00a0%"
+	case "tr":
+		return "%" + number
 	}
-	return strconv.FormatInt(n, 10) + "%"
+	return number + "%"
 }
 
 // Clock formats a time of day in the store's time zone, 24-hour: "14:05",
@@ -270,7 +359,7 @@ func Clock(lang string, t time.Time) string {
 // DateTime is a day and its time: "2 Nov 2026, 14:05", "۱۱ آبان ۱۴۰۵، ۱۴:۰۵".
 func DateTime(lang string, t time.Time) string {
 	sep := ", "
-	if Normalize(lang) == "fa" {
+	if l := Normalize(lang); l == "fa" || l == "ar" {
 		sep = "، "
 	}
 	return Date(lang, t) + sep + Clock(lang, t)

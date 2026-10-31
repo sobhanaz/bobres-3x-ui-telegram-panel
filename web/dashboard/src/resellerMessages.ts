@@ -1,7 +1,7 @@
 // Helpers for the messages to resellers and the weekly settlement reminder (the Resellers page, Messages tab): the placeholders, what the
 // composer sends, and the reminder's settings. Pure functions (no API, no Vue).
 import { labelProblem, urlProblem, type AudienceLang } from './broadcasts'
-import type { Lang } from './format'
+import type { ContentLang } from './format'
 import type { LangPair } from './types'
 
 /** The values a message to resellers may use, as {name}; core fills them in for each reseller. */
@@ -44,7 +44,7 @@ export function blankResellerDraft(): ResellerDraft {
 }
 
 /** neededLangs are the languages the audience needs a text in. */
-export function draftLangs(d: ResellerDraft): Lang[] {
+export function draftLangs(d: ResellerDraft): ContentLang[] {
   return d.language === '' ? ['fa', 'en'] : [d.language]
 }
 
@@ -85,7 +85,7 @@ export interface ReminderReply {
   debt_only: boolean
   settle_button: boolean
   texts: LangPair
-  custom: Record<Lang, boolean>
+  custom: Record<ContentLang, boolean>
   defaults: LangPair
   weekdays: string[]
   zone: string
@@ -126,7 +126,7 @@ export const REMINDER_KEYS = {
   time: 'resellers.reminder.time',
   debtOnly: 'resellers.reminder.debt_only',
   settle: 'resellers.reminder.settle_button',
-  text: (l: Lang) => 'resellers.reminder.text.' + l,
+  text: (l: ContentLang) => 'resellers.reminder.text.' + l,
 }
 
 /** timeOf reads a time of day typed as H:MM or HH:MM (Persian digits too) as HH:MM; null when it is not one. */
@@ -145,7 +145,7 @@ export function reminderChanges(before: ReminderForm, after: ReminderForm): Reco
   if (before.time !== time) out[REMINDER_KEYS.time] = time
   if (before.debtOnly !== after.debtOnly) out[REMINDER_KEYS.debtOnly] = String(after.debtOnly)
   if (before.settle !== after.settle) out[REMINDER_KEYS.settle] = String(after.settle)
-  for (const l of ['fa', 'en'] as Lang[]) if (before.texts[l].trim() !== after.texts[l].trim()) out[REMINDER_KEYS.text(l)] = after.texts[l].trim()
+  for (const l of ['fa', 'en'] as ContentLang[]) if (before.texts[l].trim() !== after.texts[l].trim()) out[REMINDER_KEYS.text(l)] = after.texts[l].trim()
   return out
 }
 
@@ -153,6 +153,6 @@ export function reminderChanges(before: ReminderForm, after: ReminderForm): Reco
 export function reminderProblems(f: ReminderForm): string[] {
   const out: string[] = []
   if (!timeOf(f.time)) out.push('time')
-  for (const l of ['fa', 'en'] as Lang[]) if (!f.texts[l].trim() || unknownPlaceholders(f.texts[l]).length) out.push('texts.' + l)
+  for (const l of ['fa', 'en'] as ContentLang[]) if (!f.texts[l].trim() || unknownPlaceholders(f.texts[l]).length) out.push('texts.' + l)
   return out
 }

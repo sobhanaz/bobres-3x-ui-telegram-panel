@@ -36,6 +36,9 @@ const (
 	ProblemMarkup      = "markup_not_allowed"
 	ProblemTooLong     = "too_long"
 	ProblemEmpty       = "empty"
+	// ProblemPluralForms is a plural selector with a number of forms the
+	// language does not have (Arg names its placeholder).
+	ProblemPluralForms = "plural_forms"
 )
 
 // allowedTags are the Telegram HTML tags an override may use.
@@ -70,7 +73,9 @@ func (c *Catalog) ValidateOverride(lang, key, value string) (string, []Problem) 
 	if !ok {
 		return "", []Problem{{ProblemUnknownKey, key}}
 	}
-	if !slices.Contains(info.Langs, lang) {
+	// A text is read in every language of the catalog unless it is one of
+	// onlyLangs (the dashboard edits Persian and English, info.Langs).
+	if only := onlyLangs[key]; (only != nil && !slices.Contains(only, lang)) || !slices.Contains(All, lang) {
 		return "", []Problem{{ProblemLangUnused, lang}}
 	}
 	if !utf8.ValidString(value) {
@@ -96,8 +101,18 @@ func (c *Catalog) ValidateOverride(lang, key, value string) (string, []Problem) 
 		}
 	}
 	for _, m := range looseBraceRe.FindAllString(value, -1) {
-		if placeholderRe.FindString(m) != m {
+		if placeholderRe.FindString(m) != m && pluralRe.FindString(m) != m {
 			add(ProblemUnknown, m)
+		}
+	}
+	for _, sel := range pluralRe.FindAllStringSubmatch(value, -1) {
+		if strings.Count(sel[2], "|") != PluralForms(lang) {
+			add(ProblemPluralForms, sel[1])
+		}
+		for _, ch := range []string{"<", ">", "&"} {
+			if strings.Contains(sel[2], ch) { // a form is plain words
+				add(ProblemMarkup, ch)
+			}
 		}
 	}
 
@@ -197,6 +212,7 @@ func ValidateLabel(value string) (string, []Problem) {
 // tag, so a text cannot put them inside <code> or an attribute.
 func render(key, s string) string {
 	markup := markupArgs[key]
+	s = pluralRe.ReplaceAllString(s, "x") // a form holds plain words only (checked apart)
 	return placeholderRe.ReplaceAllStringFunc(s, func(m string) string {
 		if slices.Contains(markup, m[1:len(m)-1]) {
 			return "<b>x</b>"

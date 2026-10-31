@@ -541,6 +541,31 @@ payments in the dashboard. Customers see none of this.
   recorded, each with the balance after.
 - Resellers are gated like customers (maintenance, required channel); a banned reseller loses the panel.
 
+## Languages
+Persian and English, and in **beta** (machine-translated, awaiting a native speaker's review) Arabic, Russian and
+Turkish. The store chooses the languages customers may pick: `languages.enabled` (dashboard Settings, General,
+Customer languages; not in the bot's admin settings), codes with the store's default first, default `fa,en`.
+- The language picker (a new user's first screen, and 🌐 Language) shows the enabled languages in that order, two to
+  a row, each in its own words. A tap on an old picker's button for a language switched off since chooses the default.
+- Before a customer has chosen, the bot speaks their Telegram language when it is enabled, else the store's default.
+  A customer whose language the store switched off reads the default (their choice is kept); staff alerts and every
+  notification follow the same rule (`i18n.Normalize`).
+- The bot's Telegram profile (menu commands, description, short description) is set per language for Persian,
+  English and each enabled beta language; one switched off is taken back, so its users see the default profile.
+- Arabic is right to left: left-to-right values (names, ids, plan names) keep the isolates Persian uses. Arabic writes
+  Arabic-Indic digits wherever Persian writes Persian ones; the three beta languages take Gregorian dates
+  (`٢ نوفمبر ٢٠٢٦`, `2 ноября 2026`, `2 Kasım 2026`); Russian groups thousands with a no-break space and Turkish with a
+  dot, both with a decimal comma; the percent sign is `١٢٪`, `12 %`, `%12`.
+- **Plural forms.** A text that counts uses a selector, `{n|# день|# дня|# дней}`: the forms of the language's plural
+  categories (Russian one | few | many, Arabic zero | one | two | few | many | other), `#` being the number as shown.
+  Turkish keeps the noun singular after a number and needs none; the Persian and English texts have none. The Toman
+  takes its Russian forms (1 томан, 2 томана, 5 томанов). Overrides are checked for the right number of forms.
+- Store-written content (plan names, broadcasts, help pages, terms, reseller messages, announcement cards) is written
+  in Persian and English: a reader of a beta language reads the English text, then the Persian one. The store's own
+  name for the Toman is its English one in the beta languages.
+- The dashboard's text editor edits the Persian and English texts; the beta ones change by a pull request to
+  `internal/bot/i18n/locales/<lang>.json` (the tests check every key, placeholder, tag and plural form).
+
 ## Notifications
 Expiry (3d/1d/expired), traffic (80%/100%), payment result, ticket reply, wallet change (resellers: commission and
 recorded payments), panel/server alerts (admin only).

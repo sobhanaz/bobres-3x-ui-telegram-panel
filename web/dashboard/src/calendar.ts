@@ -10,7 +10,7 @@
 // internal/bot/i18n.GregorianToJalali), so a report's Jalali weeks and months
 // are the days this file writes. Intl is only the oracle of the tests (the two
 // agree for every day from 1900 to 2123 and the API accepts 2000 to 2100).
-import type { Lang } from './format'
+import { gregorianLocale, type Lang } from './format'
 
 export type Calendar = 'gregorian' | 'jalali'
 
@@ -188,14 +188,20 @@ export function shiftMonth(v: Pick<YMD, 'y' | 'm'>, by: number): Pick<YMD, 'y' |
 const jalaliMonths: Record<Lang, string[]> = {
   fa: ['فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'],
   en: ['Farvardin', 'Ordibehesht', 'Khordad', 'Tir', 'Mordad', 'Shahrivar', 'Mehr', 'Aban', 'Azar', 'Dey', 'Bahman', 'Esfand'],
+  ar: ['فروردين', 'أرديبهشت', 'خرداد', 'تير', 'مرداد', 'شهريور', 'مهر', 'آبان', 'آذر', 'دي', 'بهمن', 'إسفند'],
+  ru: ['Фарвардин', 'Ордибехешт', 'Хордад', 'Тир', 'Мордад', 'Шахривар', 'Мехр', 'Абан', 'Азар', 'Дей', 'Бахман', 'Эсфанд'],
+  tr: ['Ferverdin', 'Ordibeheşt', 'Hordad', 'Tir', 'Mordad', 'Şehriver', 'Mehr', 'Aban', 'Azer', 'Dey', 'Behmen', 'Esfend'],
 }
 
 const PERSIAN_DIGITS = '۰۱۲۳۴۵۶۷۸۹'
+const ARABIC_DIGITS = '٠١٢٣٤٥٦٧٨٩'
 
 /** digits writes the digits of a text the way the language does (Persian
- * digits in Persian, Latin in English). */
+ * digits in Persian, Arabic-Indic in Arabic, Latin in the others). */
 export function digits(s: string, lang: Lang): string {
-  return lang === 'fa' ? s.replace(/\d/g, (d) => PERSIAN_DIGITS[Number(d)]) : s
+  if (lang === 'fa') return s.replace(/\d/g, (d) => PERSIAN_DIGITS[Number(d)])
+  if (lang === 'ar') return s.replace(/\d/g, (d) => ARABIC_DIGITS[Number(d)])
+  return s
 }
 
 /** latin turns Persian and Arabic-Indic digits into 0-9. */
@@ -222,7 +228,7 @@ function utcDate(iso: string): Date {
 /** monthName names a month of a calendar in the language. */
 export function monthName(calendar: Calendar, lang: Lang, m: number, y = 2026): string {
   if (calendar === 'jalali') return jalaliMonths[lang][m - 1] ?? ''
-  return intl(lang === 'fa' ? 'fa-IR-u-ca-gregory' : 'en-GB', { month: 'long' }).format(new Date(Date.UTC(y, m - 1, 1)))
+  return intl(gregorianLocale(lang), { month: 'long' }).format(new Date(Date.UTC(y, m - 1, 1)))
 }
 
 /** formatDate writes a date ("2026-10-14") in a calendar and a language:
@@ -237,7 +243,7 @@ export function formatDate(iso: string, lang: Lang, calendar: Calendar, style: '
     const name = jalaliMonths[lang][v.m - 1]
     return style === 'short' ? `${day} ${name}` : `${day} ${name} ${digits(String(v.y), lang)}`
   }
-  const locale = lang === 'fa' ? 'fa-IR-u-ca-gregory' : 'en-GB'
+  const locale = gregorianLocale(lang)
   return intl(locale, style === 'short' ? { month: 'short', day: 'numeric' } : { dateStyle: 'medium' }).format(utcDate(iso))
 }
 
@@ -246,7 +252,7 @@ export function formatDate(iso: string, lang: Lang, calendar: Calendar, style: '
 export function formatMonth(iso: string, lang: Lang, calendar: Calendar): string {
   const v = partsOf(iso, calendar)
   if (calendar === 'jalali') return `${jalaliMonths[lang][v.m - 1]} ${digits(String(v.y), lang)}`
-  return intl(lang === 'fa' ? 'fa-IR-u-ca-gregory' : 'en-GB', { month: 'short', year: 'numeric' }).format(utcDate(iso))
+  return intl(gregorianLocale(lang), { month: 'short', year: 'numeric' }).format(utcDate(iso))
 }
 
 /** weekdayName names a day of the week (0 Sunday to 6 Saturday), in full
@@ -255,7 +261,7 @@ export function weekdayName(wd: number, lang: Lang, style: 'long' | 'narrow'): s
   const sunday = new Date(Date.UTC(2026, 9, 18)) // a Sunday
   const d = new Date(sunday.getTime() + wd * DAY_MS)
   if (style === 'narrow' && lang === 'en') return ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'][wd]
-  return intl(lang === 'fa' ? 'fa-IR' : 'en-GB', { weekday: style }).format(d)
+  return intl(gregorianLocale(lang), { weekday: style }).format(d)
 }
 
 /** formatInput writes a date the way it is typed into a field: year, month
@@ -264,7 +270,7 @@ export function weekdayName(wd: number, lang: Lang, style: 'long' | 'narrow'): s
 export function formatInput(iso: string, lang: Lang, calendar: Calendar): string {
   if (!parseIso(iso)) return ''
   const v = partsOf(iso, calendar)
-  const sep = lang === 'fa' ? '/' : '-'
+  const sep = lang === 'fa' || lang === 'ar' ? '/' : '-'
   return digits(`${pad(v.y, 4)}${sep}${pad(v.m, 2)}${sep}${pad(v.d, 2)}`, lang)
 }
 

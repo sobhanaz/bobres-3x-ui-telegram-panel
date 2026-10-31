@@ -11,7 +11,7 @@ import LicenseActivate from './LicenseActivate.vue'
 import LicenseImport from './LicenseImport.vue'
 import { api } from '../../api'
 import { errorText } from '../../errors'
-import { date, dateTime, isolate, num, type Lang } from '../../format'
+import { date, dateTime, isolate, listSeparator, num, type Lang } from '../../format'
 import {
   basisOf,
   bindings,
@@ -119,7 +119,7 @@ const stateHint = computed(() => {
 
 const tierName = (tier: string) => (te('license.tier.' + tier) ? t('license.tier.' + tier) : tier)
 const providerName = (p: string) => (te('payment.provider.' + p) ? t('payment.provider.' + p) : p)
-const sep = computed(() => (lang.value === 'fa' ? '، ' : ', '))
+const sep = computed(() => listSeparator(lang.value))
 
 function limitText(r: Extract<EntitlementRow, { kind: 'limit' }>): string {
   if (r.state === 'unlimited') return r.used === null ? t('license.unlimited') : t('license.unlimited_used', { used: num(r.used, lang.value) })

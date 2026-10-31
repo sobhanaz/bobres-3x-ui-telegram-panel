@@ -469,7 +469,7 @@ type HelpViewButton struct {
 // or no usable address is left out.
 func ResolveHelp(e *store.HelpEntry, lang string) (HelpView, bool) {
 	lang = i18n.Normalize(lang)
-	order := append([]string{lang}, slices.DeleteFunc(slices.Clone(i18n.Languages), func(l string) bool { return l == lang })...)
+	order := i18n.ContentOrder(lang) // a beta language reads English before Persian
 	for _, l := range order {
 		if e.Title[l] == "" || e.Body[l] == "" {
 			continue

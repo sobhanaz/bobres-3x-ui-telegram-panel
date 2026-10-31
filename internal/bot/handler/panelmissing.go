@@ -181,7 +181,7 @@ func pmPlanName(r *req, names map[string]string) string {
 	if n := names[r.lang]; n != "" {
 		return n
 	}
-	for _, l := range i18n.Languages {
+	for _, l := range i18n.ContentOrder(r.lang) {
 		if n := names[l]; n != "" {
 			return n
 		}

@@ -13,7 +13,7 @@ import ProgressBar from 'primevue/progressbar'
 import { useAuth } from '../stores/auth'
 import { ApiError } from '../api'
 import { latinDigits } from '../format'
-import { setLang, currentLang } from '../i18n'
+import LangMenu from '../components/LangMenu.vue'
 import { APPROVAL_COMMAND, POLL_MS, clock, pendingState, reasonKey, secondsLeft } from '../security'
 import { applyBrandColor, applyDocumentBrand } from '../theme'
 import mascotWave from '../assets/brand/bobres-wave.webp'
@@ -206,7 +206,7 @@ async function cancelWaiting() {
 <template>
   <div class="login">
     <div class="top">
-      <Button :label="t('lang.switch')" text size="small" @click="setLang(currentLang() === 'fa' ? 'en' : 'fa')" />
+      <LangMenu />
     </div>
     <div class="middle">
       <picture v-if="mascot" class="mascot">

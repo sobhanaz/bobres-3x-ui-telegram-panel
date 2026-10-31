@@ -17,7 +17,7 @@ import Tag from 'primevue/tag'
 import Message from 'primevue/message'
 import { api } from '../api'
 import { errorText } from '../errors'
-import { asciiNumber, bytes, currencies, decimalOf, gbOf, isolate, money, num, validAmount, type Lang } from '../format'
+import { asciiNumber, bytes, currencies, decimalOf, gbOf, isolate, listSeparator, money, num, validAmount, type Lang } from '../format'
 import { choiceOf, goneInbounds, inboundOptions, inboundsBody, noUsableServer, serverNames, serverOptions, type InboundChoice } from '../servers'
 import { useAuth } from '../stores/auth'
 import PlanGroups from '../components/plans/PlanGroups.vue'
@@ -101,7 +101,7 @@ function serversText(p: PlanItem): string {
   if (!serversReady.value) return t('plan.servers_count', { n: num(ids.length, lang.value) }, ids.length)
   return serverNames(ids, servers.value)
     .map((n) => n || t('plan.server_removed'))
-    .join(lang.value === 'fa' ? '، ' : ', ')
+    .join(listSeparator(lang.value))
 }
 
 // The editor: traffic in GB, the price in major units, as staff type them.

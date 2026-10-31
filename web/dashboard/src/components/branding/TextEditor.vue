@@ -12,7 +12,7 @@ import TextPreview from './TextPreview.vue'
 import ProblemList from './ProblemList.vue'
 import { api, ApiError } from '../../api'
 import { errorText } from '../../errors'
-import { isolate, num, type Lang } from '../../format'
+import { isolate, num, type ContentLang, type Lang } from '../../format'
 import { TEXT_LANGS, insertAt, isHtmlContext, textLangs, textLength } from '../../branding'
 import type { TextCheck, TextItem, TextProblem } from '../../types'
 
@@ -40,7 +40,7 @@ interface Draft {
   problems: TextProblem[]
 }
 const current = ref<TextItem | null>(null)
-const drafts = reactive<Partial<Record<Lang, Draft>>>({})
+const drafts = reactive<Partial<Record<ContentLang, Draft>>>({})
 const entries = computed(() => {
   const it = current.value
   if (!it) return []
@@ -50,8 +50,8 @@ const entries = computed(() => {
   })
 })
 
-const stored = (it: TextItem, l: Lang) => it.override[l] || it.default[l] || ''
-const areaId = (l: Lang) => `${uid}-${l}`
+const stored = (it: TextItem, l: ContentLang) => it.override[l] || it.default[l] || ''
+const areaId = (l: ContentLang) => `${uid}-${l}`
 
 function stop() {
   for (const l of TEXT_LANGS) clearTimeout(drafts[l]?.timer)
@@ -74,7 +74,7 @@ watch(visible, (v) => (v ? start() : stop()), { immediate: true })
 
 /** schedule checks the text with core once typing pauses; only the answer
  * for the latest text counts. */
-function schedule(l: Lang, delay = 400) {
+function schedule(l: ContentLang, delay = 400) {
   const d = drafts[l]
   const it = current.value
   if (!d || !it) return
@@ -102,7 +102,7 @@ function schedule(l: Lang, delay = 400) {
   }, delay)
 }
 
-function edit(l: Lang, value: string | undefined) {
+function edit(l: ContentLang, value: string | undefined) {
   const d = drafts[l]
   if (!d) return
   d.value = value ?? ''
@@ -110,7 +110,7 @@ function edit(l: Lang, value: string | undefined) {
 }
 
 const len = (d: Draft) => textLength(d.value)
-const dirty = (l: Lang) => {
+const dirty = (l: ContentLang) => {
   const d = drafts[l]
   return !!current.value && !!d && d.value.trim() !== stored(current.value, l).trim()
 }
@@ -118,14 +118,14 @@ const anyDirty = computed(() => entries.value.some((e) => dirty(e.l)))
 const blocked = (d: Draft) => !!d.check && !d.check.ok && !d.checking
 // Payment texts are the store owner's (like the payment details).
 const editable = computed(() => current.value?.editable !== false)
-const canSave = (l: Lang) => {
+const canSave = (l: ContentLang) => {
   const d = drafts[l]
   return editable.value && !!d && dirty(l) && d.value.trim() !== '' && !d.saving && !blocked(d)
 }
 const shownProblems = (d: Draft) => (d.problems.length ? d.problems : !d.checking && d.check ? d.check.problems : [])
 
 /** insert puts {name} where the cursor is (or replaces the selection). */
-async function insert(l: Lang, name: string) {
+async function insert(l: ContentLang, name: string) {
   const d = drafts[l]
   if (!d) return
   const el = document.getElementById(areaId(l)) as HTMLTextAreaElement | null
@@ -137,13 +137,13 @@ async function insert(l: Lang, name: string) {
   el?.setSelectionRange(r.cursor, r.cursor)
 }
 
-function useDefault(l: Lang) {
+function useDefault(l: ContentLang) {
   if (current.value) edit(l, current.value.default[l])
 }
 
 // Saving the default text itself (or resetting) removes the change, so later
 // catalog improvements reach this text again.
-async function save(l: Lang, reset = false) {
+async function save(l: ContentLang, reset = false) {
   const d = drafts[l]
   const it = current.value
   if (!d || !it) return
@@ -176,7 +176,7 @@ async function save(l: Lang, reset = false) {
   }
 }
 
-function reset(l: Lang) {
+function reset(l: ContentLang) {
   const it = current.value
   if (!it) return
   confirm.require({

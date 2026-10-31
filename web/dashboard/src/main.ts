@@ -16,7 +16,7 @@ import './styles.css'
 
 import App from './App.vue'
 import { router } from './router'
-import { i18n, applyLang, currentLang } from './i18n'
+import { i18n, applyLang, currentLang, loadLang, setLang } from './i18n'
 import { BobresPreset, darkModeSelector } from './theme'
 import { primeLocale } from './primelocale'
 import type { Lang } from './format'
@@ -53,4 +53,7 @@ whenAuthLost(() => {
   if (router.currentRoute.value.name !== 'login') void router.push({ name: 'login' })
 })
 
-app.mount('#app')
+// A beta language chosen before is fetched first, so the page opens in it.
+void loadLang(currentLang())
+  .catch(() => setLang('fa'))
+  .finally(() => app.mount('#app'))

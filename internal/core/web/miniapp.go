@@ -12,6 +12,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/bot/i18n"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/botfiles"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/domain"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/store"
@@ -365,10 +366,13 @@ func (s *Server) miniAuth(w http.ResponseWriter, r *http.Request) {
 		// A first visit makes the account like the bot's /start does. Only a
 		// missing one is created: an upsert would overwrite the language the
 		// customer chose in the bot.
-		lang := "fa"
-		if strings.HasPrefix(strings.ToLower(tu.LanguageCode), "en") {
-			lang = "en"
+		// Their Telegram language when the store enabled it, else the store's default.
+		langs, err := s.miniLanguages(ctx)
+		if err != nil {
+			s.internal(w, "mini app settings", err)
+			return
 		}
+		lang := i18n.Choose(tu.LanguageCode, langs)
 		u, err = s.cfg.Domain.UpsertUser(ctx, domain.UpsertUserParams{TelegramID: tu.ID, Username: tu.Username, Language: lang})
 		if err != nil {
 			s.miniFail(w, "mini app create user", err)
@@ -433,6 +437,15 @@ func (s *Server) miniBot(settings map[string]string) string {
 	return ""
 }
 
+// miniLanguages are the languages the store lets customers pick, its default first.
+func (s *Server) miniLanguages(ctx context.Context) ([]string, error) {
+	settings, err := s.cfg.Domain.Settings(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return i18n.ParseEnabled(settings[domain.SettingLanguages]), nil
+}
+
 func (s *Server) miniMeBody(ctx context.Context, u *store.User) (map[string]any, error) {
 	settings, err := s.cfg.Domain.Settings(ctx)
 	if err != nil {
@@ -455,8 +468,11 @@ func (s *Server) miniMeBody(ctx context.Context, u *store.User) (map[string]any,
 	if err != nil {
 		return nil, err
 	}
+	// The app speaks the customer's language while the store has it enabled, else the store's default (the bot does the same).
+	langs := i18n.ParseEnabled(settings[domain.SettingLanguages])
 	return map[string]any{
-		"user":        map[string]any{"id": u.ID, "username": u.Username, "language": u.Language},
+		"user":        map[string]any{"id": u.ID, "username": u.Username, "language": i18n.Choose(u.Language, langs)},
+		"languages":   langs,
 		"wallets":     wallets,
 		"brand":       map[string]any{"name": brandName(settings), "color": color, "support": support, "support_url": supportURL, "bot_url": bot},
 		"maintenance": s.miniMaintenance(settings, u),

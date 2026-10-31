@@ -136,7 +136,7 @@ func Deliver(d Delivery) http.Handler {
 		}
 		langOf := func(owner int64) string {
 			if d.Lang == nil {
-				return i18n.Languages[0]
+				return i18n.Default()
 			}
 			ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 			defer cancel()

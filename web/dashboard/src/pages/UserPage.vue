@@ -31,7 +31,7 @@ import { api, newKey } from '../api'
 import { errorText } from '../errors'
 import { useAuth } from '../stores/auth'
 import { useList } from '../composables/useList'
-import { asciiNumber, currencies, date, money, num, validAmount, type Lang } from '../format'
+import { asciiNumber, currencies, date, languageName, money, num, validAmount, type Lang } from '../format'
 import { isStaff } from '../staff'
 import type { CodeItem, LedgerItem, OrderItem, PaymentItem, ServiceItem, TicketItem, UserDetail } from '../types'
 
@@ -215,7 +215,7 @@ const directions = computed(() => [
           <dt>{{ t('user.role') }}</dt>
           <dd>{{ detail.user.role === 'user' ? t('user.role_customer') : t('role.' + detail.user.role) }}</dd>
           <dt>{{ t('user.language') }}</dt>
-          <dd>{{ detail.user.language === 'fa' ? 'فارسی' : 'English' }}</dd>
+          <dd>{{ languageName(detail.user.language || 'fa') }}</dd>
           <dt>{{ t('user.joined') }}</dt>
           <dd>{{ date(detail.user.created_at, lang) }}</dd>
           <dt>{{ t('user.invite_code') }}</dt>

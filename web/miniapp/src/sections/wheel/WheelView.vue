@@ -6,6 +6,7 @@ import { ApiError } from '../../api'
 import { errorKey } from '../../errors'
 import { fmtDateTime, fmtMoney, fmtNum } from '../../fmt'
 import { lang, tr } from '../../i18n'
+import { numberLocale } from '../../format'
 import { fail, loadWallet } from '../../store'
 import { haptic } from '../../telegram'
 import { wheelApi, type Spin, type Wheel } from './api'
@@ -41,7 +42,7 @@ onMounted(load)
 
 const segments = computed(() => (data.value ? segmentsOf(data.value.prizes, data.value.no_prize_weight) : []))
 const money = (amount: number) => (data.value ? fmtMoney(amount, data.value.currency, data.value.scale) : String(amount))
-const percent = (fraction: number) => new Intl.NumberFormat(lang.value === 'fa' ? 'fa-IR' : 'en-US', { style: 'percent', maximumFractionDigits: 2 }).format(fraction)
+const percent = (fraction: number) => new Intl.NumberFormat(numberLocale(lang.value), { style: 'percent', maximumFractionDigits: 2 }).format(fraction)
 /** label is the short text on a piece: the amount, or a dash for the piece that pays nothing. */
 const label = (amount: number) => (amount > 0 ? fmtNum(amount) : '—')
 

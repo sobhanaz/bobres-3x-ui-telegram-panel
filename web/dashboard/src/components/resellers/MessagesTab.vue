@@ -19,7 +19,7 @@ import TextPreview from '../branding/TextPreview.vue'
 import ReminderCard from './ReminderCard.vue'
 import { api, ApiError } from '../../api'
 import { errorText } from '../../errors'
-import { num, type Lang } from '../../format'
+import { contentLang, num, type ContentLang, type Lang } from '../../format'
 import { AUDIENCE_LANGS, splitProblems, testOutcome, timing, type AudienceLang, type TestOutcome } from '../../broadcasts'
 import {
   PLACEHOLDERS,
@@ -49,11 +49,11 @@ const uid = useId()
 const TARGETS: readonly Target[] = ['debt', 'all', 'tier']
 const draft = ref<ResellerDraft>(blankResellerDraft())
 const needed = computed(() => draftLangs(draft.value))
-const tab = ref<Lang>(viewer.value)
+const tab = ref<ContentLang>(contentLang(viewer.value))
 watch(needed, (n) => {
-  if (!n.includes(tab.value)) tab.value = n.includes(viewer.value) ? viewer.value : n[0]
+  if (!n.includes(tab.value)) tab.value = n.includes(contentLang(viewer.value)) ? contentLang(viewer.value) : n[0]
 })
-const textProblems = reactive<Record<Lang, TextProblem[]>>({ fa: [], en: [] })
+const textProblems = reactive<Record<ContentLang, TextProblem[]>>({ fa: [], en: [] })
 const fieldErrors = ref<Record<string, string>>({})
 const showAll = ref(false)
 const formError = ref('')
@@ -315,7 +315,7 @@ async function send() {
             <span class="app-muted">{{ t('reseller.messages.ph.' + p) }}</span>
           </Button>
         </div>
-        <Tabs v-if="needed.length > 1" :value="tab" @update:value="(v: string | number) => (tab = v as Lang)">
+        <Tabs v-if="needed.length > 1" :value="tab" @update:value="(v: string | number) => (tab = v as ContentLang)">
           <TabList>
             <Tab v-for="l in needed" :key="l" :value="l">{{ t('texts.' + l) }}</Tab>
           </TabList>

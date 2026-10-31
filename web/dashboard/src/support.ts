@@ -5,7 +5,7 @@
 // them through vue-i18n or turns them into HTML.
 import { ref } from 'vue'
 import { api, newKey } from './api'
-import { latinDigits, type Lang } from './format'
+import { latinDigits, numberLocale, type ContentLang, type Lang } from './format'
 import type { CannedReply, TicketCounts, TicketItem, TicketMessageItem, UserBrief } from './types'
 
 /** A staff reply's limit in UTF-16 units (Telegram counts the same way). */
@@ -56,7 +56,7 @@ export function waitingSeconds(t: Pick<TicketItem, 'status' | 'last_customer_at'
 /** duration writes a span of time in its largest sensible unit, in the
  * dashboard's language ("2 hours", "۲ ساعت"); under a minute counts as one. */
 export function duration(sec: number, lang: Lang): string {
-  const locale = lang === 'fa' ? 'fa-IR' : 'en-US'
+  const locale = numberLocale(lang)
   const fmt = (n: number, unit: 'minute' | 'hour' | 'day') =>
     new Intl.NumberFormat(locale, { style: 'unit', unit, unitDisplay: 'long', maximumFractionDigits: 0 }).format(n)
   const s = Math.max(0, sec)
@@ -93,16 +93,16 @@ export function replyOk(s: string): boolean {
 }
 
 /** cannedBody is a saved reply in the customer's language, else the other
- * one (a customer whose language is unknown reads Persian first). */
+ * one (a customer whose language is unknown reads Persian first, one of a beta language English). */
 export function cannedBody(c: Pick<CannedReply, 'body'>, lang: string): string {
-  const first: Lang = lang === 'en' ? 'en' : 'fa'
-  const other: Lang = first === 'fa' ? 'en' : 'fa'
+  const first: ContentLang = ['en', 'ar', 'ru', 'tr'].includes(lang) ? 'en' : 'fa' // a beta language reads English first
+  const other: ContentLang = first === 'fa' ? 'en' : 'fa'
   return (c.body[first] ?? '').trim() ? c.body[first] : (c.body[other] ?? '')
 }
 
 /** cannedLangs says which languages a saved reply has. */
-export function cannedLangs(c: Pick<CannedReply, 'body'>): Lang[] {
-  return (['fa', 'en'] as Lang[]).filter((l) => (c.body[l] ?? '').trim() !== '')
+export function cannedLangs(c: Pick<CannedReply, 'body'>): ContentLang[] {
+  return (['fa', 'en'] as ContentLang[]).filter((l) => (c.body[l] ?? '').trim() !== '')
 }
 
 type FileInfo = NonNullable<TicketMessageItem['file']>
@@ -124,7 +124,7 @@ export function fileHref(ticketId: string, m: Pick<TicketMessageItem, 'id' | 'fi
 
 /** fileSize writes a file's size ("12.5 kB", "۱۲٫۵ کیلوبایت"). */
 export function fileSize(n: number, lang: Lang): string {
-  const locale = lang === 'fa' ? 'fa-IR' : 'en-US'
+  const locale = numberLocale(lang)
   const fmt = (v: number, unit: 'byte' | 'kilobyte' | 'megabyte') =>
     new Intl.NumberFormat(locale, {
       style: 'unit',
