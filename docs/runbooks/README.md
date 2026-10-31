@@ -43,6 +43,8 @@ Core's log names each check by its key (`bobres logs --tail 300 core | grep 'sys
 | A 3x-ui server with a service limit is at 90% of it or full (one notice a day; raising the limit ends it quietly) | `server.<id>.capacity` | [Provisioning backlog](provisioning-backlog.md) (a plan whose servers are all full waits) |
 | Zarinpal payments are failing, or one has been open for over 3 hours | `gateway.zarinpal.error`, `gateway.zarinpal.open` | [Payment stuck](payment-stuck.md) |
 | Automatic USDT payments are not being checked (no read of the store's TRON address from TronGrid has worked for 5 minutes), or one has been open for over 2 hours | `gateway.usdt_auto.read`, `gateway.usdt_auto.open` | [Payment stuck](payment-stuck.md) |
+| IDPay, NextPay or Aqayepardakht payments are failing, or one has been open too long (the same two checks as Zarinpal) | `gateway.idpay.error`, `.open`; `gateway.nextpay.*`; `gateway.aqayepardakht.*` | [Payment stuck](payment-stuck.md) |
+| Automatic TON payments are not being checked, or one has been open too long | `gateway.ton_auto.read`, `gateway.ton_auto.open` | [Payment stuck](payment-stuck.md), [Automatic TON](../20-ton.md) |
 | The last backup failed, or no new backup for over 26 hours | `backup.failed`, `backup.stale` | [Backups not arriving](backups-not-arriving.md) |
 | The latest backup was not copied to the off-site (S3) storage, or its settings cannot be used | `backup.offsite` | [Backups not arriving](backups-not-arriving.md#a-backup-is-made-but-not-copied-to-s3) |
 | The disk is almost full (under 2 GB) | `backup.disk` | [Disk full](disk-full.md) |
@@ -50,6 +52,8 @@ Core's log names each check by its key (`bobres logs --tail 300 core | grep 'sys
 | The bot is behind on its messages (over 10 minutes) | `events.bot_lag` | `bobres logs --tail 200 bot`; [Bot token revoked](bot-token-revoked.md) if Telegram refuses the token |
 | The license expires soon, is in its grace period or has expired | `license.expiry` | [License](license.md) |
 | A new purchase was refused: the install is at its limit of active services (one notice a day) | `license.limit` | [License](license.md) |
+| The 30-day trial ends within 7 days, or has ended | `license.trial` | [License](license.md) |
+| Services whose client the panel no longer has (someone deleted it in the panel; one notice a day, no expiry reminders for them) | `subscriptions.panel_missing` | "Manage these services" under the notice, `/admin` > Not on the panel, or "Only services not on the panel" on the dashboard's Services page: make each client again or delete the service |
 | Caddy, the HTTPS gateway, has answered on none of the store's addresses for 3 minutes | `tls.caddy` | [HTTPS certificates](https.md#alerts) |
 | An HTTPS certificate is close to its end (renewal failing, or an own certificate not replaced), or an address has served no valid certificate for 30 minutes | `tls.<role>.expiring`, `tls.<role>.failing` (`<role>`: `domain`, `ip`, `zarinpal`) | [HTTPS certificates](https.md#alerts) |
 | The saved HTTPS setting is not in use | `tls.setting` | [HTTPS certificates](https.md#an-own-certificate-after-a-domain-change-or-a-new-master-key) |

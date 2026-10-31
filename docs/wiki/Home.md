@@ -37,10 +37,11 @@ It asks for your domain, your Telegram ID, your bot token and (optionally) your 
 
 ## What you get
 
-- **Customers:** a Persian and English Telegram bot and Mini App with plans, a wallet, a free trial, renewals, traffic packages, bulk purchase, gift and reward codes, invite links, support and a page for every service.
-- **You:** a dashboard for plans, payments, users, resellers, reports, branding, panels, gateways, staff, backups, updates and licenses, plus Telegram alerts.
+- **Customers:** a Telegram bot and Mini App in Persian and English (Arabic, Russian and Turkish in beta) with plans, a wallet, a free trial, renewals, traffic packages, bulk purchase, gift and reward codes, invite links, support, a page for every service, and news of new products for those who want it.
+- **Resellers:** a panel in the bot and the Mini App with tier prices, credit and commission; messages and a weekly settlement reminder from you.
+- **You:** a dashboard for plans, payments, users, resellers, reports, branding, panels, gateways, staff, backups, updates and licenses, plus Telegram alerts, a Prometheus endpoint, an uptime view and a public status page.
 - **Payments:** wallet, card to card, USDT (manual, and automatic on TRON), TON (automatic), Zarinpal, IDPay, NextPay, Aqayepardakht and Telegram Stars.
-- **Panels:** 3x-ui v3.8.5 to v3.10.2, Marzban 0.8, S-UI 1.6 and Hiddify Manager 14, several at once.
+- **Panels:** 3x-ui v3.8.5 to v3.10.2, Marzban 0.8, S-UI 1.6 and Hiddify Manager 14, several at once, with a client limit per server.
 - **Price:** the core is free to run. A free tier, a 30-day trial of everything, then a paid license per install. See [Licensing](Licensing).
 
 ## Links
