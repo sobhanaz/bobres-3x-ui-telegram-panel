@@ -90,6 +90,14 @@ func TestBroadcastTestEndpoint(t *testing.T) {
 	if len(bot.sent) != 2 {
 		t.Fatalf("refused messages were sent: %d", len(bot.sent))
 	}
+	// A message to resellers: the Settle / Top up button opens the wallet under the message.
+	if code, out, raw := post(coreTok, `{"chat_id":5,"text":"You owe","settle":"Settle"}`); code != http.StatusOK || out["ok"] != true ||
+		len(bot.sent) != 3 || bot.sent[2].InlineKeyboard[0][0].CallbackData != "wallet:m" || bot.sent[2].InlineKeyboard[0][0].Text != "Settle" {
+		t.Fatalf("settle button: %d %s %+v", code, raw, bot.sent)
+	}
+	if code, out, _ := post(coreTok, `{"chat_id":5,"text":"You owe","settle":"<b>"}`); code != http.StatusOK || out["problem"] != ProblemBadRequest || len(bot.sent) != 3 {
+		t.Fatalf("a settle label with markup: %d %v", code, out)
+	}
 	for _, body := range []string{`not json`, `{"chat_id":0,"text":"hi"}`, `{"chat_id":-100123,"text":"hi"}`} {
 		if code, _, _ := post(coreTok, body); code != http.StatusBadRequest {
 			t.Errorf("%s: %d", body, code)

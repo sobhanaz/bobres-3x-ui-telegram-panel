@@ -286,7 +286,8 @@ in the license (the bot says only that it is not available), and counts it as a 
 command: the old ones still work, and each usage text ends with "open /admin and use the buttons".
 
 **Menu:** payments to review (count) | today and find a user | plans and discounts | notifications and broadcast |
-settings and servers | owner only: payment methods and staff | dashboard link | home.
+settings and servers | not on the panel (N), while there are any | owner only: payment methods and staff | dashboard
+link | home.
 - **Payments to review:** a list, oldest first, eight to a page: each payment is a button (who paid, how much, when; a
   warning sign when the bank reference was seen before) that opens its card with the receipt or TXID and Approve / Reject.
   Every owner and admin sees the same list and the same alerts; a payment one of them decides leaves everyone's list, and
@@ -304,6 +305,32 @@ settings and servers | owner only: payment methods and staff | dashboard link | 
   shown or asked here.
 - **Staff** (owner only): list, add by Telegram id (the person must have started the bot) with a role, remove.
 - **Broadcast:** segment, text in Persian and in English, a preview with the audience size, then send.
+- **Not on the panel** (owner and admin, `services.write` on the dashboard; built 2026-10-29): the services whose client
+  an operator deleted in the 3x-ui or Marzban panel (core's `panel_missing_since`, live services only). Reached from the
+  daily alert `alert.panel_missing` and its repeats, which carry **Manage these services** (`adm:pm`, for every owner and
+  admin who gets it; never support, who get no staff alerts), and from the admin menu as **Not on the panel (N)** while
+  N > 0 (`AdminStats.services_panel_missing`). The list is five to a page, the longest missing first: the client email,
+  the customer (@username, else the Telegram id), the plan, the end date and since when the panel lacks it, each with
+  🔁 **Make again** and 🗑 **Delete from the bot**, and **Make all again** / **Delete all** under the list. Every action
+  asks first with one tap (**Yes** / **No**; No goes back to the list as it was): making again says the same link works
+  and the used traffic starts from zero, deleting says the service ends for good and nothing is refunded. The outcome is
+  written above the list, which is shown again in place: done, skipped (back on the panel, or deleted meanwhile: nothing
+  is done, "nothing was done"), or failed with the reason (the panel not answering in the staff member's words, else
+  core's). **All** names the count in its question and processes the list oldest first, at most 50 a tap (the question
+  says so when there are more), then counts done, skipped and failed and names up to 10 failures; a list whose count
+  changed between the question and the Yes is asked about again with the new count, and nothing is done. The reason in
+  the audit log is fixed text in the staff member's language: "not on the panel: made again from the bot by @name" or
+  "...deleted from the bot by @name" (the Telegram id without a username), under `subscription.recreate_client` and
+  `subscription.delete` like the dashboard's. gRPC `AdminListPanelMissing` (a page and the total) and
+  `AdminResolvePanelMissing` (one service, `recreate` or `delete`; the outcome `done`, `back` or `deleted`), both
+  checking the role again; the domain is `ResolvePanelMissing`, which wraps `RecreateSubscriptionClient` and
+  `DeleteSubscription` and skips a service that is no longer one the panel lacks.
+  Callbacks (all within 64 bytes, every id checked as a UUID before core is asked): `adm:pm` (the first page, as a new
+  message so the alert stays), `adm:pm:<page>` (a page in place), `adm:pmr:<page>:<id>` / `adm:pmd:<page>:<id>` (ask),
+  `adm:pmy:<r|d>:<page>:<id>` (Yes), `adm:pma:<r|d>` (ask for all), `adm:pmz:<r|d>:<n>` (Yes for the n named). A stale
+  or forged one does nothing but show the list ("That button is out of date", or "no longer on the list"); a customer,
+  a reseller or support tapping one gets "This is for admins only" and nothing changes. The maintenance tables include
+  these verbs (a customer's tap during maintenance gets the maintenance popup).
 
 **Input steps** (plan, top-up, trial, discount, setting, server weight, staff, broadcast) share one engine: each step
 says "Step n of m", what is wanted, the allowed range and an example; a refused answer is explained above the same
@@ -415,12 +442,36 @@ included, a one-time dashboard login link.
   longer included). Renewals, traffic top-ups and payments of orders already made go
   through. The staff get one alert a day, "A new purchase was refused: this install is at its limit of ... active
   services. Buy or renew a license to sell more." (`alert.license_limit`).
+- **Product news** (`announce.enabled`, **off by default**; `internal/bot/handler/announce.go`). While it is on, the bot asks
+  every customer **once** "Do you want news of new products?" with *✅ Yes, tell me* and *No, thanks* (`an:y`, `an:n`): a
+  newcomer right after their first /start (the language, the welcome and the home screen, then the question), a customer
+  who was there before at their next interaction, after that update is served. Never as a message to everyone, never
+  while a gate holds them (maintenance, a required chat) or while they are in the middle of something (a payment's proof,
+  a ticket, a number they are typing: they are asked at a later update). Core records the question
+  (`AskAnnounce`, true once per customer), so two updates at once do not ask twice. **No answer is no.** The answer
+  changes later on the language screen (🌐 Language), which shows a *🔔 Product news: on / 🔕 off* switch (`an:t:y`,
+  `an:t:n`) while announcements are on, and in the Mini App (More, *Product news*). Staff announce a product by hand from
+  the dashboard ([04-dashboard.md](04-dashboard.md), "Announcing a product"); only the customers who said yes get the
+  private message (a broadcast, so banned customers and customers who blocked the bot never do), in their own language,
+  with a **🛒 Buy** button (`an:b:p:<plan id without dashes>`, `an:b:s:<supplier product>`, `an:b:l:<tier>:<months>`)
+  that opens that product as a **new message**: the card stays as it is. The channel post's Buy button is a link,
+  `t.me/<bot>?start=p_…|s_…|l_<tier>_<months>`, which /start opens the same way (a newcomer picks a language first, then
+  gets the product). The product is checked when the button is tapped: a plan switched off or deleted, a digital
+  account no longer on sale, license sales switched off, say *This product is not available any more*; a digital account
+  sold out since shows its page with "sold out". Old cards are never edited.
 
 ## Reseller panel
 Built (milestone 5, 2026-10-11; managing their customers' services and the customers who joined through their link,
 2026-10-20). Resellers work in the bot and in the Mini App's reseller section ([17-mini-app.md](17-mini-app.md)),
 never in the dashboard; the owner and admins make them, set their tier, credit limits and commission, and record their
 payments in the dashboard. Customers see none of this.
+- **Messages from the store** (built 2026-10-29): the owner's messages to resellers and the weekly settlement reminder (dashboard,
+  Resellers, Messages: [04-dashboard.md](04-dashboard.md)) arrive as ordinary bot messages, sent by the broadcast worker at its pace. Each
+  reseller's text was written by core with their own figures (`BroadcastRecipient.text`: their name, debt, balance, credit limit, tier,
+  customers, money as the bot writes it), so the bot sends it as it is. Under it may be the broadcast's link button and a **💳 Settle / Top up**
+  button (`btn.rs_settle`, green; `BroadcastBatch.settle_button`): it opens their wallet (`wallet:m`) in a new message, so the reminder with
+  its debt stays above it, and the wallet's Top up is the way to pay. There is no new payment flow: a top-up raises the balance, which lowers
+  the debt, and money paid outside the bot is still recorded by the owner (Record a payment).
 - **Home:** a "Reseller panel" button instead of "Invite friends" (their link is in the panel).
 - **Panel:** tier, discount and commission %; per currency the balance (a negative balance is shown as "debt X",
   never with a minus), credit limit and what they can spend (balance + limit); customers who joined through their

@@ -36,6 +36,22 @@ type ChatMember struct {
 	// IsMember: whether a restricted user is still in the chat.
 	IsMember bool `json:"is_member,omitempty"`
 	User     User `json:"user"`
+	// CanPostMessages: an administrator of a channel who may post in it (Telegram sends it for channel administrators only).
+	CanPostMessages bool `json:"can_post_messages,omitempty"`
+}
+
+// CanPost reports whether the member may post in the chat: its creator, or an administrator of a channel allowed to post, or any
+// administrator of a group (chatType is the chat's type).
+func (m *ChatMember) CanPost(chatType string) bool {
+	switch {
+	case m.Status == "creator":
+		return true
+	case m.Status != "administrator":
+		return false
+	case chatType == "channel":
+		return m.CanPostMessages
+	}
+	return true
 }
 
 // Joined reports whether the user is in the chat.

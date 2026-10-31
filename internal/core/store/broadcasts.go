@@ -18,31 +18,40 @@ var ErrStale = errors.New("store: changed meanwhile")
 type Broadcast struct {
 	ID           string
 	Status       string // draft | scheduled | running | paused | done | cancelled
-	Segment      string // all | active | expired | never_bought
+	Segment      string // all | active | expired | never_bought | resellers | announce
 	Language     string // "" | fa | en
 	Texts        map[string]string
 	ButtonURL    string
 	ButtonLabels map[string]string // nil: no button
-	ScheduledAt  *time.Time
-	StartedAt    *time.Time
-	FinishedAt   *time.Time
-	Total        int
-	Sent         int
-	Blocked      int
-	Failed       int
-	Unknown      int
-	Pending      int // recipients still to send (pending or claimed)
-	LastError    string
-	Version      int
-	CreatedBy    string
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	// Segment resellers only: who of the resellers it goes to, whether a Settle / Top up button is under it, and whether core queued it (the
+	// weekly reminder, Kind "reminder", CreatedBy "") or staff wrote it ("manual").
+	ResellerDebtOnly bool
+	ResellerTierID   string
+	SettleButton     bool
+	Kind             string
+	// BuyCallback is the callback data of the Buy button under a product announcement (segment announce; "" otherwise).
+	BuyCallback string
+	ScheduledAt *time.Time
+	StartedAt   *time.Time
+	FinishedAt  *time.Time
+	Total       int
+	Sent        int
+	Blocked     int
+	Failed      int
+	Unknown     int
+	Pending     int // recipients still to send (pending or claimed)
+	LastError   string
+	Version     int
+	CreatedBy   string
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 }
 
 const broadcastCols = `b.id, b.status, b.segment, b.language, b.texts, COALESCE(b.button_url, ''), b.button_labels,
 	b.scheduled_at, b.started_at, b.finished_at, b.total, b.sent, b.blocked, b.failed, b.unknown,
 	(SELECT count(*) FROM core.broadcast_recipients r WHERE r.broadcast_id = b.id AND r.status IN ('pending', 'claimed')),
-	COALESCE(b.last_error, ''), b.version, b.created_by, b.created_at, b.updated_at`
+	COALESCE(b.last_error, ''), b.version, COALESCE(b.created_by::text, ''), b.created_at, b.updated_at,
+	b.reseller_debt_only, COALESCE(b.reseller_tier_id::text, ''), b.settle_button, b.kind, COALESCE(b.buy_callback, '')`
 
 func scanBroadcast(row pgx.Row, extra ...any) (*Broadcast, error) {
 	var (
@@ -51,7 +60,7 @@ func scanBroadcast(row pgx.Row, extra ...any) (*Broadcast, error) {
 	)
 	dest := append([]any{&b.ID, &b.Status, &b.Segment, &b.Language, &texts, &b.ButtonURL, &buttons, &b.ScheduledAt,
 		&b.StartedAt, &b.FinishedAt, &b.Total, &b.Sent, &b.Blocked, &b.Failed, &b.Unknown, &b.Pending, &b.LastError,
-		&b.Version, &b.CreatedBy, &b.CreatedAt, &b.UpdatedAt}, extra...)
+		&b.Version, &b.CreatedBy, &b.CreatedAt, &b.UpdatedAt, &b.ResellerDebtOnly, &b.ResellerTierID, &b.SettleButton, &b.Kind, &b.BuyCallback}, extra...)
 	err := row.Scan(dest...)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
@@ -78,11 +87,17 @@ func labelsJSON(m map[string]string) []byte {
 func (s *Store) InsertBroadcast(ctx context.Context, q querier, b *Broadcast) error {
 	b.ID = buuid.MustV7().String()
 	b.Status = "draft"
+	if b.Kind == "" {
+		b.Kind = "manual"
+	}
 	texts, _ := json.Marshal(b.Texts)
 	err := q.QueryRow(ctx, `
-		INSERT INTO core.broadcasts (id, status, segment, language, texts, button_url, button_labels, created_by)
-		VALUES ($1, 'draft', $2, $3, $4, NULLIF($5, ''), $6, $7) RETURNING version, created_at, updated_at`,
-		b.ID, b.Segment, b.Language, texts, b.ButtonURL, labelsJSON(b.ButtonLabels), b.CreatedBy).
+		INSERT INTO core.broadcasts (id, status, segment, language, texts, button_url, button_labels, created_by,
+			reseller_debt_only, reseller_tier_id, settle_button, kind, buy_callback)
+		VALUES ($1, 'draft', $2, $3, $4, NULLIF($5, ''), $6, NULLIF($7, '')::uuid, $8, NULLIF($9, '')::uuid, $10, $11, NULLIF($12, ''))
+		RETURNING version, created_at, updated_at`,
+		b.ID, b.Segment, b.Language, texts, b.ButtonURL, labelsJSON(b.ButtonLabels), b.CreatedBy,
+		b.ResellerDebtOnly, b.ResellerTierID, b.SettleButton, b.Kind, b.BuyCallback).
 		Scan(&b.Version, &b.CreatedAt, &b.UpdatedAt)
 	if err != nil {
 		return fmt.Errorf("insert broadcast: %w", err)
@@ -195,6 +210,8 @@ func audienceWhere(segment string) (string, error) {
 	case "expired":
 		return base + ` AND NOT ` + active + ` AND EXISTS (SELECT 1 FROM core.subscriptions s
 			WHERE s.user_id = u.id AND s.status IN ('expired', 'depleted'))`, nil
+	case SegmentAnnounce: // the customers who said yes to product news (no answer is no)
+		return base + ` AND u.announce_optin IS TRUE`, nil
 	case "never_bought":
 		return base + ` AND NOT EXISTS (SELECT 1 FROM core.orders o WHERE o.user_id = u.id AND o.amount > 0
 			AND o.created_by IS NULL AND o.status IN ('paid', 'provisioning', 'active', 'provision_failed'))`, nil
@@ -226,10 +243,16 @@ func (s *Store) DueBroadcasts(ctx context.Context, q querier, now time.Time) ([]
 	return pgx.CollectRows(rows, pgx.RowTo[string])
 }
 
+// Personalize writes the recipients of a broadcast whose every recipient gets
+// a text of their own (the segment resellers): who they are now and the text
+// made for each. StartBroadcast calls it in its transaction.
+type Personalize func(ctx context.Context, tx pgx.Tx, b *Broadcast) ([]Recipient, error)
+
 // StartBroadcast puts a due broadcast's audience in line (a snapshot taken
 // now) and sets it running; done at once when nobody matches. False when
-// another worker took it or it is no longer due.
-func (s *Store) StartBroadcast(ctx context.Context, tx pgx.Tx, id string, now time.Time) (*Broadcast, bool, error) {
+// another worker took it or it is no longer due. A broadcast to resellers
+// takes its recipients, each with their text, from personal.
+func (s *Store) StartBroadcast(ctx context.Context, tx pgx.Tx, id string, now time.Time, personal Personalize) (*Broadcast, bool, error) {
 	var segment, language string
 	err := tx.QueryRow(ctx, `SELECT segment, language FROM core.broadcasts WHERE id = $1 AND status = 'scheduled'
 		AND scheduled_at <= $2 FOR UPDATE SKIP LOCKED`, id, now).Scan(&segment, &language)
@@ -239,22 +262,30 @@ func (s *Store) StartBroadcast(ctx context.Context, tx pgx.Tx, id string, now ti
 	if err != nil {
 		return nil, false, fmt.Errorf("start broadcast: %w", err)
 	}
-	where, err := audienceWhere(segment)
-	if err != nil {
-		return nil, false, err
-	}
-	tag, err := tx.Exec(ctx, `INSERT INTO core.broadcast_recipients (broadcast_id, user_id, telegram_id, language)
-		SELECT $2, u.id, u.telegram_id, u.language FROM core.users u WHERE `+where, language, id)
-	if err != nil {
-		return nil, false, fmt.Errorf("broadcast recipients: %w", err)
+	var n int64
+	if segment == SegmentResellers {
+		if n, err = s.insertPersonal(ctx, tx, id, personal); err != nil {
+			return nil, false, err
+		}
+	} else {
+		where, err := audienceWhere(segment)
+		if err != nil {
+			return nil, false, err
+		}
+		tag, err := tx.Exec(ctx, `INSERT INTO core.broadcast_recipients (broadcast_id, user_id, telegram_id, language)
+			SELECT $2, u.id, u.telegram_id, u.language FROM core.users u WHERE `+where, language, id)
+		if err != nil {
+			return nil, false, fmt.Errorf("broadcast recipients: %w", err)
+		}
+		n = tag.RowsAffected()
 	}
 	status := "running"
-	if tag.RowsAffected() == 0 {
+	if n == 0 {
 		status = "done"
 	}
 	if _, err := tx.Exec(ctx, `UPDATE core.broadcasts SET status = $2, total = $3, started_at = now(),
 			finished_at = CASE WHEN $2 = 'done' THEN now() END, updated_at = now() WHERE id = $1`,
-		id, status, tag.RowsAffected()); err != nil {
+		id, status, n); err != nil {
 		return nil, false, fmt.Errorf("start broadcast: %w", err)
 	}
 	b, err := s.GetBroadcast(ctx, tx, id, false)
@@ -305,10 +336,12 @@ type Recipient struct {
 	UserID     string
 	TelegramID int64
 	Language   string
-	Username   string
-	Status     string
-	Error      string
-	DoneAt     *time.Time
+	// Text is the recipient's own text ("": the broadcast's in their language).
+	Text     string
+	Username string
+	Status   string
+	Error    string
+	DoneAt   *time.Time
 }
 
 // ClaimRecipients takes the next recipients of the running broadcast that
@@ -330,14 +363,14 @@ func (s *Store) ClaimRecipients(ctx context.Context, tx pgx.Tx, limit int) (*Bro
 			WHERE broadcast_id = $1 AND status = 'pending' ORDER BY telegram_id LIMIT $2 FOR UPDATE SKIP LOCKED)
 		UPDATE core.broadcast_recipients r SET status = 'claimed', claimed_at = now()
 		FROM c WHERE r.broadcast_id = $1 AND r.user_id = c.user_id
-		RETURNING r.user_id, r.telegram_id, r.language`, id, limit)
+		RETURNING r.user_id, r.telegram_id, r.language, COALESCE(r.text, '')`, id, limit)
 	if err != nil {
 		return nil, nil, fmt.Errorf("claim recipients: %w", err)
 	}
 	var out []Recipient
 	for rows.Next() {
 		var r Recipient
-		if err := rows.Scan(&r.UserID, &r.TelegramID, &r.Language); err != nil {
+		if err := rows.Scan(&r.UserID, &r.TelegramID, &r.Language, &r.Text); err != nil {
 			rows.Close()
 			return nil, nil, err
 		}

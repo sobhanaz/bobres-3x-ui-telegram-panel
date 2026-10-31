@@ -85,8 +85,7 @@ func (s *Store) ListUsers(ctx context.Context, q querier, f UserFilter, p Page) 
 	for rows.Next() {
 		var r UserRow
 		u := &r.User
-		if err := rows.Scan(&u.ID, &u.TelegramID, &u.Username, &u.Language, &u.Role, &u.Status, &u.ReferredBy,
-			&u.CreatedAt, &u.UpdatedAt, &u.RefCode, &u.BotBlockedAt, &r.Subscriptions, &r.Orders, &total); err != nil {
+		if err := rows.Scan(append(userDest(u), &r.Subscriptions, &r.Orders, &total)...); err != nil {
 			return nil, 0, err
 		}
 		out = append(out, r)
@@ -185,6 +184,50 @@ func (s *Store) ListAllSubscriptions(ctx context.Context, q querier, f Subscript
 		out = append(out, r)
 	}
 	return out, total, rows.Err()
+}
+
+// ListPanelMissing returns a page of the live services the panel has no client for, the longest missing
+// first (the ones the alert counts and names), with their customer and plan, and how many there are.
+func (s *Store) ListPanelMissing(ctx context.Context, q querier, p Page) ([]SubscriptionRow, int64, error) {
+	p = p.clamp()
+	rows, err := q.Query(ctx, `
+		SELECT `+subscriptionColsS+`, u.telegram_id, COALESCE(u.username, ''), p.id, p.name_i18n, count(*) OVER ()
+		FROM core.subscriptions s
+		JOIN core.users u ON u.id = s.user_id
+		JOIN core.orders o ON o.id = s.order_id
+		JOIN core.plans p ON p.id = o.plan_id
+		WHERE s.panel_missing_since IS NOT NULL AND s.status IN `+livePanelStatuses+`
+		ORDER BY s.panel_missing_since, s.id
+		LIMIT $1 OFFSET $2`, p.Limit, p.Offset)
+	if err != nil {
+		return nil, 0, fmt.Errorf("list panel missing: %w", err)
+	}
+	defer rows.Close()
+	var (
+		out   []SubscriptionRow
+		total int64
+	)
+	for rows.Next() {
+		var (
+			r    SubscriptionRow
+			name []byte
+		)
+		if err := rows.Scan(append(subscriptionDest(&r.Subscription), &r.TelegramID, &r.Username, &r.PlanID, &name, &total)...); err != nil {
+			return nil, 0, err
+		}
+		if err := json.Unmarshal(name, &r.PlanName); err != nil {
+			return nil, 0, fmt.Errorf("plan name_i18n: %w", err)
+		}
+		out = append(out, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+	if len(out) == 0 && p.Offset > 0 { // past the end: the count still holds
+		n, err := s.CountPanelMissing(ctx, q)
+		return nil, int64(n), err
+	}
+	return out, total, nil
 }
 
 // idPart is what staff typed as (part of) an id, as hex digits without

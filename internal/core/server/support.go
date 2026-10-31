@@ -131,11 +131,30 @@ func (s *Server) ClaimBroadcastBatch(ctx context.Context, req *corev1.ClaimBroad
 		return &corev1.BroadcastBatch{}, nil
 	}
 	out := &corev1.BroadcastBatch{BroadcastId: b.Broadcast.ID, Texts: b.Broadcast.Texts, ButtonUrl: b.Broadcast.ButtonURL,
-		ButtonLabels: b.Broadcast.ButtonLabels}
+		ButtonLabels: b.Broadcast.ButtonLabels, SettleButton: b.Broadcast.SettleButton, BuyCallback: b.Broadcast.BuyCallback}
 	for _, r := range b.Recipients {
-		out.Recipients = append(out.Recipients, &corev1.BroadcastRecipient{UserId: r.UserID, TelegramId: r.TelegramID, Language: r.Language})
+		out.Recipients = append(out.Recipients, &corev1.BroadcastRecipient{UserId: r.UserID, TelegramId: r.TelegramID, Language: r.Language,
+			Text: r.Text})
 	}
 	return out, nil
+}
+
+// AskAnnounce claims the one question about product news (true once per customer, while announcements are on).
+func (s *Server) AskAnnounce(ctx context.Context, req *corev1.AskAnnounceRequest) (*corev1.AskAnnounceResponse, error) {
+	ask, err := s.dom.AskAnnounce(fromBot(ctx), req.GetTelegramId())
+	if err != nil {
+		return nil, fail(err)
+	}
+	return &corev1.AskAnnounceResponse{Ask: ask}, nil
+}
+
+// SetAnnounceOptIn stores a customer's answer about product news.
+func (s *Server) SetAnnounceOptIn(ctx context.Context, req *corev1.SetAnnounceOptInRequest) (*corev1.User, error) {
+	u, err := s.dom.SetAnnounceOptIn(fromBot(ctx), "", req.GetTelegramId(), req.GetOptIn())
+	if err != nil {
+		return nil, fail(err)
+	}
+	return userToProto(u), nil
 }
 
 var outcomeNames = map[corev1.BroadcastOutcome]string{

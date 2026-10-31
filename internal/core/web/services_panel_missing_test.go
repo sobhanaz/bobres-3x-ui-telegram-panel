@@ -75,3 +75,80 @@ func TestServicesNotOnThePanel(t *testing.T) {
 		t.Fatalf("the filter after: %v", out)
 	}
 }
+
+// The Services page's bulk actions send only_missing: a service the panel still lacks is made again or
+// deleted as usual (audited with the one reason), and one that changed since the list was loaded is
+// answered 200 with what became of it ("skipped"), and nothing is done to it.
+func TestBulkActionsOnlyWhileNotOnThePanel(t *testing.T) {
+	f, b, _, prov := salesFixture(t)
+	p := f.plan("Monthly 50GB", 30, 50<<30, 120000)
+	expires := time.Now().Add(5 * 24 * time.Hour).UTC().Truncate(time.Second)
+	_, one := f.order(f.customer(8311, "aria"), p, "active", "active", expires, 50<<30)
+	_, two := f.order(f.customer(8312, "bahar"), p, "active", "active", expires, 50<<30)
+	_, fine := f.order(f.customer(8313, "cyrus"), p, "active", "active", expires, 50<<30)
+	prov.usage = domain.Usage{Missing: true}
+	for _, id := range []string{one.ID, two.ID} {
+		if code, _ := b.do(http.MethodPost, "/api/v1/services/"+id+"/sync", nil); code != 200 {
+			t.Fatalf("sync %s: %d", id, code)
+		}
+	}
+	body := func(reason string) map[string]any { return map[string]any{"reason": reason, "only_missing": true} }
+	status := func(out map[string]any) any { return out["service"].(map[string]any)["status"] }
+
+	// Still a reason first, and support may not.
+	if code, _ := b.do(http.MethodPost, "/api/v1/services/"+one.ID+"/delete", body(" ")); code != 400 {
+		t.Fatalf("no reason: %d", code)
+	}
+	f.staffUser(8314, "support")
+	sup := f.browser()
+	sup.loginWithLink(8314)
+	if code, _ := sup.do(http.MethodPost, "/api/v1/services/"+one.ID+"/delete", body("x")); code != 403 {
+		t.Fatalf("support deleted: %d", code)
+	}
+
+	// A service the panel has is not deleted (its client is there).
+	if code, out := b.do(http.MethodPost, "/api/v1/services/"+fine.ID+"/delete", body("bulk")); code != 200 || out["skipped"] != "back" || status(out) != "active" {
+		t.Fatalf("a service on the panel: %d %v", code, out)
+	}
+	// Made again, then a second "make again" is a skip.
+	prov.usage = domain.Usage{TotalBytes: 50 << 30, ExpiresAt: expires.Unix(), Enabled: true}
+	if code, out := b.do(http.MethodPost, "/api/v1/services/"+one.ID+"/recreate-client", body("bulk: deleted by mistake")); code != 200 || out["skipped"] != nil ||
+		out["service"].(map[string]any)["panel_missing_since"] != nil {
+		t.Fatalf("recreate: %d %v", code, out)
+	}
+	if code, out := b.do(http.MethodPost, "/api/v1/services/"+one.ID+"/recreate-client", body("again")); code != 200 || out["skipped"] != "back" {
+		t.Fatalf("recreate again: %d %v", code, out)
+	}
+	// Deleted, then a second delete is a skip.
+	if code, out := b.do(http.MethodPost, "/api/v1/services/"+two.ID+"/delete", body("bulk: customer left")); code != 200 || out["skipped"] != nil || status(out) != "deleted" {
+		t.Fatalf("delete: %d %v", code, out)
+	}
+	if code, out := b.do(http.MethodPost, "/api/v1/services/"+two.ID+"/delete", body("again")); code != 200 || out["skipped"] != "deleted" {
+		t.Fatalf("delete again: %d %v", code, out)
+	}
+	if got := prov.done(); strings.Count(got, "recreate:") != 1 || strings.Count(got, "delete:") != 1 || strings.Contains(got, fine.ID) {
+		t.Fatalf("panel calls: %s", got)
+	}
+	rows, err := f.st.DB().Query(t.Context(), `SELECT action || ' ' || reason FROM core.audit_log
+		WHERE action IN ('subscription.recreate_client', 'subscription.delete') ORDER BY created_at, id`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var reasons []string
+	for rows.Next() {
+		var s string
+		if err := rows.Scan(&s); err != nil {
+			t.Fatal(err)
+		}
+		reasons = append(reasons, s)
+	}
+	rows.Close()
+	if strings.Join(reasons, "|") != "subscription.recreate_client bulk: deleted by mistake|subscription.delete bulk: customer left" {
+		t.Fatalf("audit: %q", reasons)
+	}
+	// Without the flag, delete is what it always was: a service the panel has is deleted too.
+	if code, out := b.do(http.MethodPost, "/api/v1/services/"+fine.ID+"/delete", map[string]any{"reason": "single"}); code != 200 ||
+		status(out) != "deleted" || out["skipped"] != nil {
+		t.Fatalf("plain delete: %d %v", code, out)
+	}
+}

@@ -82,6 +82,8 @@ type Stats struct {
 	// says why not, in English.
 	PanelHealthy bool
 	PanelDetail  string
+	// PanelMissing counts the live services the panel has no client for (-1: not known).
+	PanelMissing int64
 }
 
 // ServerHealth sums up the 3x-ui servers that take new services (the
@@ -123,9 +125,12 @@ func (s *Service) AdminStats(ctx context.Context, actorTelegramID int64, pay Pay
 	if err != nil {
 		return nil, err
 	}
-	out := &Stats{UserCounts: c, PendingPayments: -1, PanelDetail: "provisioner unreachable"}
+	out := &Stats{UserCounts: c, PendingPayments: -1, PanelDetail: "provisioner unreachable", PanelMissing: -1}
 	if pending, err := pay.ListPending(ctx, 200); err == nil {
 		out.PendingPayments = int64(len(pending))
+	}
+	if n, err := s.st.CountPanelMissing(ctx, s.st.Conn()); err == nil {
+		out.PanelMissing = int64(n)
 	}
 	list, err := sa.ListServers(ctx)
 	if err != nil {

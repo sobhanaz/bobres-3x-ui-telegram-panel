@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import DataTable from 'primevue/datatable'
 import Column from 'primevue/column'
 import Tag from 'primevue/tag'
+import Checkbox from 'primevue/checkbox'
 import UserLink from './UserLink.vue'
 import StatusTag from './StatusTag.vue'
 import TrafficBar from './TrafficBar.vue'
@@ -11,13 +12,34 @@ import { date, dateTime, daysLeft, num, planName, shortId, type Lang } from '../
 import type { ServiceItem } from '../types'
 
 const props = withDefaults(
-  defineProps<{ items: ServiceItem[]; total?: number; rows?: number; first?: number; loading?: boolean; lazy?: boolean; hideUser?: boolean }>(),
-  { total: 0, rows: 25, first: 0, loading: false, lazy: true, hideUser: false },
+  defineProps<{
+    items: ServiceItem[]
+    total?: number
+    rows?: number
+    first?: number
+    loading?: boolean
+    lazy?: boolean
+    hideUser?: boolean
+    /** rows get checkboxes, and the header one selects the whole page (the bulk actions of "Not on the panel") */
+    selectable?: boolean
+  }>(),
+  { total: 0, rows: 25, first: 0, loading: false, lazy: true, hideUser: false, selectable: false },
 )
 const emit = defineEmits<{ page: [e: { page: number; rows: number }]; open: [s: ServiceItem] }>()
+/** the ids of the selected services */
+const selected = defineModel<string[]>('selected', { default: () => [] })
 const { t, locale } = useI18n()
 const lang = computed(() => locale.value as Lang)
 const left = (s: ServiceItem) => (s.expires_at ? daysLeft(s.expires_at) : null)
+
+const allOnPage = computed(() => props.items.length > 0 && props.items.every((s) => selected.value.includes(s.id)))
+function pickPage(on: boolean) {
+  const ids = props.items.map((s) => s.id)
+  selected.value = on ? [...new Set([...selected.value, ...ids])] : selected.value.filter((id) => !ids.includes(id))
+}
+function pick(id: string, on: boolean) {
+  selected.value = on ? [...new Set([...selected.value, id])] : selected.value.filter((x) => x !== id)
+}
 </script>
 
 <template>
@@ -39,6 +61,32 @@ const left = (s: ServiceItem) => (s.expires_at ? daysLeft(s.expires_at) : null)
     @row-click="emit('open', $event.data)"
   >
     <template #empty>{{ t('service.none') }}</template>
+    <Column v-if="props.selectable" header-class="pick-col" body-class="pick-col">
+      <template #header>
+        <Checkbox
+          :model-value="allOnPage"
+          binary
+          input-id="pick-page"
+          class="pick-page"
+          :disabled="!props.items.length"
+          :aria-label="t('service.bulk.select_page')"
+          :title="t('service.bulk.select_page')"
+          @update:model-value="(v: boolean) => pickPage(v)"
+        />
+      </template>
+      <template #body="{ data: s }">
+        <!-- a tap on the box selects; it does not open the service -->
+        <span class="pick-wrap" @click.stop>
+          <Checkbox
+            :model-value="selected.includes(s.id)"
+            binary
+            class="pick"
+            :aria-label="t('service.bulk.select_one', { email: s.client_email })"
+            @update:model-value="(v: boolean) => pick(s.id, v)"
+          />
+        </span>
+      </template>
+    </Column>
     <Column :header="t('service.col_id')">
       <template #body="{ data: s }">
         <span class="app-ltr app-mono">{{ shortId(s.id) }}</span>
@@ -94,5 +142,13 @@ const left = (s: ServiceItem) => (s.expires_at ? daysLeft(s.expires_at) : null)
 }
 .panel-missing {
   white-space: nowrap;
+}
+:deep(.pick-col) {
+  inline-size: 2.75rem;
+}
+.pick-wrap {
+  display: inline-flex;
+  padding: 0.25rem;
+  cursor: default;
 }
 </style>

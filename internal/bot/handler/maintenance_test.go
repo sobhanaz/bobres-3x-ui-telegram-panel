@@ -308,6 +308,9 @@ func gatedCases() []gatedCase {
 		"support", "support:m", "tk:n:payment", "tk:n:other", "tk:r:t1", "tk:c:t1", "tk:l", "tk:v:t1",
 		"dash", "adm", "adm:pend", "adm:find", "rs", "rs:buy", "rs:subs:1", "rs:st:1", "rs:link", "rs:p:p1", "rs:pfx", "rs:pfy:ab", "fl", "fr:n1",
 		"jn", "nope", "x",
+		// The services not on the panel (the button under the staff alert, and the list's own).
+		"adm:pm", "adm:pm:1", "adm:pmd:0:00000000-0000-4000-8000-000000000001", "adm:pmy:d:0:00000000-0000-4000-8000-000000000001",
+		"adm:pma:r", "adm:pmz:d:3",
 	} {
 		add(buttonCase(data))
 	}
@@ -323,6 +326,11 @@ func gatedCases() []gatedCase {
 		add(buttonCase(data))
 	}
 	for _, data := range []string{"lic", "lic:b:standard:1", "lic:y:standard:1:n1", "lic:my", "lic:k:l1", "lic:r:l1:1", "lic:ry:l1:1:n1", "lpay:u:4000000:n1", "lpay:x:4000000:n1"} {
+		add(buttonCase(data))
+	}
+	// Product news: the answer to the question, the switch on the language screen, and the Buy button under an announcement (a plan, a
+	// digital account, a license).
+	for _, data := range []string{"an:y", "an:n", "an:t:y", "an:t:n", "an:b:p:0123456789abcdef0123456789abcdef", "an:b:s:abcdefghij", "an:b:l:pro:12", "an:x"} {
 		add(buttonCase(data))
 	}
 	// Resellers are held like customers, in their panel too.

@@ -114,6 +114,8 @@ type ChannelCheck struct {
 	BotAdmin bool   `json:"bot_admin"`
 	Problem  string `json:"problem,omitempty"` // not_found, not_admin, not_channel, error
 	Detail   string `json:"detail,omitempty"`
+	// CanPost: the bot may also post there (product announcements need it). An older bot does not say (false).
+	CanPost bool `json:"can_post"`
 }
 
 // CheckChannel asks the bot whether it can see who is in the channel.
@@ -146,6 +148,16 @@ type TestBroadcast struct {
 	ChatID int64             `json:"chat_id"`
 	Text   string            `json:"text"`
 	Button *TestBroadcastBtn `json:"button"`
+	// Settle is the label of a Settle / Top up button that opens the wallet ("": none), as under a message to resellers.
+	Settle string `json:"settle,omitempty"`
+	// Buy is the Buy button of a product announcement, as a customer gets it (nil: none).
+	Buy *TestBroadcastCB `json:"buy,omitempty"`
+}
+
+// TestBroadcastCB is a test message's callback button: its label and data.
+type TestBroadcastCB struct {
+	Text string `json:"text"`
+	Data string `json:"data"`
 }
 
 // TestBroadcastBtn is a test broadcast's link button.

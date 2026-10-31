@@ -72,6 +72,8 @@ const (
 	CoreService_SetUserBotBlocked_FullMethodName         = "/core.v1.CoreService/SetUserBotBlocked"
 	CoreService_ClaimBroadcastBatch_FullMethodName       = "/core.v1.CoreService/ClaimBroadcastBatch"
 	CoreService_ReportBroadcastResults_FullMethodName    = "/core.v1.CoreService/ReportBroadcastResults"
+	CoreService_AskAnnounce_FullMethodName               = "/core.v1.CoreService/AskAnnounce"
+	CoreService_SetAnnounceOptIn_FullMethodName          = "/core.v1.CoreService/SetAnnounceOptIn"
 	CoreService_SetSubscriptionLabel_FullMethodName      = "/core.v1.CoreService/SetSubscriptionLabel"
 	CoreService_GetResellerInfo_FullMethodName           = "/core.v1.CoreService/GetResellerInfo"
 	CoreService_SetResellerConfigPrefix_FullMethodName   = "/core.v1.CoreService/SetResellerConfigPrefix"
@@ -91,6 +93,8 @@ const (
 	CoreService_AdminAddStaff_FullMethodName             = "/core.v1.CoreService/AdminAddStaff"
 	CoreService_AdminRemoveStaff_FullMethodName          = "/core.v1.CoreService/AdminRemoveStaff"
 	CoreService_AdminBroadcast_FullMethodName            = "/core.v1.CoreService/AdminBroadcast"
+	CoreService_AdminListPanelMissing_FullMethodName     = "/core.v1.CoreService/AdminListPanelMissing"
+	CoreService_AdminResolvePanelMissing_FullMethodName  = "/core.v1.CoreService/AdminResolvePanelMissing"
 	CoreService_RedeemGiftCode_FullMethodName            = "/core.v1.CoreService/RedeemGiftCode"
 	CoreService_ListMyCodes_FullMethodName               = "/core.v1.CoreService/ListMyCodes"
 	CoreService_ListVendorOffers_FullMethodName          = "/core.v1.CoreService/ListVendorOffers"
@@ -185,6 +189,10 @@ type CoreServiceClient interface {
 	SetUserBotBlocked(ctx context.Context, in *SetUserBotBlockedRequest, opts ...grpc.CallOption) (*SetUserBotBlockedResponse, error)
 	ClaimBroadcastBatch(ctx context.Context, in *ClaimBroadcastBatchRequest, opts ...grpc.CallOption) (*BroadcastBatch, error)
 	ReportBroadcastResults(ctx context.Context, in *ReportBroadcastResultsRequest, opts ...grpc.CallOption) (*BroadcastState, error)
+	// Product news: AskAnnounce claims the one question "Do you want news of new products?" (true once per customer, while announcements are
+	// on); SetAnnounceOptIn stores the answer (NOT_FOUND for an unknown user) and returns the user.
+	AskAnnounce(ctx context.Context, in *AskAnnounceRequest, opts ...grpc.CallOption) (*AskAnnounceResponse, error)
+	SetAnnounceOptIn(ctx context.Context, in *SetAnnounceOptInRequest, opts ...grpc.CallOption) (*User, error)
 	// Resellers (milestone 5).
 	SetSubscriptionLabel(ctx context.Context, in *SetSubscriptionLabelRequest, opts ...grpc.CallOption) (*Subscription, error)
 	GetResellerInfo(ctx context.Context, in *GetResellerInfoRequest, opts ...grpc.CallOption) (*ResellerInfo, error)
@@ -222,6 +230,12 @@ type CoreServiceClient interface {
 	AdminAddStaff(ctx context.Context, in *AdminAddStaffRequest, opts ...grpc.CallOption) (*AdminStaffMember, error)
 	AdminRemoveStaff(ctx context.Context, in *AdminRemoveStaffRequest, opts ...grpc.CallOption) (*AdminRemoveStaffResponse, error)
 	AdminBroadcast(ctx context.Context, in *AdminBroadcastRequest, opts ...grpc.CallOption) (*AdminBroadcastResponse, error)
+	// Services whose client is gone from the panel (docs/03-bot-ux.md, "Not on the panel"): a page of them, the
+	// longest missing first, and making one's client again or deleting it from the bot too, one at a time. Owner and
+	// admin (services.write on the dashboard); each change is audited as the dashboard's (subscription.recreate_client,
+	// subscription.delete) with the reason the bot gives.
+	AdminListPanelMissing(ctx context.Context, in *AdminListPanelMissingRequest, opts ...grpc.CallOption) (*AdminListPanelMissingResponse, error)
+	AdminResolvePanelMissing(ctx context.Context, in *AdminResolvePanelMissingRequest, opts ...grpc.CallOption) (*AdminResolvePanelMissingResponse, error)
 	// RedeemGiftCode applies a gift code to the customer's wallet (docs/03-bot-ux.md):
 	// an active account only (a banned one is PERMISSION_DENIED "user is banned").
 	// What a customer can get wrong is an outcome of the answer, not an error.
@@ -788,6 +802,26 @@ func (c *coreServiceClient) ReportBroadcastResults(ctx context.Context, in *Repo
 	return out, nil
 }
 
+func (c *coreServiceClient) AskAnnounce(ctx context.Context, in *AskAnnounceRequest, opts ...grpc.CallOption) (*AskAnnounceResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AskAnnounceResponse)
+	err := c.cc.Invoke(ctx, CoreService_AskAnnounce_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) SetAnnounceOptIn(ctx context.Context, in *SetAnnounceOptInRequest, opts ...grpc.CallOption) (*User, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(User)
+	err := c.cc.Invoke(ctx, CoreService_SetAnnounceOptIn_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *coreServiceClient) SetSubscriptionLabel(ctx context.Context, in *SetSubscriptionLabelRequest, opts ...grpc.CallOption) (*Subscription, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Subscription)
@@ -972,6 +1006,26 @@ func (c *coreServiceClient) AdminBroadcast(ctx context.Context, in *AdminBroadca
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(AdminBroadcastResponse)
 	err := c.cc.Invoke(ctx, CoreService_AdminBroadcast_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) AdminListPanelMissing(ctx context.Context, in *AdminListPanelMissingRequest, opts ...grpc.CallOption) (*AdminListPanelMissingResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AdminListPanelMissingResponse)
+	err := c.cc.Invoke(ctx, CoreService_AdminListPanelMissing_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) AdminResolvePanelMissing(ctx context.Context, in *AdminResolvePanelMissingRequest, opts ...grpc.CallOption) (*AdminResolvePanelMissingResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AdminResolvePanelMissingResponse)
+	err := c.cc.Invoke(ctx, CoreService_AdminResolvePanelMissing_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1169,6 +1223,10 @@ type CoreServiceServer interface {
 	SetUserBotBlocked(context.Context, *SetUserBotBlockedRequest) (*SetUserBotBlockedResponse, error)
 	ClaimBroadcastBatch(context.Context, *ClaimBroadcastBatchRequest) (*BroadcastBatch, error)
 	ReportBroadcastResults(context.Context, *ReportBroadcastResultsRequest) (*BroadcastState, error)
+	// Product news: AskAnnounce claims the one question "Do you want news of new products?" (true once per customer, while announcements are
+	// on); SetAnnounceOptIn stores the answer (NOT_FOUND for an unknown user) and returns the user.
+	AskAnnounce(context.Context, *AskAnnounceRequest) (*AskAnnounceResponse, error)
+	SetAnnounceOptIn(context.Context, *SetAnnounceOptInRequest) (*User, error)
 	// Resellers (milestone 5).
 	SetSubscriptionLabel(context.Context, *SetSubscriptionLabelRequest) (*Subscription, error)
 	GetResellerInfo(context.Context, *GetResellerInfoRequest) (*ResellerInfo, error)
@@ -1206,6 +1264,12 @@ type CoreServiceServer interface {
 	AdminAddStaff(context.Context, *AdminAddStaffRequest) (*AdminStaffMember, error)
 	AdminRemoveStaff(context.Context, *AdminRemoveStaffRequest) (*AdminRemoveStaffResponse, error)
 	AdminBroadcast(context.Context, *AdminBroadcastRequest) (*AdminBroadcastResponse, error)
+	// Services whose client is gone from the panel (docs/03-bot-ux.md, "Not on the panel"): a page of them, the
+	// longest missing first, and making one's client again or deleting it from the bot too, one at a time. Owner and
+	// admin (services.write on the dashboard); each change is audited as the dashboard's (subscription.recreate_client,
+	// subscription.delete) with the reason the bot gives.
+	AdminListPanelMissing(context.Context, *AdminListPanelMissingRequest) (*AdminListPanelMissingResponse, error)
+	AdminResolvePanelMissing(context.Context, *AdminResolvePanelMissingRequest) (*AdminResolvePanelMissingResponse, error)
 	// RedeemGiftCode applies a gift code to the customer's wallet (docs/03-bot-ux.md):
 	// an active account only (a banned one is PERMISSION_DENIED "user is banned").
 	// What a customer can get wrong is an outcome of the answer, not an error.
@@ -1400,6 +1464,12 @@ func (UnimplementedCoreServiceServer) ClaimBroadcastBatch(context.Context, *Clai
 func (UnimplementedCoreServiceServer) ReportBroadcastResults(context.Context, *ReportBroadcastResultsRequest) (*BroadcastState, error) {
 	return nil, status.Error(codes.Unimplemented, "method ReportBroadcastResults not implemented")
 }
+func (UnimplementedCoreServiceServer) AskAnnounce(context.Context, *AskAnnounceRequest) (*AskAnnounceResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AskAnnounce not implemented")
+}
+func (UnimplementedCoreServiceServer) SetAnnounceOptIn(context.Context, *SetAnnounceOptInRequest) (*User, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetAnnounceOptIn not implemented")
+}
 func (UnimplementedCoreServiceServer) SetSubscriptionLabel(context.Context, *SetSubscriptionLabelRequest) (*Subscription, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetSubscriptionLabel not implemented")
 }
@@ -1456,6 +1526,12 @@ func (UnimplementedCoreServiceServer) AdminRemoveStaff(context.Context, *AdminRe
 }
 func (UnimplementedCoreServiceServer) AdminBroadcast(context.Context, *AdminBroadcastRequest) (*AdminBroadcastResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AdminBroadcast not implemented")
+}
+func (UnimplementedCoreServiceServer) AdminListPanelMissing(context.Context, *AdminListPanelMissingRequest) (*AdminListPanelMissingResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AdminListPanelMissing not implemented")
+}
+func (UnimplementedCoreServiceServer) AdminResolvePanelMissing(context.Context, *AdminResolvePanelMissingRequest) (*AdminResolvePanelMissingResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AdminResolvePanelMissing not implemented")
 }
 func (UnimplementedCoreServiceServer) RedeemGiftCode(context.Context, *RedeemGiftCodeRequest) (*RedeemGiftCodeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RedeemGiftCode not implemented")
@@ -2465,6 +2541,42 @@ func _CoreService_ReportBroadcastResults_Handler(srv interface{}, ctx context.Co
 	return interceptor(ctx, in, info, handler)
 }
 
+func _CoreService_AskAnnounce_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AskAnnounceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).AskAnnounce(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_AskAnnounce_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).AskAnnounce(ctx, req.(*AskAnnounceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_SetAnnounceOptIn_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetAnnounceOptInRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).SetAnnounceOptIn(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_SetAnnounceOptIn_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).SetAnnounceOptIn(ctx, req.(*SetAnnounceOptInRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _CoreService_SetSubscriptionLabel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(SetSubscriptionLabelRequest)
 	if err := dec(in); err != nil {
@@ -2803,6 +2915,42 @@ func _CoreService_AdminBroadcast_Handler(srv interface{}, ctx context.Context, d
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(CoreServiceServer).AdminBroadcast(ctx, req.(*AdminBroadcastRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_AdminListPanelMissing_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AdminListPanelMissingRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).AdminListPanelMissing(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_AdminListPanelMissing_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).AdminListPanelMissing(ctx, req.(*AdminListPanelMissingRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_AdminResolvePanelMissing_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AdminResolvePanelMissingRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).AdminResolvePanelMissing(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_AdminResolvePanelMissing_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).AdminResolvePanelMissing(ctx, req.(*AdminResolvePanelMissingRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -3225,6 +3373,14 @@ var CoreService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _CoreService_ReportBroadcastResults_Handler,
 		},
 		{
+			MethodName: "AskAnnounce",
+			Handler:    _CoreService_AskAnnounce_Handler,
+		},
+		{
+			MethodName: "SetAnnounceOptIn",
+			Handler:    _CoreService_SetAnnounceOptIn_Handler,
+		},
+		{
 			MethodName: "SetSubscriptionLabel",
 			Handler:    _CoreService_SetSubscriptionLabel_Handler,
 		},
@@ -3299,6 +3455,14 @@ var CoreService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "AdminBroadcast",
 			Handler:    _CoreService_AdminBroadcast_Handler,
+		},
+		{
+			MethodName: "AdminListPanelMissing",
+			Handler:    _CoreService_AdminListPanelMissing_Handler,
+		},
+		{
+			MethodName: "AdminResolvePanelMissing",
+			Handler:    _CoreService_AdminResolvePanelMissing_Handler,
 		},
 		{
 			MethodName: "RedeemGiftCode",

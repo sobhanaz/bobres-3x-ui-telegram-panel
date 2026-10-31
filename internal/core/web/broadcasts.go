@@ -34,6 +34,15 @@ type broadcastJSON struct {
 	CreatedBy   *userBrief       `json:"created_by"`
 	CreatedAt   int64            `json:"created_at"`
 	Version     int              `json:"version"`
+	// Resellers: who of the resellers a message to resellers (segment resellers) goes to; null on a broadcast to customers.
+	Resellers *resellerTargetJSON `json:"resellers"`
+}
+
+type resellerTargetJSON struct {
+	DebtOnly     bool   `json:"debt_only"`
+	TierID       string `json:"tier_id"`
+	SettleButton bool   `json:"settle_button"`
+	Kind         string `json:"kind"` // manual | reminder (core's weekly reminder: no author)
 }
 
 func (s *Server) broadcastsJSON(r *http.Request, list []store.Broadcast) []broadcastJSON {
@@ -52,6 +61,9 @@ func (s *Server) broadcastsJSON(r *http.Request, list []store.Broadcast) []broad
 			RatePerSec: rate, LastError: b.LastError, CreatedBy: users[b.CreatedBy], CreatedAt: b.CreatedAt.Unix(), Version: b.Version}
 		if b.ButtonURL != "" {
 			j.Button = &broadcastButton{URL: b.ButtonURL, Labels: langPair{b.ButtonLabels["fa"], b.ButtonLabels["en"]}}
+		}
+		if b.Segment == store.SegmentResellers {
+			j.Resellers = &resellerTargetJSON{DebtOnly: b.ResellerDebtOnly, TierID: b.ResellerTierID, SettleButton: b.SettleButton, Kind: b.Kind}
 		}
 		if (b.Status == "running" || b.Status == "scheduled") && rate > 0 && b.Pending > 0 {
 			eta := (int64(b.Pending) + rate - 1) / rate

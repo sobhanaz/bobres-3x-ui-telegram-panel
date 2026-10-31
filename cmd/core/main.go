@@ -242,6 +242,8 @@ func setup(rt *app.Runtime) error {
 		logs["bot"] = peer
 		monBot = peer
 		dom.SetVendorTransport(peer) // the owner's own store asks the license server for keys through the bot
+		// Product announcements are posted in the store's channel by the bot.
+		dom.SetAnnounceTransport(peer)
 		dom.SetSupplierTransport(peer)
 		dom.SetRateTransport(peer)    // the live USDT price is read by the bot: core has no internet access
 		dom.SetLoginApprovalBot(peer) // the approval of dashboard sign-ins is asked in Telegram, which only the bot reaches
@@ -331,6 +333,9 @@ func setup(rt *app.Runtime) error {
 	// Support tickets nobody answered back close themselves; broadcasts start on time.
 	rt.Go("tickets", dom.NewTicketWorker(rt.Log).Run)
 	rt.Go("broadcasts", dom.NewBroadcastWorker(rt.Log).Run)
+	// Product announcements go out when they are due (now, or at the end of the quiet hours): the private messages as a broadcast, the
+	// channel post through the bot.
+	rt.Go("announcements", dom.NewAnnouncementWorker(rt.Log).Run)
 	// System alerts: every minute the watchdog checks the services, the 3x-ui
 	// servers, Zarinpal, backups and the disk (backups is nil when the backup
 	// service is not installed), deliveries, the bot's event feed, the
@@ -342,6 +347,9 @@ func setup(rt *app.Runtime) error {
 	// day, yesterday's sales go to the staff who hold reports.read (the
 	// dashboard's permission table says who) as report.daily_summary.v1.
 	rt.Go("daily-summary", dom.NewDailySummary(mayReadReports, rt.Log).Run)
+	// The weekly settlement reminder to resellers (off until the store turns it on): once a week, at the store's weekday and time, a message to
+	// the resellers (those in debt, by default) goes out through the broadcasts.
+	rt.Go("reseller-reminder", dom.NewResellerReminder(rt.Log).Run)
 
 	// Apply payment outcomes from the payments feed (pulled over gRPC: core
 	// never reads the payments database).

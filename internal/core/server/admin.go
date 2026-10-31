@@ -26,7 +26,7 @@ func (s *Server) AdminGetStats(ctx context.Context, req *corev1.AdminGetStatsReq
 	out := &corev1.AdminStats{
 		UsersTotal: st.UsersTotal, UsersToday: st.UsersSince, ActiveSubscriptions: st.ActiveSubscriptions,
 		PendingPayments: st.PendingPayments, ProvisionFailedOrders: st.ProvisionFailedOrders,
-		PanelHealthy: st.PanelHealthy, PanelDetail: st.PanelDetail,
+		PanelHealthy: st.PanelHealthy, PanelDetail: st.PanelDetail, ServicesPanelMissing: max(st.PanelMissing, 0),
 	}
 	if h := st.Servers; h != nil {
 		out.ServersKnown, out.ServersDown = true, h.Down

@@ -44,6 +44,8 @@ const (
 	permSystem    = "system.write"   // owner only: how the server itself runs (its updates)
 	permBranding  = "branding.write"
 	permDiscounts = "discounts.write"
+	// permBroadcasts: messages to the resellers (the weekly settlement reminder) are broadcasts.
+	permBroadcasts = "broadcasts.write"
 	// permSecurity is how staff sign in (the approval of sign-ins): the owner's, changed in the dashboard with the owner signed in (or on
 	// the server with bobres admin approval), never in the bot.
 	permSecurity = "security.write"
@@ -203,6 +205,35 @@ var SettingSpecs = []SettingSpec{
 		Help: "the most Toman the wheel pays out in one day (store time); when it cannot cover a prize the customer is asked to come back tomorrow and their spin is not used (empty or 0 = the wheel is closed)"},
 	{Key: SettingWheelMinOrders, Group: "wheel", Kind: KindInt, Perm: permDiscounts, Min: 1, Max: MaxWheelMinOrders, Default: "1",
 		Help: "how many paid orders a customer needs before they may spin, at least 1"},
+	{Key: SettingReminderEnabled, Group: "reseller_reminder", Kind: KindBool, Perm: permBroadcasts, Default: "false",
+		Help: "true = once a week, at the weekday and time below (the store's time zone), the resellers get a reminder to settle what they owe, in their own bot language; false = no reminder (the default). Switching it on after this week's time starts next week; a week missed while the server was down is not made up"},
+	{Key: SettingReminderWeekday, Group: "reseller_reminder", Kind: KindEnum, Perm: permBroadcasts, Default: DefaultReminderWeekday, Options: ReminderWeekdays,
+		Help: "the day of the week the reminder goes out"},
+	{Key: SettingReminderTime, Group: "reseller_reminder", Kind: KindTime, Perm: permBroadcasts, Default: DefaultReminderTime,
+		Help: "the time of day (HH:MM, 24-hour, the store's time zone) the reminder goes out"},
+	{Key: SettingReminderDebtOnly, Group: "reseller_reminder", Kind: KindBool, Perm: permBroadcasts, Default: "true",
+		Help: "true = only the resellers who owe money (a negative balance) get the reminder; false = every active reseller does"},
+	{Key: SettingReminderSettle, Group: "reseller_reminder", Kind: KindBool, Perm: permBroadcasts, Default: "true",
+		Help: "true = a Settle / Top up button under the reminder opens the reseller's wallet in the bot"},
+	{Key: SettingReminderText + "fa", Group: "reseller_reminder", Kind: KindText, Perm: permBroadcasts, MaxLen: reminderTextMax, Multiline: true,
+		Help: "the reminder in Persian (Telegram HTML); {name}, {debt}, {balance}, {credit_limit}, {tier} and {customers} are filled in for each reseller (empty = the built-in text)"},
+	{Key: SettingReminderText + "en", Group: "reseller_reminder", Kind: KindText, Perm: permBroadcasts, MaxLen: reminderTextMax, Multiline: true,
+		Help: "the reminder in English (Telegram HTML); {name}, {debt}, {balance}, {credit_limit}, {tier} and {customers} are filled in for each reseller (empty = the built-in text)"},
+	// New product announcements (announce.go): a card with a Buy button in the store's channel and/or in private messages to the customers who
+	// said yes to product news. Off by default; staff send each one by hand from the product's page.
+	{Key: SettingAnnounceEnabled, Group: "announce", Kind: KindBool, Perm: permBroadcasts, Default: "false",
+		Help: "true = staff can announce a product (a plan, a digital account, a BOBRES license) from its page, in the store's channel and/or in private messages, and the bot asks each customer once whether they want news of new products; false = no announcements and no question (the default)"},
+	{Key: SettingAnnounceChannel, Group: "announce", Kind: KindChannel, Perm: permBroadcasts,
+		Help: "the channel announcements are posted in: @name or -100… id; the bot must be its admin, allowed to post (empty = the first required channel, join.channel)"},
+	{Key: SettingAnnounceChannelLangs, Group: "announce", Kind: KindEnum, Perm: permBroadcasts, Default: AnnounceLangsDefault,
+		Options: []string{AnnounceLangsDefault, AnnounceLangsBoth},
+		Help:    "the language of a channel post: default = the store's default language (Persian); both = every language, one under the other (private messages are always in each customer's own language)"},
+	{Key: SettingAnnounceDailyMax, Group: "announce", Kind: KindInt, Perm: permBroadcasts, Default: strconv.Itoa(DefaultAnnounceDailyMax), Min: 1, Max: 50,
+		Help: "the most announcements that go out in one day (the store's time zone), 1 to 50"},
+	{Key: SettingAnnounceQuietStart, Group: "announce", Kind: KindTime, Perm: permBroadcasts, Default: DefaultAnnounceQuietStart,
+		Help: "quiet hours start (HH:MM, the store's time zone): an announcement sent in the quiet hours waits until they end (the same start and end = no quiet hours)"},
+	{Key: SettingAnnounceQuietEnd, Group: "announce", Kind: KindTime, Perm: permBroadcasts, Default: DefaultAnnounceQuietEnd,
+		Help: "quiet hours end (HH:MM, the store's time zone): queued announcements go out then"},
 	{Key: "branding.name", Group: "branding", Kind: KindText, Perm: permBranding, MaxLen: 64,
 		Help: "store name shown to users"},
 	{Key: "branding.support", Group: "branding", Kind: KindText, Perm: permBranding, MaxLen: 64,
@@ -413,6 +444,9 @@ func NormalizeSetting(key, value string) (string, error) {
 			value = strings.Join(strings.Fields(value), " ")
 		}
 		switch key {
+		case SettingReminderText + "fa", SettingReminderText + "en":
+			// A message to resellers: Telegram's HTML and only the placeholders it is given.
+			return checkReminderText(key, value)
 		case "branding.currency.fa", "branding.currency.en":
 			// It goes into every price, also inside HTML messages and buttons.
 			if strings.ContainsAny(value, "<>&") {

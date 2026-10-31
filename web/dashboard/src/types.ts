@@ -529,10 +529,13 @@ export interface CannedReply {
 export interface BroadcastItem {
   id: string
   status: 'draft' | 'scheduled' | 'running' | 'paused' | 'done' | 'cancelled'
-  segment: 'all' | 'active' | 'expired' | 'never_bought'
+  /** resellers: a message to resellers (the Resellers page), with its own text for each of them */
+  segment: 'all' | 'active' | 'expired' | 'never_bought' | 'resellers' | 'announce'
   language: '' | 'fa' | 'en'
   texts: LangPair
   button: { url: string; labels: LangPair } | null
+  /** who of the resellers a message to resellers goes to; null on a broadcast to customers. kind reminder: core's weekly reminder */
+  resellers?: { debt_only: boolean; tier_id: string; settle_button: boolean; kind: 'manual' | 'reminder' } | null
   scheduled_at: number | null
   started_at: number | null
   finished_at: number | null
@@ -540,7 +543,8 @@ export interface BroadcastItem {
   rate_per_sec: number
   eta_seconds: number | null
   last_error: string
-  created_by: UserBrief
+  /** null: core queued it (the weekly reminder to resellers) */
+  created_by: UserBrief | null
   created_at: number
   version: number
 }

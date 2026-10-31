@@ -65,6 +65,7 @@ func TestRefreshOnlyForCore(t *testing.T) {
 type fakeChats struct {
 	chats  map[string]tg.Chat
 	status map[string]string // the bot's status per chat
+	posts  map[string]bool   // the channels where the bot, an administrator, may post
 	err    error             // every call fails
 	asked  []string
 }
@@ -90,7 +91,7 @@ func (f *fakeChats) GetChatMember(_ context.Context, chat string, userID int64) 
 	if !ok {
 		return nil, &tg.APIError{Code: 400, Description: "Bad Request: member list is inaccessible"}
 	}
-	return &tg.ChatMember{Status: st}, nil
+	return &tg.ChatMember{Status: st, CanPostMessages: f.posts[chat]}, nil
 }
 
 func TestChannelCheck(t *testing.T) {
@@ -120,8 +121,15 @@ func TestChannelCheck(t *testing.T) {
 		return out
 	}
 
-	if got := check("@mynews"); got["ok"] != true || got["title"] != "My News" || got["bot_admin"] != true || len(got) != 3 {
-		t.Fatalf("admin of a public channel: %v", got)
+	if got := check("@mynews"); got["ok"] != true || got["title"] != "My News" || got["bot_admin"] != true || got["can_post"] != false || len(got) != 4 {
+		t.Fatalf("admin of a public channel (not allowed to post): %v", got)
+	}
+	// A product announcement needs the bot to post: an admin allowed to, the creator, or an admin of a group.
+	bot.posts = map[string]bool{"@mynews": true}
+	for _, chat := range []string{"@mynews", "-1009876543210", "@friends", "@teamchat"} {
+		if got := check(chat); got["ok"] != true || got["can_post"] != true {
+			t.Errorf("%s: the bot may post there: %v", chat, got)
+		}
 	}
 	if got := check("-1009876543210"); got["ok"] != true || got["title"] != "Private" {
 		t.Fatalf("private channel by id: %v", got)

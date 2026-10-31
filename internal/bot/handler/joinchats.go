@@ -349,6 +349,7 @@ func (h *Handler) gateNewUser(r *req) bool {
 			return false
 		}
 	}
+	r.held = true // held: nothing else is asked of them now (the question about product news waits)
 	r.show(r.t("welcome", "brand", esc(h.brand())), nil)
 	if maintenance {
 		r.send(r.t("maintenance"), nil)
