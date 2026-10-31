@@ -54,6 +54,8 @@ type Config struct {
 	// VendorTransport carries the license sales' signed calls to the license server (the bot does, in production: core
 	// has no internet access; nil until SetVendorTransport). VendorNow is their clock (nil: time.Now), for tests.
 	VendorTransport VendorTransport
+	// HostedTransport reads the hosted stores' /metrics (the bot, in production; nil: the register is not read).
+	HostedTransport HostedTransport
 	VendorNow       func() time.Time
 	// SupplierTransport carries the supplier calls of the owner's resale (the bot, in production; nil until
 	// SetSupplierTransport).

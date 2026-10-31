@@ -47,6 +47,9 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == "approval" {
 		os.Exit(approvalCmd(os.Args[2:], os.Stdout, os.Stderr))
 	}
+	if len(os.Args) > 1 && os.Args[1] == "metrics-token" {
+		os.Exit(metricsTokenCmd(os.Args[2:], os.Stdout, os.Stderr))
+	}
 	// `bobres rotate-key` seals what core keeps encrypted again with the new master key.
 	if len(os.Args) > 1 && os.Args[1] == "rekey" {
 		os.Exit(rekey.Command("core", os.Args[2:], os.Stdout, os.Stderr))
@@ -242,6 +245,7 @@ func setup(rt *app.Runtime) error {
 		logs["bot"] = peer
 		monBot = peer
 		dom.SetVendorTransport(peer) // the owner's own store asks the license server for keys through the bot
+		dom.SetHostedTransport(peer) // and reads its hosted stores' /metrics through it
 		// Product announcements are posted in the store's channel by the bot.
 		dom.SetAnnounceTransport(peer)
 		dom.SetSupplierTransport(peer)
@@ -319,6 +323,7 @@ func setup(rt *app.Runtime) error {
 	// The owner's own store sells BOBRES licenses: a paid order whose license server did not answer is asked again
 	// here. It does nothing on a store that has no license server set up.
 	rt.Go("license-sales", func(ctx context.Context) error { dom.RunVendorWorker(ctx); return nil })
+	rt.Go("hosted-stores", func(ctx context.Context) error { dom.RunHostedWorker(ctx); return nil })
 	// The same store resells a supplier's digital accounts: a paid order the supplier did not deliver is asked again, and the
 	// catalog is read every half hour. It does nothing on a store that has no supplier key.
 	rt.Go("supplier", func(ctx context.Context) error { dom.RunSupplierWorker(ctx); return nil })

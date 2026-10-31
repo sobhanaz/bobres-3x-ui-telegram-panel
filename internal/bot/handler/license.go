@@ -134,6 +134,9 @@ func (h *Handler) showLicenses(r *req) {
 		kb.Row(row...)
 	}
 	kb.Row(r.button("btn.lic_my", "lic:my"), r.button("btn.home", "home"))
+	if h.affiliatesOn() { // earn by bringing buyers
+		kb.Row(r.button("btn.affiliate", "aff"))
+	}
 	bal := resp.GetBalance()
 	r.show(r.t("lic.title", "balance", r.balance(bal.GetAmount(), bal.GetCurrency())+r.usdtNote(resp.GetBalanceUsdt()),
 		"rate", r.money(resp.GetRate(), "IRT")), kb)

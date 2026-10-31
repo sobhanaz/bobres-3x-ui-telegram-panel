@@ -208,6 +208,8 @@ func setup(rt *app.Runtime) error {
 		// The owner's own store asks the license server's signed admin API for keys the same way (core signs, the bot
 		// passes the request on to the one server above and the answer back).
 		rt.Mux.Handle("POST /internal/vendor/admin", lic.VendorAdminHandler())
+		// The owner's own store reads its hosted stores' /metrics through the bot too: https://<domain>/metrics on a public address only.
+		rt.Mux.Handle("POST /internal/hosted/metrics", runner.HostedMetrics{CoreToken: cfg.PeerCoreToken, Log: rt.Log}.Handler())
 		// The owner's own store resells a supplier's digital accounts: core signs nothing here, it brings the supplier's
 		// API key per call and the bot calls the one supplier address it is configured for.
 		supplierURL := os.Getenv("BOBRES_SUPPLIER_URL")

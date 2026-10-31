@@ -23,9 +23,13 @@ func (h *Handler) onStart(r *req, param string) {
 		} else if open != "" { // opened once the newcomer has picked a language
 			r.setState("", map[string]string{"open": open})
 		}
+		if code := affiliateCode(param); code != "" { // an affiliate link: core records it once the user exists
+			r.setState("", map[string]string{"aff": code})
+		}
 		h.askLanguage(r)
 		return
 	}
+	h.applyAffiliate(r, affiliateCode(param)) // a customer who already uses the bot opened an affiliate link
 	if open != "" {
 		h.dispatch(r, open)
 		return
@@ -73,10 +77,10 @@ func (h *Handler) onLanguage(r *req, lang string) {
 	lang = i18n.Normalize(lang)
 	isNew := r.user == nil
 	in := &corev1.UpsertUserRequest{TelegramId: r.from.ID, Username: r.from.Username, Language: lang}
-	var open string
-	if isNew { // an invite link's code, or a product's Buy link, kept since /start
+	var open, aff string
+	if isNew { // an invite link's code, an affiliate link's or a product's Buy link, kept since /start
 		if st, err := h.state.Get(r.ctx, r.from.ID); err == nil && st.Scene == "" {
-			in.ReferralCode, open = st.Get("ref"), st.Get("open")
+			in.ReferralCode, open, aff = st.Get("ref"), st.Get("open"), st.Get("aff")
 		}
 	}
 	u, err := h.core.UpsertUser(r.ctx, in)
@@ -84,10 +88,11 @@ func (h *Handler) onLanguage(r *req, lang string) {
 		r.fail(err)
 		return
 	}
-	if in.ReferralCode != "" || open != "" {
+	if in.ReferralCode != "" || open != "" || aff != "" {
 		r.clearState()
 	}
 	r.user, r.lang = u, i18n.Normalize(u.GetLanguage())
+	h.applyAffiliate(r, aff)
 	if isNew {
 		if h.gateNewUser(r) {
 			return // the bottom menu follows once the gates let them in (refreshMenu)

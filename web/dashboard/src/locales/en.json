@@ -132,6 +132,14 @@
     "audit": {
       "title": "Audit log",
       "desc": "Every change made by staff, searchable and exportable."
+    },
+    "affiliates": {
+      "title": "Affiliates",
+      "desc": "The affiliate program of your license store: who brings new license buyers, what they earned and what you paid them."
+    },
+    "hosted": {
+      "title": "Hosted stores",
+      "desc": "The stores you run for customers: the register, and each store's health read from its metrics."
     }
   },
   "placeholder": {
@@ -691,7 +699,10 @@
       "cashback": "Cashback",
       "cashback_reversal": "Cashback taken back",
       "target_bonus": "Monthly target bonus",
-      "wheel_prize": "Wheel of fortune prize"
+      "wheel_prize": "Wheel of fortune prize",
+      "affiliate_commission": "Affiliate commission",
+      "affiliate_reversal": "Affiliate commission taken back",
+      "affiliate_payout": "Affiliate payout"
     },
     "balance_after": "Balance after",
     "reference": "For",
@@ -1158,7 +1169,10 @@
       "tier_help": "A new tier takes that tier's limits and features.",
       "extend": "Or renew by",
       "extend_go": "Renew"
-    }
+    },
+    "refund": "Refund",
+    "refund_help": "The buyer gets back what they paid, in their wallet, and the license is revoked. Within 30 days of the payment, an affiliate's commission on it is taken back too.",
+    "refunded": "Refunded"
   },
   "supplier": {
     "category": "Category",
@@ -2443,6 +2457,17 @@
         "tls": {
           "set": "HTTPS setting changed"
         }
+      },
+      "affiliate": {
+        "update": "Affiliate changed",
+        "payout": "Affiliate payout recorded",
+        "reversal": "Affiliate commission taken back"
+      },
+      "hosted": {
+        "add": "Hosted store registered",
+        "update": "Hosted store changed",
+        "delete": "Hosted store removed",
+        "license": "Hosted license made"
       }
     }
   },
@@ -4532,6 +4557,118 @@
       "total": "All these days",
       "empty": "Nobody has spun yet."
     }
+  },
+  "affiliates": {
+    "intro": "Customers get a link with /affiliate in the bot. Whoever opens it before their first license and then buys one earns the affiliate a share of that first payment, in the affiliate's wallet. You pay affiliates by hand and record it here.",
+    "program": "The program",
+    "needs_sales": "License sales are off (Licenses page), so the program does not run even when it is switched on.",
+    "enabled": "Affiliate program on",
+    "percent": "Commission (%)",
+    "percent_help": "The share of a referred buyer's first license payment, 1 to 100. An affiliate can have a percent of their own.",
+    "min_payout": "Minimum payout (Toman)",
+    "min_payout_help": "The least you record as one payout; 0 for no minimum.",
+    "save": "Save",
+    "saved": "Saved",
+    "on": "Running",
+    "off": "Not running",
+    "rules": "First payment only: renewals and later licenses of the same buyer earn nothing. No self-referral. A refund within 30 days takes the commission back, never below zero (a shortfall is written to the audit log).",
+    "none": "No affiliates yet.",
+    "who": "Affiliate",
+    "percent_col": "Percent",
+    "own": "own",
+    "status_col": "Status",
+    "status": {
+      "active": "Active",
+      "disabled": "Paused"
+    },
+    "referred": "Brought",
+    "licenses": "Licenses",
+    "earned": "Earned",
+    "paid": "Paid",
+    "balance": "Wallet",
+    "actions": "Actions",
+    "details": "Commissions and payouts",
+    "edit": "Change the affiliate",
+    "pay": "Record a payout",
+    "paid_ok": "Payout recorded",
+    "detail_line": "Earns {percent}% · earned {earned} · paid {paid}",
+    "commissions": "Commissions",
+    "no_commissions": "No commission yet.",
+    "buyer": "Buyer",
+    "tier": "Tier",
+    "base": "Paid",
+    "amount": "Amount",
+    "reversed_all": "Taken back: {amount}",
+    "reversed_part": "Partly taken back: {amount}",
+    "date": "Date",
+    "payouts": "Payouts",
+    "no_payouts": "No payout yet.",
+    "note": "Note",
+    "note_placeholder": "For example: USDT TRC20, transaction id",
+    "own_percent": "Their own percent",
+    "own_percent_help": "Empty: the program's percent. 0: they earn nothing.",
+    "pay_help": "Left to pay: {open}. Their wallet: {balance}. The amount leaves their wallet.",
+    "amount_toman": "Amount (Toman)",
+    "problem": {
+      "amount": "A whole number of Toman above 0",
+      "min": "Below the minimum payout ({min})",
+      "open": "More than they earned and were not paid yet",
+      "wallet": "More than their wallet holds"
+    }
+  },
+  "hosted": {
+    "add": "Add a store",
+    "intro": "Install a customer's store with tools/hosted from your computer; it prints a registration code to paste here. The page reads each store's /metrics through the bot every 5 minutes.",
+    "custody": "Never kept here: the customer's bot token and backup key. The customer keeps their backup key. The metrics token is stored encrypted and is never shown again.",
+    "none": "No hosted stores yet.",
+    "store": "Store",
+    "state": "State",
+    "states": {
+      "up": "Up",
+      "warn": "Needs a look",
+      "down": "Down",
+      "unknown": "Not read yet"
+    },
+    "no_token": "No metrics token",
+    "version": "Version",
+    "behind": "behind",
+    "channel": {
+      "stable": "stable",
+      "beta": "beta"
+    },
+    "figures": "Figures",
+    "services": "Services up: {up} of {total}",
+    "orders": "Orders in 24 h: {n}",
+    "alerts": "Alerts: {critical} critical, {warning} warnings",
+    "license_days": "License: {n} day left | License: {n} days left",
+    "backup": "Newest backup: {n} hour ago | Newest backup: {n} hours ago",
+    "license": "License",
+    "make_license": "Make the Hosted license",
+    "actions": "Actions",
+    "check": "Read now",
+    "edit": "Change",
+    "delete": "Remove",
+    "delete_confirm": "Remove {domain} from the register? The store itself keeps running.",
+    "registration": "Registration code",
+    "registration_help": "The line tools/hosted printed (bobres-hosted:v1:…). Without one, fill the fields below.",
+    "customer": "Customer",
+    "domain": "Domain",
+    "channel_label": "Update channel",
+    "license_id": "License id",
+    "token": "Metrics token",
+    "token_help": "The store's /metrics token (on the store: sudo bobres admin metrics-token generate).",
+    "token_kept": "A token is kept. Type a new one to replace it.",
+    "new_token": "New metrics token",
+    "clear_token": "Forget the token (the store is no longer read)",
+    "notes": "Notes",
+    "added": "Store registered",
+    "saved": "Saved",
+    "save": "Save",
+    "version_installed": "Version installed",
+    "license_help": "A pro license for this store, in the license server, with the customer and the domain in its name. Its key is shown once: pass it to tools/hosted with --license-key-file, or activate it on the store.",
+    "key_once": "The activation key, shown once:",
+    "key_next": "Save it in a file only you can read and run tools/hosted with --license-key-file, or on the store: sudo bobres license activate.",
+    "done": "Done"
   },
   "announce": {
     "button": "Announce",

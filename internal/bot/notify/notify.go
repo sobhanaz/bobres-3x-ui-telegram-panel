@@ -237,6 +237,7 @@ func (n *Notifier) Handle(ctx context.Context, m eventbus.Message) error {
 			events.CreditCommission:      "wallet.credited_commission",
 			events.CreditSettlement:      "wallet.credited_settlement",
 			events.CreditCashback:        "wallet.credited_cashback",
+			events.CreditAffiliate:       "wallet.credited_affiliate",
 		}[e.Reason]
 		if key == "" {
 			key = "wallet.credited"

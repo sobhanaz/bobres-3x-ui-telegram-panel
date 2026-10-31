@@ -14,6 +14,9 @@ avoid mixing raw English inside RTL lines; use consistent numerals; test long-li
   language change and with `/menu`, and again ahead of the next answer whenever it changed (role, language, an edited
   label, a switch that adds or takes away one of those buttons). A tap is never taken as the answer to an open
   question (a bank reference, a service name), and the gates treat it as any message.
+- On the vendor's own store, `/affiliate` (and **Affiliate program** on the licenses screen, while the program is on) shows the customer's
+  affiliate link `t.me/<bot>?start=aff_<code>` and what it earned; a start link `aff_<code>` records who brought a new customer
+  ([18-hosted-and-affiliate-plans.md](18-hosted-and-affiliate-plans.md)).
 - The commands `/new`, `/renew` and `/status` do what Buy, Renew and My services do, and `/codes` what Wallet > My codes does. They are in the
   bot's command menu with a Persian and an English description (`profile.cmd.new`, `profile.cmd.renew`, `profile.cmd.status`,
   `profile.cmd.codes`, edited like any text), and they pass every gate exactly as the buttons do (see "Commands" below).

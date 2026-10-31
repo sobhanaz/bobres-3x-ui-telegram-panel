@@ -125,6 +125,8 @@ Prometheus text format 0.0.4. It is **off** until the owner makes a token, and t
 
 **Turn it on.** As the owner: **Settings → Monitoring → Prometheus metrics → Make a token**. The token is shown once, with the scrape
 configuration below filled in for your domain. Core keeps only its SHA-256, so a token that was not copied is made again, not looked up.
+On the server, `sudo bobres admin metrics-token generate` makes one too (printed once, replacing any; `status` says whether one is set):
+`tools/hosted` uses it after it installs a hosted store.
 You can also type a token of your own (24 to 128 characters of letters, digits and `. _ ~ + / = -`). **Make a new token** replaces it
 at once and **Turn off** removes it (`/metrics` is then a plain 404 again). Making, replacing and removing it are audited
 (`metrics.token.generate`, `metrics.token.set`, `metrics.token.clear`) without the token. Admins see whether it is on; only the owner changes it.
