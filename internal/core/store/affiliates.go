@@ -11,7 +11,7 @@ import (
 	buuid "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/uuid"
 )
 
-// The affiliate program of the owner's own store (migration 00053): the affiliates and their codes, who brought whom, the commissions paid on
+// The affiliate program of the owner's own store (migration 00054): the affiliates and their codes, who brought whom, the commissions paid on
 // the first license of a referred buyer and what the owner paid out by hand.
 
 // ErrAffiliateCodeTaken: another affiliate has this code (a new one is drawn).

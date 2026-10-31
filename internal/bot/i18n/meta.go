@@ -88,6 +88,9 @@ var contexts = map[string]Context{
 	"admin.unknown":          CtxButtonHTML,
 	"error.rate":             CtxToast,
 	"error.expired":          CtxToast,
+	"an.on":                  CtxToast, // product news switched on the language screen (a popup)
+	"an.off":                 CtxToast,
+	"an.unavailable":         CtxToastHTML, // a Buy button whose product is gone: a popup, or a message after a start link
 	"lang.changed":           CtxToastHTML, // a popup, or a new user's language picker edited into it
 	"admin.status_done":      CtxToast,
 	"pay.check_pending":      CtxToast,
@@ -217,6 +220,8 @@ var contexts = map[string]Context{
 var buttonStyles = map[string]string{
 	"btn.buy":               "success",
 	"btn.sup_buy":           "success",
+	"btn.an_buy":            "success", // under a product announcement
+	"btn.an_yes":            "success",
 	"btn.sup_pay":           "success",
 	"btn.bulk":              "success",
 	"btn.bulk_pay":          "success",

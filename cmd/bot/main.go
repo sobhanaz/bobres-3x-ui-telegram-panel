@@ -160,6 +160,9 @@ func setup(rt *app.Runtime) error {
 		rt.Mux.Handle("GET /internal/channel-check", runner.ChannelCheck(bot, me.ID, cfg.PeerCoreToken))
 		// "Send to me" from the broadcast composer.
 		rt.Mux.Handle("POST /internal/broadcasts/test", runner.BroadcastTest(bot, cfg.PeerCoreToken, rt.Log))
+		// A product announcement's post in the store's channel: core writes the card, the bot posts it with a Buy button that opens the
+		// product here (t.me/<bot>?start=…).
+		rt.Mux.Handle("POST /internal/announce/channel", runner.AnnounceChannel(bot, me.Username, cfg.PeerCoreToken, rt.Log))
 		// The Mini App store (/app on core): core has no bot token, so it asks
 		// the bot to check the init data a Mini App is opened with.
 		rt.Mux.Handle("POST /internal/miniapp/verify", runner.MiniAppVerify(cfg.TelegramBotToken, me.Username, cfg.PeerCoreToken, nil))

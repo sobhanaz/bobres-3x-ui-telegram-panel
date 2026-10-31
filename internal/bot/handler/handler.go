@@ -501,6 +501,9 @@ func (h *Handler) Handle(ctx context.Context, u tg.Update) {
 			return // a message over the limit stays unanswered
 		}
 	}
+	// Once the update is served (and its toast sent): the one question about product news, while the customer has not been asked and no
+	// gate holds them (announce.go).
+	defer h.maybeAskAnnounce(r)
 	// A message has no callback to carry a toast (a tap on the bottom menu
 	// reaches the handlers that answer with one): it comes as a message.
 	// Toast texts are plain, safe to send as HTML.
@@ -656,6 +659,8 @@ func (h *Handler) dispatch(r *req, data string) {
 		h.onLoginApproval(r, rest)
 	case "rs":
 		h.routeReseller(r, rest)
+	case "an": // product news: the answer to the question, the switch, and the Buy button under an announcement (announce.go)
+		h.onAnnounce(r, rest)
 	default:
 		r.toast = r.t("error.expired")
 		h.showHome(r)

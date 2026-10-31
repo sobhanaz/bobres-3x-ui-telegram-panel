@@ -12,7 +12,7 @@ import (
 	buuid "github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/uuid"
 )
 
-// The register of hosted stores (migration 00054): the customers' stores the owner installed and runs for them, and the last reading of each
+// The register of hosted stores (migration 00055): the customers' stores the owner installed and runs for them, and the last reading of each
 // store's /metrics. The token of that endpoint is kept encrypted; the customer's bot token and backup key are never here.
 
 // ErrHostedDomainTaken: another hosted store has this domain.

@@ -15,9 +15,13 @@ import (
 // an invite link (kept until a new user picks a language and is created).
 func (h *Handler) onStart(r *req, param string) {
 	r.clearState()
+	param = strings.TrimSpace(param)
+	open := announcedStart(param) // a product's Buy link in the store's channel (announce.go)
 	if r.user == nil {
-		if code, ok := strings.CutPrefix(strings.TrimSpace(param), "r_"); ok && code != "" && len(code) <= 32 {
+		if code, ok := strings.CutPrefix(param, "r_"); ok && code != "" && len(code) <= 32 {
 			r.setState("", map[string]string{"ref": code})
+		} else if open != "" { // opened once the newcomer has picked a language
+			r.setState("", map[string]string{"open": open})
 		}
 		if code := affiliateCode(param); code != "" { // an affiliate link: core records it once the user exists
 			r.setState("", map[string]string{"aff": code})
@@ -26,6 +30,10 @@ func (h *Handler) onStart(r *req, param string) {
 		return
 	}
 	h.applyAffiliate(r, affiliateCode(param)) // a customer who already uses the bot opened an affiliate link
+	if open != "" {
+		h.dispatch(r, open)
+		return
+	}
 	if r.user.GetUsername() != r.from.Username {
 		if u, err := h.core.UpsertUser(r.ctx, &corev1.UpsertUserRequest{
 			TelegramId: r.from.ID, Username: r.from.Username, Language: r.user.GetLanguage(),
@@ -39,6 +47,9 @@ func (h *Handler) onStart(r *req, param string) {
 
 func (h *Handler) askLanguage(r *req) {
 	kb := (&tg.Keyboard{}).Row(tg.CB("فارسی 🇮🇷", "lang:fa"), tg.CB("English 🇬🇧", "lang:en"))
+	if b := h.announceToggle(r); b != nil { // the customer's own switch of product news (announce.go)
+		kb.Row(*b).Row(r.button("btn.home", "home"))
+	}
 	r.show(h.cat.T("en", "lang.prompt"), kb)
 }
 
@@ -51,11 +62,10 @@ func (h *Handler) onLanguage(r *req, lang string) {
 	lang = i18n.Normalize(lang)
 	isNew := r.user == nil
 	in := &corev1.UpsertUserRequest{TelegramId: r.from.ID, Username: r.from.Username, Language: lang}
-	aff := ""
-	if isNew { // an invite link's code (or an affiliate link's), kept since /start
+	var open, aff string
+	if isNew { // an invite link's code, an affiliate link's or a product's Buy link, kept since /start
 		if st, err := h.state.Get(r.ctx, r.from.ID); err == nil && st.Scene == "" {
-			in.ReferralCode = st.Get("ref")
-			aff = st.Get("aff")
+			in.ReferralCode, open, aff = st.Get("ref"), st.Get("open"), st.Get("aff")
 		}
 	}
 	u, err := h.core.UpsertUser(r.ctx, in)
@@ -63,7 +73,7 @@ func (h *Handler) onLanguage(r *req, lang string) {
 		r.fail(err)
 		return
 	}
-	if in.ReferralCode != "" || aff != "" {
+	if in.ReferralCode != "" || open != "" || aff != "" {
 		r.clearState()
 	}
 	r.user, r.lang = u, u.GetLanguage()
@@ -78,6 +88,9 @@ func (h *Handler) onLanguage(r *req, lang string) {
 		r.cb = nil // the rest comes as new messages
 		h.sendMenu(r, r.t("welcome", "brand", esc(h.brand())))
 		h.showHome(r)
+		if open != "" { // the product of the Buy link they came from
+			h.dispatch(r, open)
+		}
 		return
 	}
 	r.toast = r.t("lang.changed")

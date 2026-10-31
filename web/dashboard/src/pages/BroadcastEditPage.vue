@@ -103,7 +103,7 @@ async function load(): Promise<boolean> {
   try {
     const res = await api<{ item: BroadcastItem }>('GET', `/broadcasts/${id.value}`)
     // Once it is sending (or over), its page shows it instead.
-    if (!editable(res.item.status) || res.item.segment === 'resellers') {
+    if (!editable(res.item.status) || res.item.segment === 'resellers' || res.item.segment === 'announce') {
       void router.replace({ name: 'broadcast', params: { id: res.item.id } })
       return false
     }

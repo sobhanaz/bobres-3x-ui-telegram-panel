@@ -54,7 +54,7 @@ type VendorOrder struct {
 	LastError      string
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
-	// AffiliateID is the affiliate who brought the buyer (migration 00053), recorded on a new license of a referred customer; nil otherwise.
+	// AffiliateID is the affiliate who brought the buyer (migration 00054), recorded on a new license of a referred customer; nil otherwise.
 	AffiliateID *string
 }
 

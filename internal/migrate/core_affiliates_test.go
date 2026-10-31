@@ -7,14 +7,14 @@ import (
 	"testing"
 )
 
-// 00053 adds the affiliate tables and three ledger kinds on top of the rule in force; 00054 the hosted stores' register. Down takes the
+// 00054 adds the affiliate tables and three ledger kinds on top of the rule in force; 00055 the hosted stores' register. Down takes the
 // tables away and the kinds out for new rows only (the ledger is append-only).
 func TestAffiliatesAndHostedMigrations(t *testing.T) {
 	dsn := testDSN(t)
 	dropSchemas(t, dsn)
 	ctx := context.Background()
-	if err := upTo(ctx, dsn, "core", 52); err != nil {
-		t.Fatalf("Up to 52: %v", err)
+	if err := upTo(ctx, dsn, "core", 53); err != nil {
+		t.Fatalf("Up to 53: %v", err)
 	}
 	db, err := sql.Open("pgx", dsn)
 	if err != nil {
@@ -67,7 +67,7 @@ func TestAffiliatesAndHostedMigrations(t *testing.T) {
 			t.Errorf("%s refused: %v", kind, err)
 		}
 	}
-	if err := downTo(ctx, dsn, "core", 52); err != nil {
+	if err := downTo(ctx, dsn, "core", 53); err != nil {
 		t.Fatalf("Down: %v", err)
 	}
 	var tables int

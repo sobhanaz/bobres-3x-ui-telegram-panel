@@ -309,6 +309,15 @@ func (s *Server) Register(mux *http.ServeMux) {
 	s.route(api, "POST /api/v1/broadcasts/{id}/resume", PermBroadcastWrite, s.resumeBroadcast)
 	s.route(api, "POST /api/v1/broadcasts/{id}/cancel", PermBroadcastWrite, s.cancelBroadcast)
 	s.route(api, "GET /api/v1/broadcasts/{id}/recipients", PermBroadcastWrite, s.broadcastRecipients)
+	// New product announcements (the Announce dialog of the plan, supplier product and license pages).
+	s.route(api, "GET /api/v1/announcements", PermBroadcastWrite, s.listAnnouncements)
+	s.route(api, "POST /api/v1/announcements", PermBroadcastWrite, s.sendAnnouncement)
+	s.route(api, "GET /api/v1/announcements/draft", PermBroadcastWrite, s.announceDraft)
+	s.route(api, "POST /api/v1/announcements/check", PermBroadcastWrite, s.checkAnnounceText)
+	s.route(api, "POST /api/v1/announcements/preview", PermBroadcastWrite, s.previewAnnouncement)
+	s.route(api, "POST /api/v1/announcements/test", PermBroadcastWrite, s.testAnnouncement)
+	s.route(api, "POST /api/v1/announcements/channel-check", PermBroadcastWrite, s.checkAnnounceChannel)
+	s.route(api, "POST /api/v1/announcements/{id}/cancel", PermBroadcastWrite, s.cancelAnnouncement)
 	// Messages to resellers and the weekly settlement reminder (the Resellers page): broadcasts that show balances.
 	s.route(api, "POST /api/v1/reseller-messages", PermBroadcastWrite, resellerMessages(s.sendResellerMessage))
 	s.route(api, "POST /api/v1/reseller-messages/audience", PermBroadcastWrite, resellerMessages(s.resellerMessageAudience))

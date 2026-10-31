@@ -445,6 +445,23 @@ included, a one-time dashboard login link.
   longer included). Renewals, traffic top-ups and payments of orders already made go
   through. The staff get one alert a day, "A new purchase was refused: this install is at its limit of ... active
   services. Buy or renew a license to sell more." (`alert.license_limit`).
+- **Product news** (`announce.enabled`, **off by default**; `internal/bot/handler/announce.go`). While it is on, the bot asks
+  every customer **once** "Do you want news of new products?" with *✅ Yes, tell me* and *No, thanks* (`an:y`, `an:n`): a
+  newcomer right after their first /start (the language, the welcome and the home screen, then the question), a customer
+  who was there before at their next interaction, after that update is served. Never as a message to everyone, never
+  while a gate holds them (maintenance, a required chat) or while they are in the middle of something (a payment's proof,
+  a ticket, a number they are typing: they are asked at a later update). Core records the question
+  (`AskAnnounce`, true once per customer), so two updates at once do not ask twice. **No answer is no.** The answer
+  changes later on the language screen (🌐 Language), which shows a *🔔 Product news: on / 🔕 off* switch (`an:t:y`,
+  `an:t:n`) while announcements are on, and in the Mini App (More, *Product news*). Staff announce a product by hand from
+  the dashboard ([04-dashboard.md](04-dashboard.md), "Announcing a product"); only the customers who said yes get the
+  private message (a broadcast, so banned customers and customers who blocked the bot never do), in their own language,
+  with a **🛒 Buy** button (`an:b:p:<plan id without dashes>`, `an:b:s:<supplier product>`, `an:b:l:<tier>:<months>`)
+  that opens that product as a **new message**: the card stays as it is. The channel post's Buy button is a link,
+  `t.me/<bot>?start=p_…|s_…|l_<tier>_<months>`, which /start opens the same way (a newcomer picks a language first, then
+  gets the product). The product is checked when the button is tapped: a plan switched off or deleted, a digital
+  account no longer on sale, license sales switched off, say *This product is not available any more*; a digital account
+  sold out since shows its page with "sold out". Old cards are never edited.
 
 ## Reseller panel
 Built (milestone 5, 2026-10-11; managing their customers' services and the customers who joined through their link,

@@ -45,7 +45,7 @@ The DNS of the domain must point at the server before the install (the installer
 SSH runner (`tools/hosted/main_test.go`): it never touched a real server.
 
 **The register and the central view: dashboard > Hosted stores.** Paste the registration code into **Add a store** (or type the fields:
-customer, domain, channel, license id, metrics token, notes). The register (`core.hosted_stores`, migration 00054) keeps the store id,
+customer, domain, channel, license id, metrics token, notes). The register (`core.hosted_stores`, migration 00055) keeps the store id,
 customer, domain, version installed, license id, channel, notes, created, and the metrics token **encrypted** with core's master key
 (write-only: answers say only whether one is set). Every five minutes, and on **Read now**, core reads each store's `https://<domain>/metrics`
 with its token **through the bot** (core has no internet access; the bot's `POST /internal/hosted/metrics` calls that one URL on a public
@@ -112,7 +112,7 @@ lawyer's review (the launch checklist).
   back) and payouts; a percent of their own, pausing them, and recording a payout. Every change is audited (`affiliate.update`,
   `affiliate.payout`, `affiliate.reversal`, `vendor.refund`, `setting.set`).
 
-Migration core 00053 (additive, with Down): the ledger kinds `affiliate_commission`, `affiliate_reversal` and `affiliate_payout`, the
+Migration core 00054 (additive, with Down): the ledger kinds `affiliate_commission`, `affiliate_reversal` and `affiliate_payout`, the
 tables `affiliates`, `affiliate_referrals`, `affiliate_commissions`, `affiliate_payouts`, and `vendor_orders.affiliate_id`. New gRPC calls
 `GetMyAffiliate` and `ApplyAffiliateCode`.
 

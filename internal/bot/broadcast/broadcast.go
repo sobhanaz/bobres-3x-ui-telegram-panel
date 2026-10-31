@@ -489,7 +489,33 @@ func (w *Worker) recipientMessage(b *corev1.BroadcastBatch, r *corev1.BroadcastR
 		settle.Style = i18n.ButtonStyle(SettleText)
 		kb.Row(settle)
 	}
+	if cb := b.GetBuyCallback(); cb != "" && w.Texts != nil {
+		if kb == nil {
+			kb = &tg.Keyboard{}
+		}
+		buy := tg.CB(w.Texts.T(lang, BuyText), cb)
+		buy.Style = i18n.ButtonStyle(BuyText)
+		kb.Row(buy)
+	}
 	return text, kb
+}
+
+// BuyText is the bot text of the Buy button under a product announcement.
+const BuyText = "btn.an_buy"
+
+// BuyCallbackOK accepts the callback data of a Buy button the way the bot reads it: an:b:<kind>:<product>, at most 64 bytes, letters,
+// digits and colons only.
+func BuyCallbackOK(data string) bool {
+	rest, ok := strings.CutPrefix(data, "an:b:")
+	if !ok || len(data) > 64 || rest == "" {
+		return false
+	}
+	for _, c := range rest {
+		if (c < 'a' || c > 'z') && (c < 'A' || c > 'Z') && (c < '0' || c > '9') && c != ':' {
+			return false
+		}
+	}
+	return true
 }
 
 // checkBatch checks again what core checked, so a broken broadcast halts
@@ -509,6 +535,9 @@ func checkBatch(b *corev1.BroadcastBatch) string {
 				return "the " + l + " text " + p
 			}
 		}
+	}
+	if cb := b.GetBuyCallback(); cb != "" && !BuyCallbackOK(cb) {
+		return "the buy button's data cannot be used"
 	}
 	if u := b.GetButtonUrl(); u != "" {
 		if !HTTPSURL(u) {

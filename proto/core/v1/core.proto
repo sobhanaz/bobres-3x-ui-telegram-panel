@@ -23,6 +23,10 @@ message User {
   int64 created_at = 8; // unix seconds
   int64 updated_at = 9;
   bool bot_blocked = 10; // Telegram said the user blocked the bot
+  // Product news (docs/03-bot-ux.md, "Product news"): whether the bot has asked "Do you want news of new products?" (it asks once), and the
+  // answer (false also while unanswered: no answer is no).
+  bool announce_asked = 11;
+  bool announce_optin = 12;
 }
 
 message Plan {
@@ -278,6 +282,24 @@ message BroadcastBatch {
   repeated BroadcastRecipient recipients = 5;
   // A "Settle / Top up" button (the bot's own text) that opens the recipient's wallet: a message to resellers.
   bool settle_button = 6;
+  // The callback data of a "Buy" button (the bot's own text) under a product announcement; empty: none.
+  string buy_callback = 7;
+}
+
+// AskAnnounceRequest: the bot is about to ask a customer whether they want news of new products.
+message AskAnnounceRequest {
+  int64 telegram_id = 1;
+}
+
+// AskAnnounceResponse: ask is true once per customer (core records it), and only while announcements are on.
+message AskAnnounceResponse {
+  bool ask = 1;
+}
+
+// SetAnnounceOptInRequest is a customer's answer about product news (also a change later, in their settings).
+message SetAnnounceOptInRequest {
+  int64 telegram_id = 1;
+  bool opt_in = 2;
 }
 
 enum BroadcastOutcome {
@@ -1065,6 +1087,10 @@ service CoreService {
   rpc SetUserBotBlocked(SetUserBotBlockedRequest) returns (SetUserBotBlockedResponse);
   rpc ClaimBroadcastBatch(ClaimBroadcastBatchRequest) returns (BroadcastBatch);
   rpc ReportBroadcastResults(ReportBroadcastResultsRequest) returns (BroadcastState);
+  // Product news: AskAnnounce claims the one question "Do you want news of new products?" (true once per customer, while announcements are
+  // on); SetAnnounceOptIn stores the answer (NOT_FOUND for an unknown user) and returns the user.
+  rpc AskAnnounce(AskAnnounceRequest) returns (AskAnnounceResponse);
+  rpc SetAnnounceOptIn(SetAnnounceOptInRequest) returns (User);
   // Resellers (milestone 5).
   rpc SetSubscriptionLabel(SetSubscriptionLabelRequest) returns (Subscription);
   rpc GetResellerInfo(GetResellerInfoRequest) returns (ResellerInfo);

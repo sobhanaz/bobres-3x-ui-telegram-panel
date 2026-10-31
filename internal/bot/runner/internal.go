@@ -114,7 +114,8 @@ func checkChannel(ctx context.Context, bot ChatChecker, botID int64, chat string
 	if !m.IsAdmin() {
 		return fail(ProblemNotAdmin, "the bot is not an administrator of this channel (its status: "+m.Status+")")
 	}
-	return map[string]any{"ok": true, "title": ch.Title, "bot_admin": true}
+	// can_post: whether the bot may also post there (product announcements need it; a required chat does not).
+	return map[string]any{"ok": true, "title": ch.Title, "bot_admin": true, "can_post": m.CanPost(ch.Type)}
 }
 
 // telegramError is the HTTP code and text of a Bot API error (0 and the
@@ -165,6 +166,11 @@ func BroadcastTest(bot MessageSender, coreToken string, log *slog.Logger) http.H
 				URL  string `json:"url"`
 			} `json:"button"`
 			Settle string `json:"settle"` // the label of a Settle / Top up button ("": none)
+			// Buy is the Buy button of a product announcement: its label and callback data (an:b:…), as a customer gets it.
+			Buy *struct {
+				Text string `json:"text"`
+				Data string `json:"data"`
+			} `json:"buy"`
 		}
 		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxTestBody)).Decode(&in); err != nil {
 			var tooBig *http.MaxBytesError
@@ -206,6 +212,16 @@ func BroadcastTest(bot MessageSender, coreToken string, log *slog.Logger) http.H
 				kb = &tg.Keyboard{}
 			}
 			kb.Row(tg.CB(in.Settle, broadcast.SettleCallback))
+		}
+		if in.Buy != nil {
+			if _, probs := i18n.ValidateLabel(in.Buy.Text); len(probs) > 0 || !broadcast.BuyCallbackOK(in.Buy.Data) {
+				fail(ProblemBadRequest, "the buy button cannot be used")
+				return
+			}
+			if kb == nil {
+				kb = &tg.Keyboard{}
+			}
+			kb.Row(tg.CB(in.Buy.Text, in.Buy.Data))
 		}
 		ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
 		defer cancel()
