@@ -58,5 +58,7 @@ cd2b76a004815210000219395fffd3b4fb6837d5:web/dashboard/src/__tests__/initial-log
 40ae0967ec50f091c153c48817cc1d25b1b2e83d:internal/rekey/rekey_test.go:private-key:144
 # A made-up token in the dashboard metrics test (no secret).
 11f9df00c4f3f4b63b76a1c626e15ece5c189d36:web/dashboard/src/__tests__/metrics.test.ts:generic-api-key:53
-# A benchmark metric's name ("key": "ci/CI/Vulnerability scan/s"), not a secret; the field is "metric" since.
+# A benchmark metric's name in the summary (a CI job's time), not a secret; the field is called metric since.
+# The second line pins the first wording of this comment, which quoted that name and was flagged too.
 0d253afefcde4bdda3512a27de5c99749a4da9a4:docs/bench/2026-10-29/plain/summary.json:generic-api-key:1224
+6e3bbcc51c6f35a971fa0f9ee2ce5df8cb854b2f:.gitleaksignore:generic-api-key:61
