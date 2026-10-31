@@ -59,11 +59,7 @@ func wheelChance(lang string, weight, total int64) string {
 		f := strconv.FormatInt(100+frac, 10)[1:] // two digits
 		s += "." + strings.TrimRight(f, "0")
 	}
-	s = i18n.Digits(lang, s)
-	if i18n.Normalize(lang) == "fa" {
-		return strings.Replace(s, ".", "٫", 1) + "٪"
-	}
-	return s + "%"
+	return i18n.PercentText(lang, i18n.Digits(lang, s))
 }
 
 // wheelResult is the sentence about a spin that is done: the prize, or none.

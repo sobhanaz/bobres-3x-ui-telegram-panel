@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, h, type FunctionalComponent, type VNodeChild } from 'vue'
 import { parsePreview, sampleValue, type PreviewNode } from '../../branding'
-import type { Lang } from '../../format'
+import type { ContentLang } from '../../format'
 
 // Roughly how Telegram shows a bot text: the allowed tags as Vue elements,
 // the {placeholders} as sample values, everything else as plain text. It
@@ -11,7 +11,7 @@ const props = withDefaults(
     value: string
     html: boolean
     placeholders: string[]
-    lang: Lang
+    lang: ContentLang
     brand?: string
     kind?: 'message' | 'button' | 'toast'
   }>(),

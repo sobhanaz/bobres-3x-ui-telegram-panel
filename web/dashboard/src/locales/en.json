@@ -25,7 +25,10 @@
     "light": "Theme: light"
   },
   "lang": {
-    "switch": "فارسی"
+    "switch": "فارسی",
+    "menu": "Language",
+    "beta": "beta",
+    "beta_note": "Machine-translated: a native speaker has not reviewed it yet."
   },
   "role": {
     "owner": "Owner",
@@ -129,6 +132,14 @@
     "audit": {
       "title": "Audit log",
       "desc": "Every change made by staff, searchable and exportable."
+    },
+    "affiliates": {
+      "title": "Affiliates",
+      "desc": "The affiliate program of your license store: who brings new license buyers, what they earned and what you paid them."
+    },
+    "hosted": {
+      "title": "Hosted stores",
+      "desc": "The stores you run for customers: the register, and each store's health read from its metrics."
     }
   },
   "placeholder": {
@@ -688,7 +699,10 @@
       "cashback": "Cashback",
       "cashback_reversal": "Cashback taken back",
       "target_bonus": "Monthly target bonus",
-      "wheel_prize": "Wheel of fortune prize"
+      "wheel_prize": "Wheel of fortune prize",
+      "affiliate_commission": "Affiliate commission",
+      "affiliate_reversal": "Affiliate commission taken back",
+      "affiliate_payout": "Affiliate payout"
     },
     "balance_after": "Balance after",
     "reference": "For",
@@ -1155,7 +1169,10 @@
       "tier_help": "A new tier takes that tier's limits and features.",
       "extend": "Or renew by",
       "extend_go": "Renew"
-    }
+    },
+    "refund": "Refund",
+    "refund_help": "The buyer gets back what they paid, in their wallet, and the license is revoked. Within 30 days of the payment, an affiliate's commission on it is taken back too.",
+    "refunded": "Refunded"
   },
   "supplier": {
     "category": "Category",
@@ -1492,7 +1509,8 @@
       "too_long": "Too long: at most {arg} character. | Too long: at most {arg} characters.",
       "lang_unused": "This text is not used in this language.",
       "unknown_key": "This text no longer exists.",
-      "other": "Not accepted ({code}): {arg}"
+      "other": "Not accepted ({code}): {arg}",
+      "plural_forms": "{arg}: the plural choice has the wrong number of forms for this language."
     },
     "owner_only": "Only the store owner can change the payment texts (where customers are told to send money)."
   },
@@ -1679,7 +1697,9 @@
       "prizes": "Each prize needs a whole amount of Toman (at least 1) and a weight from 1 to 1,000,000.",
       "prizes_dup": "Two prizes have the same amount.",
       "prizes_many": "At most 12 prizes.",
-      "percent": "A percent from 0.01 to 20, for example 2.5."
+      "percent": "A percent from 0.01 to 20, for example 2.5.",
+      "langs": "Use the language codes fa, en, ar, ru and tr, each once.",
+      "langs_empty": "Choose at least one language."
     },
     "option": {
       "bot": {
@@ -2062,6 +2082,12 @@
           "help": "How many paid orders a customer needs before they may spin, at least 1: an account made only to spin earns nothing. Refunded orders and orders that cost nothing do not count."
         }
       },
+      "languages": {
+        "enabled": {
+          "label": "Customer languages",
+          "help": "The languages customers can pick in the bot and the Mini App. A customer whose Telegram language is one of them gets it; anyone else gets the default. Turning a language off moves its customers to the default (their choice comes back when you turn it on again). The bot's own texts exist in every language; plan names, broadcasts and help pages stay in Persian and English (a customer of another language reads the English ones)."
+        }
+      },
       "announce": {
         "enabled": {
           "label": "Product announcements",
@@ -2110,6 +2136,12 @@
       "add": "Add a prize",
       "max": "The wheel holds at most {n} prize. | The wheel holds at most {n} prizes.",
       "sorted": "Prizes are saved in order of amount."
+    },
+    "langs": {
+      "default": "Default",
+      "default_aria": "Make {lang} the default",
+      "enable_aria": "Customers can pick {lang}",
+      "beta_note": "Arabic, Russian and Turkish are in beta: they are machine-translated, and a native speaker should review them before you rely on them."
     }
   },
   "staff": {
@@ -2425,6 +2457,17 @@
         "tls": {
           "set": "HTTPS setting changed"
         }
+      },
+      "affiliate": {
+        "update": "Affiliate changed",
+        "payout": "Affiliate payout recorded",
+        "reversal": "Affiliate commission taken back"
+      },
+      "hosted": {
+        "add": "Hosted store registered",
+        "update": "Hosted store changed",
+        "delete": "Hosted store removed",
+        "license": "Hosted license made"
       }
     }
   },
@@ -2934,24 +2977,33 @@
     "hide": "Hide what you typed"
   },
   "server": {
-    "intro": "The panels (3x-ui or Marzban) services are created on. A new service goes to the panel with the fewest services for its weight, among the healthy panels its plan allows. Whatever you change here, existing services stay on their panel.",
+    "intro": "The panels (3x-ui, Marzban, S-UI or Hiddify) services are created on. A new service goes to the panel with the fewest services for its weight, among the healthy panels its plan allows. Whatever you change here, existing services stay on their panel.",
     "add": "Add server",
     "edit": "Edit server",
-    "none": "No servers yet. Add your 3x-ui or Marzban panel to start selling.",
+    "none": "No servers yet. Add your 3x-ui, Marzban, S-UI or Hiddify panel to start selling.",
     "name": "Name",
     "base_url": "Panel address",
     "base_url_help": "The panel's full address with its port and secret path, as you open it in a browser, for example https://panel.example.com:2053/path",
+    "base_url_help_sui": "The S-UI panel's address with its port and web path, as you open it in a browser, for example https://panel.example.com:2095/app. Use the panel's public domain: S-UI builds the share links from the address BOBRES calls it at.",
+    "base_url_help_hiddify": "The Hiddify panel's address with its admin proxy path, for example https://panel.example.com/AdminProxyPath (the first part of the path of your admin link; the rest of a pasted admin link is ignored). Use the panel's public domain.",
     "kind": "Panel software",
     "kind_xui": "3x-ui",
     "kind_marzban": "Marzban",
+    "kind_sui": "S-UI",
+    "kind_hiddify": "Hiddify",
     "kind_help": "Which panel this server is. It cannot be changed after it is added.",
     "kind_fixed": "Fixed when the server was added: the services on it live in that panel.",
     "login": "Admin username and password",
     "login_help": "Marzban: an admin's login written as username:password (a Marzban username has no colon). Use a dedicated admin. It is stored encrypted in the provisioner service and never shown again. Subscription links come from the panel itself.",
     "token": "API token",
     "token_help": "Create it in the 3x-ui panel under Settings, API tokens. It is stored encrypted in the provisioner service and never shown again.",
+    "token_help_sui": "Create it in the S-UI panel under Admins, API Tokens, with no expiry. It is stored encrypted in the provisioner service and never shown again. Subscription links come from the panel itself.",
+    "api_key": "API key (admin UUID)",
+    "api_key_help": "Hiddify: the UUID of the admin BOBRES acts as, the part of the admin link after the admin proxy path. Use a dedicated admin. It is stored encrypted in the provisioner service and never shown again. Every customer gets all of the panel's proxies; Hiddify has no client groups and counts expiry in whole days.",
     "sub_url": "Subscription address (optional)",
     "sub_url_help": "Where customers' subscription links point, for example the panel's subscription domain. Empty uses the panel's own links. When it changes, existing links are updated within a few minutes.",
+    "sub_url_help_sui": "Optional: the address S-UI serves subscriptions at, up to the path before the client's name, for example https://sub.example.com:2096/sub/. Empty uses the panel's own subscription settings.",
+    "sub_url_help_hiddify": "Optional: the address with the client proxy path, for example https://sub.example.com/ClientProxyPath. Empty uses the panel's own links.",
     "weight": "Weight",
     "weight_help": "This panel's share of new services compared with the others: weight 200 takes twice as many as 100. From 1 to 1000.",
     "max_clients": "Service limit",
@@ -3019,6 +3071,7 @@
       "sub_url": "A full address that starts with https:// or http://",
       "token": "A token has no spaces.",
       "login": "Write it as username:password, with no spaces.",
+      "api_key": "The API key is the admin's UUID, such as 0b5e6a3c-2f4d-4e8a-9c1b-7d6e5f4a3b2c.",
       "weight": "A whole number from {min} to {max}.",
       "max_clients": "A whole number from 0 to {max}, or empty for no limit."
     },
@@ -4504,6 +4557,118 @@
       "total": "All these days",
       "empty": "Nobody has spun yet."
     }
+  },
+  "affiliates": {
+    "intro": "Customers get a link with /affiliate in the bot. Whoever opens it before their first license and then buys one earns the affiliate a share of that first payment, in the affiliate's wallet. You pay affiliates by hand and record it here.",
+    "program": "The program",
+    "needs_sales": "License sales are off (Licenses page), so the program does not run even when it is switched on.",
+    "enabled": "Affiliate program on",
+    "percent": "Commission (%)",
+    "percent_help": "The share of a referred buyer's first license payment, 1 to 100. An affiliate can have a percent of their own.",
+    "min_payout": "Minimum payout (Toman)",
+    "min_payout_help": "The least you record as one payout; 0 for no minimum.",
+    "save": "Save",
+    "saved": "Saved",
+    "on": "Running",
+    "off": "Not running",
+    "rules": "First payment only: renewals and later licenses of the same buyer earn nothing. No self-referral. A refund within 30 days takes the commission back, never below zero (a shortfall is written to the audit log).",
+    "none": "No affiliates yet.",
+    "who": "Affiliate",
+    "percent_col": "Percent",
+    "own": "own",
+    "status_col": "Status",
+    "status": {
+      "active": "Active",
+      "disabled": "Paused"
+    },
+    "referred": "Brought",
+    "licenses": "Licenses",
+    "earned": "Earned",
+    "paid": "Paid",
+    "balance": "Wallet",
+    "actions": "Actions",
+    "details": "Commissions and payouts",
+    "edit": "Change the affiliate",
+    "pay": "Record a payout",
+    "paid_ok": "Payout recorded",
+    "detail_line": "Earns {percent}% · earned {earned} · paid {paid}",
+    "commissions": "Commissions",
+    "no_commissions": "No commission yet.",
+    "buyer": "Buyer",
+    "tier": "Tier",
+    "base": "Paid",
+    "amount": "Amount",
+    "reversed_all": "Taken back: {amount}",
+    "reversed_part": "Partly taken back: {amount}",
+    "date": "Date",
+    "payouts": "Payouts",
+    "no_payouts": "No payout yet.",
+    "note": "Note",
+    "note_placeholder": "For example: USDT TRC20, transaction id",
+    "own_percent": "Their own percent",
+    "own_percent_help": "Empty: the program's percent. 0: they earn nothing.",
+    "pay_help": "Left to pay: {open}. Their wallet: {balance}. The amount leaves their wallet.",
+    "amount_toman": "Amount (Toman)",
+    "problem": {
+      "amount": "A whole number of Toman above 0",
+      "min": "Below the minimum payout ({min})",
+      "open": "More than they earned and were not paid yet",
+      "wallet": "More than their wallet holds"
+    }
+  },
+  "hosted": {
+    "add": "Add a store",
+    "intro": "Install a customer's store with tools/hosted from your computer; it prints a registration code to paste here. The page reads each store's /metrics through the bot every 5 minutes.",
+    "custody": "Never kept here: the customer's bot token and backup key. The customer keeps their backup key. The metrics token is stored encrypted and is never shown again.",
+    "none": "No hosted stores yet.",
+    "store": "Store",
+    "state": "State",
+    "states": {
+      "up": "Up",
+      "warn": "Needs a look",
+      "down": "Down",
+      "unknown": "Not read yet"
+    },
+    "no_token": "No metrics token",
+    "version": "Version",
+    "behind": "behind",
+    "channel": {
+      "stable": "stable",
+      "beta": "beta"
+    },
+    "figures": "Figures",
+    "services": "Services up: {up} of {total}",
+    "orders": "Orders in 24 h: {n}",
+    "alerts": "Alerts: {critical} critical, {warning} warnings",
+    "license_days": "License: {n} day left | License: {n} days left",
+    "backup": "Newest backup: {n} hour ago | Newest backup: {n} hours ago",
+    "license": "License",
+    "make_license": "Make the Hosted license",
+    "actions": "Actions",
+    "check": "Read now",
+    "edit": "Change",
+    "delete": "Remove",
+    "delete_confirm": "Remove {domain} from the register? The store itself keeps running.",
+    "registration": "Registration code",
+    "registration_help": "The line tools/hosted printed (bobres-hosted:v1:…). Without one, fill the fields below.",
+    "customer": "Customer",
+    "domain": "Domain",
+    "channel_label": "Update channel",
+    "license_id": "License id",
+    "token": "Metrics token",
+    "token_help": "The store's /metrics token (on the store: sudo bobres admin metrics-token generate).",
+    "token_kept": "A token is kept. Type a new one to replace it.",
+    "new_token": "New metrics token",
+    "clear_token": "Forget the token (the store is no longer read)",
+    "notes": "Notes",
+    "added": "Store registered",
+    "saved": "Saved",
+    "save": "Save",
+    "version_installed": "Version installed",
+    "license_help": "A pro license for this store, in the license server, with the customer and the domain in its name. Its key is shown once: pass it to tools/hosted with --license-key-file, or activate it on the store.",
+    "key_once": "The activation key, shown once:",
+    "key_next": "Save it in a file only you can read and run tools/hosted with --license-key-file, or on the store: sudo bobres license activate.",
+    "done": "Done"
   },
   "announce": {
     "button": "Announce",

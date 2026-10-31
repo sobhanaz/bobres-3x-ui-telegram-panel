@@ -278,7 +278,7 @@ export interface AuditItem {
 export interface SettingItem {
   key: string
   group: string
-  kind: 'text' | 'int' | 'bool' | 'enum' | 'tz' | 'time' | 'url' | 'channel' | 'color' | 'list'
+  kind: 'text' | 'int' | 'bool' | 'enum' | 'tz' | 'time' | 'url' | 'channel' | 'color' | 'list' | 'langs'
   value: string
   default: string
   options: string[]
@@ -660,7 +660,7 @@ export interface BroadcastRecipientItem {
  * back: has_token only says one is stored. */
 export interface ServerItem {
   id: string
-  /** the panel software: xui | marzban; absent from older cores (xui) */
+  /** the panel software: xui | marzban | sui | hiddify; absent from older cores (xui) */
   kind?: string
   name: string
   base_url: string

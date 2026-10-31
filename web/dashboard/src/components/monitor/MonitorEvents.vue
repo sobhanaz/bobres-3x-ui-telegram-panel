@@ -6,7 +6,7 @@ import Message from 'primevue/message'
 import SelectButton from 'primevue/selectbutton'
 import Skeleton from 'primevue/skeleton'
 import Tag from 'primevue/tag'
-import { isolate } from '../../format'
+import { isolate, listSeparator } from '../../format'
 import { alertStateOf, eventTitle, levelOf, levelSeverity, repeatOf, type EventItem, type EventLevel, type EventsReply, type Words } from '../../monitor'
 import { useFmt } from './feed'
 
@@ -46,7 +46,7 @@ const pick = (v: unknown) => {
     <Message v-if="failed" severity="warn" icon="pi pi-exclamation-triangle" :closable="false" class="events-failed">{{ t('monitor.events.load_error') }}</Message>
     <Message v-if="events && !events.logs_visible" severity="info" icon="pi pi-lock" :closable="false" class="owner-only">{{ t('monitor.events.owner_only') }}</Message>
     <Message v-if="events && events.unreachable.length" severity="warn" icon="pi pi-exclamation-triangle" :closable="false" class="unreachable">
-      {{ t('monitor.events.unreachable', { list: events.unreachable.map((s) => (te('system.service.' + s) ? t('system.service.' + s) : s)).join(lang === 'fa' ? '، ' : ', ') }) }}
+      {{ t('monitor.events.unreachable', { list: events.unreachable.map((s) => (te('system.service.' + s) ? t('system.service.' + s) : s)).join(listSeparator(lang)) }) }}
     </Message>
 
     <Card class="events-card">

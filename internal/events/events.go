@@ -220,6 +220,8 @@ const (
 	// CreditWheelPrize: the customer won a prize on the daily wheel. They spun in the bot or the Mini App, which answered with the prize and the new
 	// balance in the same place, so the notifier sends no second message.
 	CreditWheelPrize = "wheel_prize"
+	// CreditAffiliate: an affiliate's commission on the first license of a buyer they brought (the owner's own store; the buyer is never named).
+	CreditAffiliate = "affiliate"
 )
 
 // WalletCreditedEvent: money was added to a user's wallet.

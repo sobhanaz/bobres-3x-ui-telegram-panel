@@ -12,9 +12,11 @@ import (
 	"unicode/utf8"
 
 	provisionerv1 "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/provisioner/v1"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/hiddify"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/marzban"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/provisioner/adapter"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/provisioner/store"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/sui"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/xui"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -37,7 +39,8 @@ func serverProto(in *store.ServerInfo) *provisionerv1.XUIServer {
 		Id: in.ID, Name: in.Name, BaseUrl: in.BaseURL, PanelVersion: in.PanelVersion, Enabled: in.Enabled,
 		SubBaseUrl: in.SubBaseURL, AllowPrivate: in.AllowPrivate, Weight: in.Weight, Managed: in.Managed,
 		HasToken: in.HasToken, Clients: in.Clients, Kind: in.Kind, MaxClients: in.MaxClients,
-		VersionUntested: in.Kind != store.KindMarzban && adapter.Untested(in.PanelVersion),
+		// The tested range is 3x-ui's; the versions tested of the other kinds are in the docs.
+		VersionUntested: (in.Kind == store.KindXUI || in.Kind == "") && adapter.Untested(in.PanelVersion),
 	}
 	if in.CheckedAt != nil {
 		p.CheckedAt = in.CheckedAt.Unix()
@@ -72,7 +75,7 @@ func (s *Server) ListServers(ctx context.Context, _ *provisionerv1.ListServersRe
 	return out, nil
 }
 
-// AddServer registers a new panel, 3x-ui or Marzban (token encrypted at rest). The
+// AddServer registers a new panel, 3x-ui, Marzban, S-UI or Hiddify (token encrypted at rest). The
 // connection is tested first unless skip_check. It is saved switched on
 // unless the request says enabled=false (unset is on, for older callers).
 func (s *Server) AddServer(ctx context.Context, req *provisionerv1.AddServerRequest) (*provisionerv1.XUIServer, error) {
@@ -362,17 +365,25 @@ func panelDetail(err error) string {
 	var (
 		ae     *xui.APIError
 		me     *marzban.APIError
+		se     *sui.APIError
+		he     *hiddify.APIError
 		detail string
 	)
 	switch {
 	case policyRefusal(err):
 		detail = err.Error()
-	case xui.IsUnauthorized(err):
+	case xui.IsUnauthorized(err), sui.IsUnauthorized(err):
 		detail = "the panel refused the API token"
 	case marzban.IsUnauthorized(err):
 		detail = "the panel refused the admin username or password"
+	case hiddify.IsUnauthorized(err):
+		detail = "the panel refused the API key (the admin's UUID)"
 	case errors.As(err, &me):
 		detail = me.Error()
+	case errors.As(err, &se):
+		detail = se.Error()
+	case errors.As(err, &he):
+		detail = he.Error()
 	case errors.Is(err, context.DeadlineExceeded):
 		detail = "the panel did not answer in time"
 	case errors.As(err, &ae):

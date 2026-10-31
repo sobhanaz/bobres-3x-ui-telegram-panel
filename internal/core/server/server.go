@@ -371,7 +371,8 @@ func (s *Server) GetWallet(ctx context.Context, req *corev1.GetWalletRequest) (*
 	m := walletToProto(w)
 	if w.Currency == domain.WalletCurrency {
 		// One wallet, in Toman: its equivalent in USDT and the rate it is worked out at, always beside it.
-		m.UsdtEquivalent, m.UsdtRate = s.dom.UsdtEquivalent(ctx, w.Balance), s.dom.UsdtBaseRate(ctx)
+		rate := s.dom.UsdtBaseRate(ctx)
+		m.UsdtEquivalent, m.UsdtRate = domain.UsdtEquivalentAt(w.Balance, rate), rate
 	}
 	return m, nil
 }

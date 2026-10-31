@@ -48,13 +48,13 @@ Every change is written to an append-only audit log. Sensitive actions, such as 
 | | Resellers | Tiers, prices, credit limits, settlements |
 | Setup | Branding & texts | Name, logo, colors, every bot text, FAQ and tutorials, your Terms and Privacy pages |
 | | Settings | Time zone, maintenance mode, required channels and groups, notifications, limits, bulk purchase, cashback, reseller targets, the daily wheel (with its report), daily sales summary |
-| | Panel servers | Your 3x-ui and Marzban panels. See [Panels](Panels) |
+| | Panel servers | Your 3x-ui, Marzban, S-UI and Hiddify panels. See [Panels](Panels) |
 | | Payment gateways | Owner only. See [Payments](Payments) |
 | Administration | Staff | Who may use the dashboard, roles, sessions |
 | | System | Health and version of every service, updates, backups, HTTPS, logs, license |
 | | Audit log | Every staff change, searchable and exportable |
 
-Two more sections, **BOBRES licenses** and **Digital accounts**, belong to the vendor's own store and are hidden on a normal install. See [Digital Accounts](Digital-Accounts).
+Four more sections, **BOBRES licenses**, **Digital accounts**, **Affiliates** and **Hosted stores**, belong to the vendor's own store and are hidden on a normal install. See [Digital Accounts](Digital-Accounts). **Affiliates** is the affiliate program of the license sales: people who bring a new license buyer get 20% (or the owner's percent) of that buyer's first payment in their wallet, a refund within 30 days takes it back, and payouts made by hand are recorded there. **Hosted stores** is the register of the stores the vendor runs for customers (installed with `tools/hosted`), with each store's health read from its metrics. Both are described in [docs/18](https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/blob/main/docs/18-hosted-and-affiliate-plans.md).
 
 ## Announcing a new product
 
@@ -62,7 +62,7 @@ Switch on **Settings → Product announcements** first (it is off by default). T
 
 ## A service that is not on the panel
 
-If someone deletes a customer's client (their account) on the 3x-ui or Marzban panel, the customer cannot connect, yet the service still looks active in BOBRES. BOBRES notices it, marks the service **Not on the panel** and stops sending expiry reminders for it. **Overview** shows a **Not on the panel** card with how many there are, and **Services** has an **Only services not on the panel** switch. Open one and press **Make the client again** (owner and admin, with a reason): the same subscription link works again, the used traffic starts from zero on the panel, and the end date and the traffic limit stay as shown. With the switch on, owners and admins can also tick services (the box in the header ticks the whole page) and press **Make again** or **Delete** for all of them with one reason: a bar shows the progress, and a summary says which were done, which were skipped (back on the panel, or deleted meanwhile: nothing is done to them) and which failed, with the reason for each. The bot offers the same under the daily alert (**Manage these services**). On the **Monitoring** tab, a line that repeated shows once with **×N** and the time it first and last came.
+If someone deletes a customer's client (their account) on the panel (3x-ui, Marzban, S-UI or Hiddify), the customer cannot connect, yet the service still looks active in BOBRES. BOBRES notices it, marks the service **Not on the panel** and stops sending expiry reminders for it. **Overview** shows a **Not on the panel** card with how many there are, and **Services** has an **Only services not on the panel** switch. Open one and press **Make the client again** (owner and admin, with a reason): the same subscription link works again, the used traffic starts from zero on the panel, and the end date and the traffic limit stay as shown. With the switch on, owners and admins can also tick services (the box in the header ticks the whole page) and press **Make again** or **Delete** for all of them with one reason: a bar shows the progress, and a summary says which were done, which were skipped (back on the panel, or deleted meanwhile: nothing is done to them) and which failed, with the reason for each. The bot offers the same under the daily alert (**Manage these services**). On the **Monitoring** tab, a line that repeated shows once with **×N** and the time it first and last came.
 
 ## The System page
 
@@ -83,6 +83,8 @@ If someone deletes a customer's client (their account) on the 3x-ui or Marzban p
 If you want your customers to be able to see whether the store works, turn on **Settings > Monitoring > Public status page**. It adds `https://<your domain>/status` (a page, in Persian or, with `?l=en`, English) and `/status.json` (for a monitoring service). They say only "All systems working" or "Some systems are down" and the state of four general parts: Dashboard, Bot, Payments and Panels. No server names, versions or numbers are on them. It is **off by default**; until you turn it on, both addresses answer "not found".
 
 ### Metrics for Prometheus and Grafana
+
+On the server, `sudo bobres admin metrics-token generate` makes the token too (printed once; `status` says whether one is set).
 
 If you already run Prometheus and Grafana, **Settings > Monitoring > Prometheus metrics** lets them read the store's figures at `https://<your domain>/metrics`: which services answer, the queues, paid orders, open alerts, each panel server's services and limit, the license's days left, the newest backup, and the server's CPU, memory and disks. It is **off until the owner makes a token**: press **Make a token**, copy it (it is shown once; BOBRES keeps only a hash) and save it in a file on the Prometheus server. Until then `/metrics` answers 404 to everybody, and with a wrong token 401. **Turn off** brings the 404 back; **Make a new token** ends the old one at once. Nothing about customers is in it. A scrape configuration, alert rules and a Grafana dashboard to import are in the [monitoring runbook](https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/blob/main/docs/runbooks/monitoring.md#prometheus-and-grafana).
 

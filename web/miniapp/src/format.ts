@@ -1,27 +1,55 @@
-// Numbers, money and dates in the customer's language: Persian digits and the
-// Jalali calendar for fa, Latin digits and Gregorian dates for en (the
-// browser's own Intl, no library).
+// Numbers, money and dates in the customer's language (the browser's own
+// Intl, no library): Persian digits and the Jalali calendar for fa,
+// Arabic-Indic digits for ar, Gregorian dates and each language's own
+// separators for en, ar, ru and tr.
 import { plainAmount } from './pay'
 
-export type Lang = 'fa' | 'en'
+/** Lang is a language of the app: Persian and English, and in beta (machine-translated, awaiting a native review) Arabic,
+ * Russian and Turkish. */
+export type Lang = 'fa' | 'en' | 'ar' | 'ru' | 'tr'
 
-const numberLocale = (lang: Lang) => (lang === 'fa' ? 'fa-IR' : 'en-US')
+export const LANGS: readonly Lang[] = ['fa', 'en', 'ar', 'ru', 'tr']
+
+/** isLang tells a language of the app from any other string. */
+export function isLang(v: unknown): v is Lang {
+  return typeof v === 'string' && (LANGS as readonly string[]).includes(v)
+}
+
+/** rtl: the language is written right to left (Persian, Arabic). */
+export const rtl = (lang: Lang): boolean => lang === 'fa' || lang === 'ar'
+
+const numberLocales: Record<Lang, string> = { fa: 'fa-IR', en: 'en-US', ar: 'ar-u-nu-arab', ru: 'ru-RU', tr: 'tr-TR' }
+const dateLocales: Record<Lang, string> = { fa: 'fa-IR-u-ca-persian', en: 'en-GB', ar: 'ar-u-ca-gregory-nu-arab', ru: 'ru-RU', tr: 'tr-TR' }
+
+/** numberLocale is the Intl locale of the language's numbers. */
+export const numberLocale = (lang: Lang): string => numberLocales[lang] ?? 'en-US'
 
 export function num(n: number, lang: Lang): string {
   return new Intl.NumberFormat(numberLocale(lang)).format(n)
 }
 
+// A name with forms per plural category ("one|few|many|other") takes the one its amount needs.
 const names: Record<string, Record<Lang, string>> = {
-  IRT: { fa: 'تومان', en: 'Toman' },
-  USDT: { fa: 'تتر', en: 'USDT' },
-  TON: { fa: 'تون', en: 'TON' },
+  IRT: { fa: 'تومان', en: 'Toman', ar: 'تومان', ru: 'томан|томана|томанов|томана', tr: 'Toman' },
+  USDT: { fa: 'تتر', en: 'USDT', ar: 'USDT', ru: 'USDT', tr: 'USDT' },
+  TON: { fa: 'تون', en: 'TON', ar: 'TON', ru: 'TON', tr: 'TON' },
+}
+const ruCategories = ['one', 'few', 'many', 'other']
+
+function currencyName(currency: string, lang: Lang, value: number): string {
+  const name = names[currency]?.[lang] ?? currency
+  if (!name.includes('|')) return name
+  const forms = name.split('|')
+  const i = ruCategories.indexOf(new Intl.PluralRules(numberLocale(lang)).select(Math.abs(value)))
+  return forms[i >= 0 ? i : forms.length - 1]
 }
 
 /** money writes an amount in minor units in its currency (Toman has none; USDT has 6; TON has 9). */
 export function money(amount: number, currency: string, scale: number, lang: Lang): string {
   const value = amount / 10 ** scale
-  const formatted = new Intl.NumberFormat(numberLocale(lang), { maximumFractionDigits: Math.min(scale, 2) }).format(value)
-  return `${formatted} ${names[currency]?.[lang] ?? currency}`
+  const digits = Math.min(scale, 2)
+  const formatted = new Intl.NumberFormat(numberLocale(lang), { maximumFractionDigits: digits }).format(value)
+  return `${formatted} ${currencyName(currency, lang, Number(value.toFixed(digits)))}`
 }
 
 /**
@@ -29,12 +57,15 @@ export function money(amount: number, currency: string, scale: number, lang: Lan
  * to send ("2.500731 USDT") is typed or pasted into a wallet, and a payment of a cent less is not matched to the order.
  */
 export function exactMoney(amount: number, currency: string, scale: number, lang: Lang): string {
-  return `${plainAmount(amount, scale)} ${names[currency]?.[lang] ?? currency}`
+  return `${plainAmount(amount, scale)} ${currencyName(currency, lang, amount / 10 ** scale)}`
 }
 
 const byteUnits: Record<Lang, [string, string, string]> = {
   fa: ['مگابایت', 'گیگابایت', 'ترابایت'],
   en: ['MB', 'GB', 'TB'],
+  ar: ['ميغابايت', 'غيغابايت', 'تيرابايت'],
+  ru: ['МБ', 'ГБ', 'ТБ'],
+  tr: ['MB', 'GB', 'TB'],
 }
 
 /** bytes shows a traffic amount in MB, GB or TB (1 GB = 2^30 bytes, as the bot counts). */
@@ -47,12 +78,12 @@ export function bytes(n: number, lang: Lang): string {
 }
 
 export function date(unix: number, lang: Lang): string {
-  const locale = lang === 'fa' ? 'fa-IR-u-ca-persian' : 'en-GB'
+  const locale = dateLocales[lang] ?? 'en-GB'
   return new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(new Date(unix * 1000))
 }
 
 export function dateTime(unix: number, lang: Lang): string {
-  const locale = lang === 'fa' ? 'fa-IR-u-ca-persian' : 'en-GB'
+  const locale = dateLocales[lang] ?? 'en-GB'
   return new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(unix * 1000))
 }
 

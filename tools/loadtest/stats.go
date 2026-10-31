@@ -106,9 +106,11 @@ func (r *recorder) rows(elapsed time.Duration) []row {
 type result struct {
 	Users    int
 	Duration time.Duration // how long new journeys were started
+	Think    time.Duration // the pause between a customer's updates
 	Elapsed  time.Duration // until the last journey ended
 	Rec      *recorder
-	Notes    []string // facts about the stack, printed under the table
+	Notes    []string       // facts about the stack, printed under the table
+	Facts    map[string]any // the same facts as numbers, for -json
 }
 
 // journeyName is the row of whole journeys, kept apart from the calls.

@@ -437,11 +437,12 @@ func (c *Catalog) Infos() []TextInfo {
 // Default is the built-in text of key in lang ("" for an unknown key).
 func (c *Catalog) Default(lang, key string) string { return c.base[lang][key] }
 
-// placeholders lists the distinct {names} of a text, sorted.
+// placeholders lists the distinct {names} of a text, sorted; a plural
+// selector {name|…} uses its name too.
 func placeholders(s string) []string {
 	seen := map[string]bool{}
 	var out []string
-	for _, m := range placeholderRe.FindAllStringSubmatch(s, -1) {
+	for _, m := range append(placeholderRe.FindAllStringSubmatch(s, -1), pluralRe.FindAllStringSubmatch(s, -1)...) {
 		if !seen[m[1]] {
 			seen[m[1]] = true
 			out = append(out, m[1])

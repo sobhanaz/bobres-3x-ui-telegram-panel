@@ -1,4 +1,4 @@
-// The dashboard's 20 sections (docs/04-dashboard.md), the permission each
+// The dashboard's 23 sections (docs/04-dashboard.md), the permission each
 // needs, and the milestone that builds it. The menu shows a section only to
 // staff whose role grants its permission.
 
@@ -28,6 +28,8 @@ export const sections: Section[] = [
   { key: 'giftcodes', path: 'gift-codes', icon: 'pi pi-gift', perm: 'discounts.write', group: 'sales', milestone: 8 },
   { key: 'licenses', path: 'licenses', icon: 'pi pi-key', perm: 'license.write', needs: 'private.features', group: 'sales', milestone: 8 },
   { key: 'supplier', path: 'supplier', icon: 'pi pi-shopping-bag', perm: 'gateways.write', needs: 'private.features', group: 'sales', milestone: 8 },
+  { key: 'affiliates', path: 'affiliates', icon: 'pi pi-share-alt', perm: 'license.write', needs: 'private.features', group: 'sales', milestone: 8 },
+  { key: 'hosted', path: 'hosted', icon: 'pi pi-cloud', perm: 'license.write', needs: 'private.features', group: 'admin', milestone: 8 },
   { key: 'resellers', path: 'resellers', icon: 'pi pi-sitemap', perm: 'resellers.write', group: 'sales', milestone: 5 },
   { key: 'branding', path: 'branding', icon: 'pi pi-palette', perm: 'branding.write', group: 'setup', milestone: 3 },
   { key: 'settings', path: 'settings', icon: 'pi pi-cog', perm: 'settings.write', group: 'setup', milestone: 3 },

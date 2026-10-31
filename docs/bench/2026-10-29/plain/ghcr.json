@@ -1,0 +1,72 @@
+{
+  "kind": "ghcr",
+  "version": "0.19.0",
+  "at": "2026-10-30T15:23:07Z",
+  "images": [
+    {
+      "service": "core",
+      "ref": "ghcr.io/sobhanaz/bobres-core:0.19.0",
+      "digest": "sha256:e7a7d8c410065568d7bb1315417b811b5dec50063c8a33bb167bcac1d34865aa",
+      "compressed_bytes": {
+        "linux/amd64": 13955958,
+        "linux/arm64": 12776141
+      },
+      "layers": {
+        "linux/amd64": 8,
+        "linux/arm64": 8
+      }
+    },
+    {
+      "service": "bot",
+      "ref": "ghcr.io/sobhanaz/bobres-bot:0.19.0",
+      "digest": "sha256:ae8b187870be13e2cb6067bebe3708fa05f52e37ca2d57601a51c8edfcd9b2fb",
+      "compressed_bytes": {
+        "linux/amd64": 8843825,
+        "linux/arm64": 7929777
+      },
+      "layers": {
+        "linux/amd64": 8,
+        "linux/arm64": 8
+      }
+    },
+    {
+      "service": "payments",
+      "ref": "ghcr.io/sobhanaz/bobres-payments:0.19.0",
+      "digest": "sha256:b35a06821e59603caf33c5f2665400f260b19a28badcb5ebddd8a137fa15a6ad",
+      "compressed_bytes": {
+        "linux/amd64": 7136734,
+        "linux/arm64": 6525820
+      },
+      "layers": {
+        "linux/amd64": 8,
+        "linux/arm64": 8
+      }
+    },
+    {
+      "service": "provisioner",
+      "ref": "ghcr.io/sobhanaz/bobres-provisioner:0.19.0",
+      "digest": "sha256:49b21699f4e8c49edf40df6836dd180ddd88e95a0993d2ce30587fc3c69a2f25",
+      "compressed_bytes": {
+        "linux/amd64": 7040144,
+        "linux/arm64": 6433347
+      },
+      "layers": {
+        "linux/amd64": 8,
+        "linux/arm64": 8
+      }
+    },
+    {
+      "service": "backup",
+      "ref": "ghcr.io/sobhanaz/bobres-backup:0.19.0",
+      "digest": "sha256:7b659fc7d38f6e4356336a480bf1ae4278911b370935b401264c700335579baf",
+      "compressed_bytes": {
+        "linux/amd64": 121415993,
+        "linux/arm64": 118761968
+      },
+      "layers": {
+        "linux/amd64": 13,
+        "linux/arm64": 13
+      }
+    }
+  ]
+}

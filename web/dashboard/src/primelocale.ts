@@ -1,5 +1,5 @@
 import { defaultOptions, type PrimeVueLocaleOptions } from 'primevue/config'
-import type { Lang } from './format'
+import { gregorianLocale, type Lang } from './format'
 
 // PrimeVue's own words (dialog buttons, empty lists, screen-reader labels) in
 // the dashboard's language. English is PrimeVue's built-in default.
@@ -125,6 +125,41 @@ const fa: PrimeVueLocaleOptions = {
   },
 }
 
+// The beta languages: the words of the dialogs and lists, and day and month
+// names from the browser (machine-translated like the rest of their texts).
+const betaWords: Record<'ar' | 'ru' | 'tr', Partial<PrimeVueLocaleOptions>> = {
+  ar: {
+    accept: 'نعم', reject: 'لا', cancel: 'إلغاء', clear: 'مسح', apply: 'تطبيق', choose: 'اختيار', upload: 'رفع', today: 'اليوم',
+    emptyMessage: 'لا توجد خيارات', emptyFilterMessage: 'لا توجد نتائج', emptySearchMessage: 'لا توجد نتائج', noFilter: 'بدون فلتر',
+  },
+  ru: {
+    accept: 'Да', reject: 'Нет', cancel: 'Отмена', clear: 'Очистить', apply: 'Применить', choose: 'Выбрать', upload: 'Загрузить', today: 'Сегодня',
+    emptyMessage: 'Нет вариантов', emptyFilterMessage: 'Ничего не найдено', emptySearchMessage: 'Ничего не найдено', noFilter: 'Без фильтра',
+  },
+  tr: {
+    accept: 'Evet', reject: 'Hayır', cancel: 'İptal', clear: 'Temizle', apply: 'Uygula', choose: 'Seç', upload: 'Yükle', today: 'Bugün',
+    emptyMessage: 'Seçenek yok', emptyFilterMessage: 'Sonuç bulunamadı', emptySearchMessage: 'Sonuç bulunamadı', noFilter: 'Filtre yok',
+  },
+}
+
+const betaLocales = new Map<Lang, PrimeVueLocaleOptions>()
+
+function betaLocale(lang: 'ar' | 'ru' | 'tr'): PrimeVueLocaleOptions {
+  let l = betaLocales.get(lang)
+  if (!l) {
+    const loc = gregorianLocale(lang)
+    const days = (weekday: 'long' | 'short' | 'narrow') =>
+      Array.from({ length: 7 }, (_, i) => new Intl.DateTimeFormat(loc, { weekday, timeZone: 'UTC' }).format(new Date(Date.UTC(2026, 9, 18 + i))))
+    const months = (month: 'long' | 'short') =>
+      Array.from({ length: 12 }, (_, i) => new Intl.DateTimeFormat(loc, { month, timeZone: 'UTC' }).format(new Date(Date.UTC(2026, i, 1))))
+    l = { ...en, ...betaWords[lang], dayNames: days('long'), dayNamesShort: days('short'), dayNamesMin: days('narrow'), monthNames: months('long'), monthNamesShort: months('short') }
+    betaLocales.set(lang, l)
+  }
+  return l
+}
+
 export function primeLocale(lang: Lang): PrimeVueLocaleOptions {
-  return lang === 'fa' ? fa : en
+  if (lang === 'fa') return fa
+  if (lang === 'ar' || lang === 'ru' || lang === 'tr') return betaLocale(lang)
+  return en
 }

@@ -35,7 +35,13 @@ const (
 	// KindList is a list of rows kept as compact JSON text (the reseller targets' tiers, the wheel's prizes): the dashboard has an editor for it,
 	// the bot's admin menu leaves it out.
 	KindList = "list"
+	// KindLangs is a list of language codes, the first being the default (languages.enabled): the dashboard has an editor for it, the bot's
+	// admin menu leaves it out.
+	KindLangs = "langs"
 )
+
+// SettingLanguages are the languages customers may pick in the bot and the Mini App, the store's default first (i18n.ParseEnabled).
+const SettingLanguages = "languages.enabled"
 
 // Dashboard permissions a setting needs (the web package's names).
 const (
@@ -94,6 +100,8 @@ type SettingSpec struct {
 var SettingSpecs = []SettingSpec{
 	{Key: "general.timezone", Group: "general", Kind: KindTZ, Perm: permSettings,
 		Help: "time zone of the dates the bot shows, e.g. Asia/Tehran (empty = the server's BOBRES_TIMEZONE)"},
+	{Key: SettingLanguages, Group: "general", Kind: KindLangs, Perm: permSettings, Default: i18n.DefaultEnabled,
+		Help: "the languages customers may pick in the bot and the Mini App, separated by commas, the store's default first: fa, en, and in beta (machine-translated, awaiting a native review) ar, ru, tr. A customer whose Telegram language is one of them gets it, anyone else the default; a language taken off moves its customers to the default (default fa,en)"},
 	{Key: "general.bot_profile", Group: "general", Kind: KindBool, Perm: permSettings, Default: "true",
 		Help: "true = the bot keeps its Telegram profile (menu commands, description, short description) in Persian and English from its texts, and its profile photo from the Branding page; false = the bot takes back its Persian and English texts and the staff menus (the photo stays), and you set them in @BotFather"},
 	{Key: "branding.sub_page.enabled", Group: "general", Kind: KindBool, Perm: permBranding, Default: "true",
@@ -132,6 +140,13 @@ var SettingSpecs = []SettingSpec{
 		Help: "how the bot lists plans: table = each plan is a row of two buttons (its name and its price) under a header row; list = one button per plan"},
 	{Key: SettingVendorEnabled, Group: "shop", Kind: KindBool, Perm: permSettings, Default: "false",
 		Help: "true = the bot sells BOBRES licenses (the owner's own store only: it needs the license server's address and admin key, set in the dashboard); false = it does not"},
+	// The affiliate program of the vendor's own store (affiliates.go): edited on the dashboard's Affiliates page, not the Settings page.
+	{Key: SettingAffiliateEnabled, Group: "affiliate", Kind: KindBool, Perm: permSettings, Default: "false",
+		Help: "true = customers get an affiliate link (/affiliate in the bot) and earn a commission on the first license a buyer they brought pays for (the owner's own store, while licenses are sold); false = no new affiliates, links or commissions (what was paid stays)"},
+	{Key: SettingAffiliatePercent, Group: "affiliate", Kind: KindInt, Perm: permSettings, Default: strconv.Itoa(DefaultAffiliatePercent), Min: 1, Max: 100,
+		Help: "percent of a referred buyer's first license payment credited to the affiliate's wallet (an affiliate can have a percent of their own)"},
+	{Key: SettingAffiliateMinPayout, Group: "affiliate", Kind: KindInt, Perm: permSettings, Default: "0", Min: 0, Max: MaxGrowthAmount,
+		Help: "the least, in Toman, the owner records as one payout to an affiliate (0 = no minimum)"},
 	{Key: SettingSupplierEnabled, Group: "shop", Kind: KindBool, Perm: permSettings, Default: "false",
 		Help: "true = the bot has a Digital accounts button: the owner's own store resells a supplier's accounts, paid from the wallet in Toman (it needs the supplier's API key and the products switched on in the dashboard); false = no button, and core refuses the purchase"},
 	{Key: SettingBulkEnabled, Group: "shop", Kind: KindBool, Perm: permSettings, Default: "true",
@@ -533,8 +548,32 @@ func NormalizeSetting(key, value string) (string, error) {
 			return bad(err.Error())
 		}
 		value = list
+	case KindLangs:
+		langs, err := normalizeLangs(value)
+		if err != nil {
+			return bad(err.Error())
+		}
+		value = langs
 	}
 	return value, nil
+}
+
+// normalizeLangs checks a list of language codes (KindLangs) and writes it the way it is stored: "fa,en,ru", the default first.
+func normalizeLangs(value string) (string, error) {
+	var out []string
+	for _, f := range strings.FieldsFunc(strings.ToLower(value), func(r rune) bool { return r == ',' || r == ' ' || r == ';' || r == '،' }) {
+		switch {
+		case !slices.Contains(i18n.All, f):
+			return "", fmt.Errorf("unknown language %q: use %s", f, strings.Join(i18n.All, ", "))
+		case slices.Contains(out, f):
+			return "", fmt.Errorf("%s is listed twice", f)
+		}
+		out = append(out, f)
+	}
+	if len(out) == 0 {
+		return "", errors.New("at least one language")
+	}
+	return strings.Join(out, ","), nil
 }
 
 // normalizeList checks a list setting (KindList) and writes it the way it is stored: compact JSON, in order, "" for an empty list.

@@ -128,6 +128,18 @@ a failure that may pass (the database, a balance that moved) keeps it until it e
 buyer, a license that ended) forgets it. A refused or refunded order clears the intent, so nothing is bought twice or
 against the buyer's will.
 
+**Refunds, affiliates and hosted stores.** The owner's store adds three things on top of the sales, all in core and the dashboard (the
+license server is unchanged; details in [18-hosted-and-affiliate-plans.md](18-hosted-and-affiliate-plans.md)):
+
+- **Refund** on a sold license (Licenses page): the license is revoked here (`revoke`, the same ref as Revoke, so a retry is one call), then
+  one transaction credits the buyer what they paid (`license_refund`), marks the order `refunded` and the license revoked, and takes back an
+  affiliate's commission when within 30 days. Before this, a delivered license could only be revoked; the money was the owner's to return.
+- **The affiliate program** (dashboard > Affiliates, off by default): a customer's link `?start=aff_<code>` recorded before their first
+  license puts the affiliate on that first order (`vendor_orders.affiliate_id`); when the order is done the affiliate's wallet gets 20% (or
+  the owner's percent) of what the buyer paid, once per buyer.
+- **The "Hosted" product** (dashboard > Hosted stores): a pro license made through this API for a store the owner runs for a customer,
+  named `Hosted: <customer> (<domain>)` and linked to the store in the register. No new tier: installs refuse a tier they do not know.
+
 ## The signed admin API (optional, off by default)
 
 `licensesrv key ...` is the admin tool. For a program that sells licenses (the owner's own BOBRES store), the same

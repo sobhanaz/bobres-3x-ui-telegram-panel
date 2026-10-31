@@ -196,6 +196,32 @@ func TestAdminOwnersRefusals(t *testing.T) {
 	}
 }
 
+// bobres admin metrics-token generate|status runs core's metrics-token command in the running core container.
+func TestAdminMetricsToken(t *testing.T) {
+	f := &fakeOps{ps: healthyPS}
+	o, _, errOut := testOps("", f)
+	dir := installDir(t)
+	for _, sub := range []string{"generate", "status"} {
+		f.stream = nil
+		if code := o.adminCmd([]string{"metrics-token", sub, "--dir", dir}); code != 0 {
+			t.Fatalf("admin metrics-token %s: %d %s", sub, code, errOut)
+		}
+		if got := strings.Join(f.stream[0], " "); !strings.HasSuffix(got, "exec -T core /app metrics-token "+sub) {
+			t.Fatalf("compose args for %s: %s", sub, got)
+		}
+	}
+	f.stream = nil
+	for _, bad := range [][]string{{"metrics-token"}, {"metrics-token", "clear"}, {"metrics-token", "generate", "now"}} {
+		errOut.Reset()
+		if code := o.adminCmd(append(bad, "--dir", dir)); code != 2 || !strings.Contains(errOut.String(), "bobres admin metrics-token generate|status") {
+			t.Errorf("%v: %d %q", bad, code, errOut)
+		}
+	}
+	if len(f.stream) != 0 {
+		t.Fatalf("a refused command reached core: %v", f.stream)
+	}
+}
+
 // bobres admin approval status|off runs core's approval command in the running core container.
 func TestAdminApproval(t *testing.T) {
 	f := &fakeOps{ps: healthyPS}

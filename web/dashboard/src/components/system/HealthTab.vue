@@ -9,7 +9,7 @@ import Message from 'primevue/message'
 import Tag from 'primevue/tag'
 import { api } from '../../api'
 import { errorText } from '../../errors'
-import { dateTime, isolate, num, type Lang } from '../../format'
+import { dateTime, isolate, listSeparator, num, type Lang } from '../../format'
 import { overviewGatewaySeverity, overviewGatewayState } from '../../gateways'
 import { healthSeverity } from '../../servers'
 import {
@@ -66,7 +66,7 @@ const others = computed(() => (reply.value ? mismatched(reply.value) : []))
 const otherNames = computed(() => new Set(others.value.map((s) => s.name)))
 const label = (prefix: string, key: string) => (te(prefix + key) ? t(prefix + key) : key)
 const serviceName = (s: ServiceHealth) => label('system.service.', s.name)
-const sep = computed(() => (lang.value === 'fa' ? '، ' : ', '))
+const sep = computed(() => listSeparator(lang.value))
 const mismatchText = computed(() =>
   t('system.version_mismatch', {
     version: isolate(reply.value?.version || t('app.unknown')),

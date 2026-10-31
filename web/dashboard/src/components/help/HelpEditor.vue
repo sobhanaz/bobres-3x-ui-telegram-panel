@@ -14,7 +14,7 @@ import HelpPreview from './HelpPreview.vue'
 import HelpProblems from './HelpProblems.vue'
 import { api, ApiError } from '../../api'
 import { errorText } from '../../errors'
-import { isolate, num, type Lang } from '../../format'
+import { isolate, num, type ContentLang, type Lang } from '../../format'
 import { textLength } from '../../branding'
 import {
   HELP_LANGS,
@@ -124,10 +124,10 @@ const canSave = computed(() => dirty.value && !saving.value && !checking.value &
 
 const titleLimit = computed(() => titleMax(props.kind, props.limits))
 const k = (name: string) => t(`help.${props.kind}.${name}`)
-const stateLabel = (l: Lang) => t('help.edit.state_' + langState(draft, l))
+const stateLabel = (l: ContentLang) => t('help.edit.state_' + langState(draft, l))
 const stateSeverity = (s: LangState) => (s === 'complete' ? 'success' : s === 'half' ? 'warn' : 'secondary')
-const titleLen = (l: Lang) => tidyLine(draft.title[l]).length
-const bodyLen = (l: Lang) => textLength(draft.body[l])
+const titleLen = (l: ContentLang) => tidyLine(draft.title[l]).length
+const bodyLen = (l: ContentLang) => textLength(draft.body[l])
 const markup = {
   tags: isolate('<b> <i> <u> <s> <tg-spoiler> <code> <pre> <blockquote> <a href="https://…">'),
   chars: isolate('& < >'),

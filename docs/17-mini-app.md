@@ -56,6 +56,17 @@ Mini App   --initData-->  core  --POST /internal/miniapp/verify (Bearer core tok
 - A banned customer gets 403 `banned` and nothing else. A customer outside the store's required channel gets 403
   `join_required` and no session ([The required channel](#the-required-channel)). A user that is gone ends the session.
 
+## Languages
+
+The app speaks the languages the store enabled (`languages.enabled`, default `fa,en`; Arabic, Russian and Turkish are
+**beta**, machine-translated and awaiting a native review). A first visit creates the account in the customer's
+Telegram language when it is enabled, else in the store's default (the first of the list). `/me` answers
+`languages` (the enabled ones, default first) and the customer's `user.language` as the app should use it: their own
+while it is enabled, else the default. Arabic is right to left with Arabic-Indic digits; the beta languages take
+Gregorian dates. The texts of the beta languages are in `src/locales/<lang>.json` (a section may carry its own `ar`,
+`ru`, `tr` beside `fa` and `en`); a counting text uses the bot's plural selector `{n|# день|# дня|# дней}`. Plan names
+and the store's other content are in Persian and English: a reader of a beta language gets the English name.
+
 ## The required channel
 
 When the store makes customers join a channel first (`join.channel` in Settings, Join; `join.link` for a private one),

@@ -168,7 +168,7 @@ func (s *Service) personalize(ctx context.Context, tx pgx.Tx, b *store.Broadcast
 		lang := i18n.Normalize(c.Language)
 		text := b.Texts[lang]
 		if text == "" { // a language the message has no text in: the other one, in its own words
-			for _, l := range i18n.Languages {
+			for _, l := range i18n.ContentOrder(lang) {
 				if b.Texts[l] != "" {
 					text, lang = b.Texts[l], l
 					break

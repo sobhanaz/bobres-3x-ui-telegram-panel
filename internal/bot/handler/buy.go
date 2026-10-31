@@ -21,7 +21,7 @@ func planName(r *req, p *corev1.Plan) string {
 	if n := names[r.lang]; n != "" {
 		return n
 	}
-	for _, l := range i18n.Languages {
+	for _, l := range i18n.ContentOrder(r.lang) {
 		if n := names[l]; n != "" {
 			return n
 		}

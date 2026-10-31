@@ -115,9 +115,14 @@ func (s *Service) AdminSettingSpecs(ctx context.Context, actorTelegramID int64) 
 		return nil, err
 	}
 	out := make([]AdminSettingView, 0, len(SettingSpecs))
+	private := s.PrivateFeatures(ctx) // the affiliate program is the vendor's own: no other store lists its settings
 	for _, sp := range SettingSpecs {
-		// A list of rows (the tiers of the reseller targets, the wheel's prizes) is edited in the dashboard, not by typing JSON in a chat.
-		if settingChangeable(actor.Role, sp) && sp.Kind != KindList {
+		if sp.Group == "affiliate" && !private {
+			continue
+		}
+		// A list of rows (the tiers of the reseller targets, the wheel's prizes) is edited in the dashboard, not by typing JSON in a chat;
+		// so are the customers' languages (a list with a default and beta ones, which the dashboard explains).
+		if settingChangeable(actor.Role, sp) && sp.Kind != KindList && sp.Kind != KindLangs {
 			out = append(out, AdminSettingView{SettingSpec: sp, Value: values[sp.Key]})
 		}
 	}

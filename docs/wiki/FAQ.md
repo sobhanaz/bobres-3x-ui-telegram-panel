@@ -15,7 +15,7 @@ Yes. Use `--xui-allow-private` and see [Install Options](Install-Options). The i
 No. Two programs cannot poll one bot token. Give BOBRES a bot of its own.
 
 **Which panels work?**
-3x-ui v3.8.5 to v3.10.2 and Marzban 0.8. Marzban 1.0 (beta), S-UI and Hiddify are not supported. See [Panels](Panels).
+3x-ui v3.8.5 to v3.10.2, Marzban 0.8, S-UI 1.6 (tested with v1.6.6) and Hiddify Manager 14 (tested with v14.0.5). Marzban 1.0 (beta) is not supported. See [Panels](Panels).
 
 **Which languages does the bot speak?**
 Persian and English. Arabic, Russian and Turkish are on the [Roadmap](Roadmap).
@@ -65,6 +65,9 @@ It is shown once at the end of the install, and again in `sudo bobres`, under **
 
 **How do I move to a new server?**
 Install on the new server with the same domain and bot token, then restore a backup with its key. See [Updates, Backups, Restore](Updates-Backups-Restore).
+
+**How many customers can one server handle?**
+More than Telegram lets one bot serve. In the load test core finished about 380 complete purchases a second on a laptop, while Telegram allows a bot about 30 messages a second, which is about 4 purchases. The six services use about 120 MB of memory idle and under 200 MB under that load. Deliveries to the panel go one at a time, so a sales burst is delivered a little later, never lost. The numbers are in [docs/21-benchmark.md](https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/blob/main/docs/21-benchmark.md).
 
 **Will customers lose service if BOBRES is down?**
 Active VPN services depend on your panel's host, not on BOBRES. While BOBRES is down nobody can buy or renew.

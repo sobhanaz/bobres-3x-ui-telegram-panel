@@ -5,11 +5,11 @@
 // the length of the whole FAQ, and moving an entry in its list. Nothing here
 // touches the DOM or the API, so it is unit-tested; core stays the judge of
 // what is saved (the markup of a text is checked by core, not here).
-import type { Lang } from './format'
+import type { ContentLang } from './format'
 import { textLength } from './branding'
 import type { HelpButton, HelpDraft, HelpItem, HelpKind, HelpLimits, HelpProblem } from './types'
 
-export const HELP_LANGS: readonly Lang[] = ['fa', 'en']
+export const HELP_LANGS: readonly ContentLang[] = ['fa', 'en']
 export const HELP_KINDS: readonly HelpKind[] = ['faq', 'tutorial']
 
 /** The limits core applies, as of this version: used until core's own arrive. */
@@ -87,7 +87,7 @@ export type LangState = 'empty' | 'half' | 'complete'
 
 /** langState says what a language of a draft has: nothing, a title or a text
  * without the other (core refuses that), or both (a translation customers can read). */
-export function langState(d: Pick<HelpDraft, 'title' | 'body'>, lang: Lang): LangState {
+export function langState(d: Pick<HelpDraft, 'title' | 'body'>, lang: ContentLang): LangState {
   const t = tidyLine(d.title[lang]) !== ''
   const b = d.body[lang].trim() !== ''
   if (t && b) return 'complete'
@@ -149,20 +149,20 @@ export function problemsUnder(problems: readonly HelpProblem[], prefix: string):
 /** What the bot shows of an entry to a customer: the text in one language and the buttons. */
 export interface Reading {
   /** the language the text is in: the customer's, or the other when theirs is missing */
-  lang: Lang
+  lang: ContentLang
   title: string
   body: string
   buttons: { label: string; url: string }[]
 }
 
 /** otherLang is the language an entry falls back to. */
-const others = (lang: Lang): Lang[] => HELP_LANGS.filter((l) => l !== lang)
+const others = (lang: ContentLang): ContentLang[] => HELP_LANGS.filter((l) => l !== lang)
 
 /** readIn reads an entry (or a draft of one) as a customer of a language does:
  * their own language when it has a title and a text, else the other; null when
  * neither has both. A button takes the other language's label where its own is
  * missing, and one with no label or an address the bot cannot use is left out. */
-export function readIn(d: Pick<HelpDraft, 'title' | 'body' | 'buttons'>, lang: Lang, limits: HelpLimits = DEFAULT_LIMITS): Reading | null {
+export function readIn(d: Pick<HelpDraft, 'title' | 'body' | 'buttons'>, lang: ContentLang, limits: HelpLimits = DEFAULT_LIMITS): Reading | null {
   for (const l of [lang, ...others(lang)]) {
     const title = tidyLine(d.title[l])
     const body = d.body[l].trim()
@@ -181,7 +181,7 @@ export function readIn(d: Pick<HelpDraft, 'title' | 'body' | 'buttons'>, lang: L
 /** faqSize is what the bot weighs to decide between one message and a list:
  * how many enabled questions customers of a language read and how many units
  * their questions and answers take together (core's rule: FitsOneMessage). */
-export function faqSize(items: readonly HelpItem[], lang: Lang, limits: HelpLimits = DEFAULT_LIMITS): { entries: number; units: number } {
+export function faqSize(items: readonly HelpItem[], lang: ContentLang, limits: HelpLimits = DEFAULT_LIMITS): { entries: number; units: number } {
   let entries = 0
   let total = 0
   for (const it of items) {
@@ -207,7 +207,7 @@ export function move(ids: readonly string[], id: string, by: -1 | 1): string[] {
 
 /** The words of the bot's own buttons around an entry, in each language, as
  * the bot has them by default (the preview cannot know the store's edits). */
-export const BOT_WORDS: Record<Lang, { support: string; back: string; home: string }> = {
+export const BOT_WORDS: Record<ContentLang, { support: string; back: string; home: string }> = {
   fa: { support: '💬 ارسال پیام به پشتیبانی', back: '» بازگشت', home: '🏠 منوی اصلی' },
   en: { support: '💬 Send a message to support', back: '« Back', home: '🏠 Main menu' },
 }

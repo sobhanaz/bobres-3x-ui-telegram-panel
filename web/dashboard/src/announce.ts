@@ -1,6 +1,6 @@
 // Helpers for new product announcements (the Announce dialog of the plan, supplier product and license pages): the placeholders, the
 // draft and what is sent, and how core's refusals read. Pure functions (no API, no Vue).
-import type { Lang } from './format'
+import type { ContentLang } from './format'
 import type { UserBrief } from './types'
 
 /** The kinds of product that can be announced. */
@@ -11,7 +11,7 @@ export const ANNOUNCE_PLACEHOLDERS = ['name', 'kind', 'price', 'days', 'traffic'
 export type AnnouncePlaceholder = (typeof ANNOUNCE_PLACEHOLDERS)[number]
 
 /** The languages a card is written in (every customer gets their own). */
-export const ANNOUNCE_LANGS: readonly Lang[] = ['fa', 'en']
+export const ANNOUNCE_LANGS: readonly ContentLang[] = ['fa', 'en']
 
 /** A product as GET /announcements/draft answers it. */
 export interface AnnounceProduct {
@@ -64,7 +64,7 @@ export interface AnnounceDraftReply {
     enabled: boolean
     channel: string
     channel_langs: 'default' | 'both'
-    default_language: Lang
+    default_language: ContentLang
     daily_max: number
     quiet_start: string
     quiet_end: string
@@ -75,7 +75,7 @@ export interface AnnounceDraftReply {
 
 /** The dialog's state. */
 export interface AnnounceDraft {
-  texts: Record<Lang, string>
+  texts: Record<ContentLang, string>
   channel: boolean
   private: boolean
 }

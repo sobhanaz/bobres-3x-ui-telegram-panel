@@ -52,6 +52,7 @@ var Tables = map[string][]Table{
 		{"core", "vendor_licenses", "id", []string{"key_enc"}},
 		{"core", "supplier_config", "id", []string{"api_key_enc"}},
 		{"core", "supplier_orders", "id", []string{"delivery_enc"}},
+		{"core", "hosted_stores", "id", []string{"metrics_token_enc"}}, // a hosted store's /metrics token (domain/hosted.go)
 	},
 	"payments": {
 		{"payments", "gateway_configs", "provider", []string{"merchant_enc", "proxy_enc", "address_enc", "api_key_enc"}},

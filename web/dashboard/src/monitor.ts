@@ -1,5 +1,5 @@
 import type { Calendar } from './calendar'
-import type { Lang } from './format'
+import { calendarLocale, numberLocale, type Lang } from './format'
 import { ALERT_FALLBACK, alertArgs, alertCount, alertTextKey, fills } from './system'
 
 // The System page's Monitoring tab (docs/04-dashboard.md, "Monitoring API"): what core's
@@ -530,7 +530,7 @@ export const observedShare = (a: Pick<Availability, 'observed_s' | 'window_s'>):
 // ---------------------------------------------------------------- numbers, sizes, durations and times
 
 const SIZE_UNITS = ['byte', 'kilobyte', 'megabyte', 'gigabyte', 'terabyte'] as const
-const intlLocale = (lang: Lang) => (lang === 'fa' ? 'fa-IR' : 'en-US')
+const intlLocale = (lang: Lang) => numberLocale(lang)
 const cache = new Map<string, Intl.NumberFormat | Intl.DateTimeFormat | Intl.ListFormat>()
 function memo<T extends Intl.NumberFormat | Intl.DateTimeFormat | Intl.ListFormat>(key: string, make: () => T): T {
   let v = cache.get(key) as T | undefined
@@ -582,7 +582,7 @@ export function duration(seconds: number, lang: Lang): string {
   return memo(`l|${lang}`, () => new Intl.ListFormat(intlLocale(lang), { type: 'unit', style: 'narrow' })).format(words)
 }
 
-const dateLocale = (lang: Lang, cal: Calendar) => (lang === 'fa' ? 'fa-IR' : 'en-GB') + '-u-ca-' + (cal === 'jalali' ? 'persian' : 'gregory')
+const dateLocale = (lang: Lang, cal: Calendar) => calendarLocale(lang, cal)
 const dateFormat = (lang: Lang, cal: Calendar, opts: Intl.DateTimeFormatOptions) =>
   memo(`d|${lang}|${cal}|${JSON.stringify(opts)}`, () => new Intl.DateTimeFormat(dateLocale(lang, cal), opts))
 

@@ -237,6 +237,7 @@ func (n *Notifier) Handle(ctx context.Context, m eventbus.Message) error {
 			events.CreditCommission:      "wallet.credited_commission",
 			events.CreditSettlement:      "wallet.credited_settlement",
 			events.CreditCashback:        "wallet.credited_cashback",
+			events.CreditAffiliate:       "wallet.credited_affiliate",
 		}[e.Reason]
 		if key == "" {
 			key = "wallet.credited"
@@ -1078,7 +1079,7 @@ func planName(names map[string]string, lang, id string) string {
 	if n := names[lang]; n != "" {
 		return n
 	}
-	for _, l := range i18n.Languages {
+	for _, l := range i18n.ContentOrder(lang) {
 		if n := names[l]; n != "" {
 			return n
 		}
@@ -1170,7 +1171,7 @@ func (n *Notifier) reason(lang, r string) string {
 func (n *Notifier) lang(ctx context.Context, telegramID int64) string {
 	u, err := n.core.GetUser(ctx, &corev1.GetUserRequest{Lookup: &corev1.GetUserRequest_TelegramId{TelegramId: telegramID}})
 	if err != nil {
-		return i18n.Languages[0]
+		return i18n.Default()
 	}
 	return u.GetLanguage()
 }

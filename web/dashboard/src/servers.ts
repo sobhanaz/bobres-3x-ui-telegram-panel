@@ -35,8 +35,18 @@ export const healthSeverity: Record<Health, 'success' | 'danger' | 'secondary' |
 }
 
 /** The add and edit form, as staff type it. */
-export type PanelKind = 'xui' | 'marzban'
-export const PANEL_KINDS: PanelKind[] = ['xui', 'marzban']
+export type PanelKind = 'xui' | 'marzban' | 'sui' | 'hiddify'
+export const PANEL_KINDS: PanelKind[] = ['xui', 'marzban', 'sui', 'hiddify']
+
+/** panelKindOf reads a server's kind; an unknown or missing one is 3x-ui (older cores send none). */
+export function panelKindOf(kind: string | undefined): PanelKind {
+  return (PANEL_KINDS as string[]).includes(kind ?? '') ? (kind as PanelKind) : 'xui'
+}
+
+/** A Hiddify server's API key is an admin's UUID. */
+export function hiddifyKeyOK(token: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(token)
+}
 
 /** A Marzban server is logged in with an admin's "username:password". */
 export function marzbanLoginOK(token: string): boolean {
@@ -70,7 +80,7 @@ export function blankServer(): ServerForm {
  * (it is never sent back). */
 export function serverFormOf(s: ServerItem): ServerForm {
   return {
-    kind: s.kind === 'marzban' ? 'marzban' : 'xui',
+    kind: panelKindOf(s.kind),
     name: s.name,
     baseURL: s.base_url,
     subURL: s.sub_base_url ?? '',
@@ -181,7 +191,13 @@ export function serverProblems(f: ServerForm, editing: Pick<ServerItem, 'has_tok
   if (panelURLProblem(f.baseURL, f.allowPrivate)) out.push('base_url')
   if (subURLProblem(f.subURL)) out.push('sub_base_url')
   const tok = f.token.trim()
-  if (/\s/.test(tok) || (!tok && needsToken(f, editing)) || (f.kind === 'marzban' && tok && !marzbanLoginOK(tok))) out.push('token')
+  if (
+    /\s/.test(tok) ||
+    (!tok && needsToken(f, editing)) ||
+    (f.kind === 'marzban' && tok && !marzbanLoginOK(tok)) ||
+    (f.kind === 'hiddify' && tok && !hiddifyKeyOK(tok))
+  )
+    out.push('token')
   if (weightOf(f.weight) === null) out.push('weight')
   if (maxClientsOf(f.maxClients) === null) out.push('max_clients')
   return out

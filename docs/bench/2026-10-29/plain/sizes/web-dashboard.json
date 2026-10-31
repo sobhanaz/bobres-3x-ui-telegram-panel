@@ -1,0 +1,1072 @@
+{
+  "label": "web/dashboard",
+  "files": [
+    {
+      "path": "assets/index-D6whDqgy.js",
+      "raw": 781911,
+      "gzip": 198578
+    },
+    {
+      "path": "assets/primeicons-Dr5RGzOO.svg",
+      "raw": 342525,
+      "gzip": 102610
+    },
+    {
+      "path": "assets/bobres-wave-damZrktf.webp",
+      "raw": 301056,
+      "gzip": 299909
+    },
+    {
+      "path": "assets/column-Dd32ejhd.js",
+      "raw": 283886,
+      "gzip": 59682
+    },
+    {
+      "path": "assets/SystemPage-BYW3GobZ.js",
+      "raw": 179249,
+      "gzip": 47604
+    },
+    {
+      "path": "assets/_plugin-vue_export-helper-B-H40yVN.js",
+      "raw": 124722,
+      "gzip": 44279
+    },
+    {
+      "path": "assets/primeicons-DMOk5skT.eot",
+      "raw": 85156,
+      "gzip": 40766
+    },
+    {
+      "path": "assets/primeicons-WjwUDZjB.woff",
+      "raw": 85056,
+      "gzip": 40705
+    },
+    {
+      "path": "assets/primeicons-MpK4pl85.ttf",
+      "raw": 84980,
+      "gzip": 40681
+    },
+    {
+      "path": "assets/BrandingPage-BOs0ZB-E.js",
+      "raw": 75633,
+      "gzip": 20835
+    },
+    {
+      "path": "assets/PlansPage-GFZOcLOL.js",
+      "raw": 72359,
+      "gzip": 16954
+    },
+    {
+      "path": "assets/select-SYGOD7fA.js",
+      "raw": 69461,
+      "gzip": 17064
+    },
+    {
+      "path": "assets/format-Cu0VNzcW.js",
+      "raw": 63797,
+      "gzip": 19436
+    },
+    {
+      "path": "assets/button-C1SHSFm4.js",
+      "raw": 52583,
+      "gzip": 10289
+    },
+    {
+      "path": "assets/GatewaysPage-DX7Xux38.js",
+      "raw": 49748,
+      "gzip": 11250
+    },
+    {
+      "path": "assets/inter-latin-ext-700-normal-TidjK2hL.woff",
+      "raw": 48632,
+      "gzip": 48498
+    },
+    {
+      "path": "assets/inter-latin-ext-500-normal-BxGbmqWO.woff",
+      "raw": 48492,
+      "gzip": 48388
+    },
+    {
+      "path": "assets/inter-latin-ext-400-normal-77YHD8bZ.woff",
+      "raw": 47560,
+      "gzip": 47485
+    },
+    {
+      "path": "assets/ReportsPage-DRAJ0alP.js",
+      "raw": 44548,
+      "gzip": 13131
+    },
+    {
+      "path": "assets/inter-latin-ext-700-normal-Ca8adRJv.woff2",
+      "raw": 36244,
+      "gzip": 36274
+    },
+    {
+      "path": "assets/charts-D5Ka_x0q.js",
+      "raw": 36228,
+      "gzip": 11191
+    },
+    {
+      "path": "assets/inter-latin-ext-500-normal-CV4jyFjo.woff2",
+      "raw": 36024,
+      "gzip": 36054
+    },
+    {
+      "path": "assets/primeicons-C6QP2o4f.woff2",
+      "raw": 35148,
+      "gzip": 35178
+    },
+    {
+      "path": "assets/inter-latin-ext-400-normal-C1nco2VV.woff2",
+      "raw": 35000,
+      "gzip": 35000
+    },
+    {
+      "path": "assets/SettingsPage-BeEPdU5q.js",
+      "raw": 34473,
+      "gzip": 9655
+    },
+    {
+      "path": "assets/PaymentsPage-D1HvaJeF.js",
+      "raw": 34342,
+      "gzip": 10411
+    },
+    {
+      "path": "apple-touch-icon.png",
+      "raw": 32802,
+      "gzip": 32829
+    },
+    {
+      "path": "assets/SystemPage-CdZWo2v9.css",
+      "raw": 32286,
+      "gzip": 5166
+    },
+    {
+      "path": "assets/inter-latin-700-normal-BLAVimhd.woff",
+      "raw": 31320,
+      "gzip": 31181
+    },
+    {
+      "path": "assets/inter-latin-500-normal-BL9OpVg8.woff",
+      "raw": 31284,
+      "gzip": 31146
+    },
+    {
+      "path": "assets/inter-latin-400-normal-CyCys3Eg.woff",
+      "raw": 30696,
+      "gzip": 30576
+    },
+    {
+      "path": "assets/index-BRp8h_5F.css",
+      "raw": 30566,
+      "gzip": 6345
+    },
+    {
+      "path": "assets/listbox-egL8JpiU.js",
+      "raw": 28425,
+      "gzip": 6962
+    },
+    {
+      "path": "assets/vazirmatn-arabic-500-normal-Dqq3-xo3.woff",
+      "raw": 28012,
+      "gzip": 27783
+    },
+    {
+      "path": "assets/vazirmatn-arabic-700-normal-B5nPuCFv.woff",
+      "raw": 27888,
+      "gzip": 27670
+    },
+    {
+      "path": "assets/vazirmatn-arabic-400-normal-C4W5XURk.woff",
+      "raw": 27304,
+      "gzip": 27123
+    },
+    {
+      "path": "assets/LicensesPage-DhOJgc4a.js",
+      "raw": 26375,
+      "gzip": 6504
+    },
+    {
+      "path": "assets/inter-latin-700-normal-Yt3aPRUw.woff2",
+      "raw": 24356,
+      "gzip": 24318
+    },
+    {
+      "path": "assets/inter-latin-500-normal-Cerq10X2.woff2",
+      "raw": 24272,
+      "gzip": 24256
+    },
+    {
+      "path": "assets/ResellerPage-3pTWSdPO.js",
+      "raw": 24041,
+      "gzip": 6858
+    },
+    {
+      "path": "assets/inter-latin-400-normal-C38fXH4l.woff2",
+      "raw": 23664,
+      "gzip": 23675
+    },
+    {
+      "path": "assets/bobres-mascot-DrliBV4p.webp",
+      "raw": 23512,
+      "gzip": 23537
+    },
+    {
+      "path": "assets/GiftCodesPage-Drp6CBZ-.js",
+      "raw": 22465,
+      "gzip": 6849
+    },
+    {
+      "path": "assets/message-ymTqy8r_.js",
+      "raw": 22197,
+      "gzip": 4561
+    },
+    {
+      "path": "assets/vazirmatn-arabic-500-normal-C_lbnnKa.woff2",
+      "raw": 21792,
+      "gzip": 21817
+    },
+    {
+      "path": "assets/vazirmatn-arabic-700-normal-Dge_DOjm.woff2",
+      "raw": 21728,
+      "gzip": 21708
+    },
+    {
+      "path": "assets/BroadcastEditPage-s8bVstyp.js",
+      "raw": 21672,
+      "gzip": 7025
+    },
+    {
+      "path": "assets/ServersPage-CJ6w-UjW.js",
+      "raw": 21539,
+      "gzip": 6313
+    },
+    {
+      "path": "assets/vazirmatn-arabic-400-normal-DMZFCm7K.woff2",
+      "raw": 21088,
+      "gzip": 21113
+    },
+    {
+      "path": "assets/vazirmatn-latin-700-normal-DrB0PBU6.woff",
+      "raw": 20936,
+      "gzip": 20905
+    },
+    {
+      "path": "assets/vazirmatn-latin-500-normal-Bg_BALlD.woff",
+      "raw": 20904,
+      "gzip": 20894
+    },
+    {
+      "path": "assets/vazirmatn-latin-400-normal-GKyMcI03.woff",
+      "raw": 20776,
+      "gzip": 20766
+    },
+    {
+      "path": "assets/password-CNLgfsu3.js",
+      "raw": 18410,
+      "gzip": 6203
+    },
+    {
+      "path": "assets/SettingsCard-BVH28aW2.js",
+      "raw": 18249,
+      "gzip": 5375
+    },
+    {
+      "path": "favicon.svg",
+      "raw": 17518,
+      "gzip": 6603
+    },
+    {
+      "path": "assets/SupplierPage-CFnAU8t7.js",
+      "raw": 17049,
+      "gzip": 5099
+    },
+    {
+      "path": "assets/TicketPage-DeeAMwUI.js",
+      "raw": 16664,
+      "gzip": 5955
+    },
+    {
+      "path": "assets/vazirmatn-latin-700-normal-9BlbvDRV.woff2",
+      "raw": 16420,
+      "gzip": 16445
+    },
+    {
+      "path": "assets/tab-CG5n0Sev.js",
+      "raw": 16395,
+      "gzip": 4852
+    },
+    {
+      "path": "assets/vazirmatn-latin-500-normal-6zZzgpg4.woff2",
+      "raw": 16356,
+      "gzip": 16381
+    },
+    {
+      "path": "assets/vazirmatn-latin-400-normal-BT_DHTc7.woff2",
+      "raw": 16068,
+      "gzip": 16093
+    },
+    {
+      "path": "assets/UserPage-DCZnT_qt.js",
+      "raw": 15616,
+      "gzip": 4732
+    },
+    {
+      "path": "assets/BroadcastPage-BsXDQiwe.js",
+      "raw": 14416,
+      "gzip": 4588
+    },
+    {
+      "path": "assets/ResellersPage-CdHT-Mc8.js",
+      "raw": 14358,
+      "gzip": 4620
+    },
+    {
+      "path": "assets/StaffPage-D61a39jR.js",
+      "raw": 14197,
+      "gzip": 4757
+    },
+    {
+      "path": "assets/vazirmatn-latin-ext-500-normal-4XgegWYb.woff",
+      "raw": 14060,
+      "gzip": 14057
+    },
+    {
+      "path": "assets/vazirmatn-latin-ext-700-normal-DMYLqBto.woff",
+      "raw": 14044,
+      "gzip": 14031
+    },
+    {
+      "path": "assets/vazirmatn-latin-ext-400-normal-DPxMaNjI.woff",
+      "raw": 14004,
+      "gzip": 14002
+    },
+    {
+      "path": "assets/runtime-dom.esm-bundler-Byh23fMS.js",
+      "raw": 13908,
+      "gzip": 5974
+    },
+    {
+      "path": "assets/ProfessionalReport-Cjk_ks7A.js",
+      "raw": 13689,
+      "gzip": 4482
+    },
+    {
+      "path": "assets/inter-cyrillic-ext-500-normal-BmqWE9Dz.woff",
+      "raw": 13452,
+      "gzip": 13464
+    },
+    {
+      "path": "assets/inter-cyrillic-ext-700-normal-LO58E6JB.woff",
+      "raw": 13408,
+      "gzip": 13419
+    },
+    {
+      "path": "assets/inter-cyrillic-ext-400-normal-DQukG94-.woff",
+      "raw": 13336,
+      "gzip": 13340
+    },
+    {
+      "path": "assets/selectbutton-BxiFPUaC.js",
+      "raw": 13024,
+      "gzip": 3706
+    },
+    {
+      "path": "assets/gateways-v3w4BKmN.js",
+      "raw": 12265,
+      "gzip": 4585
+    },
+    {
+      "path": "assets/LoginPage-F3cyby3n.js",
+      "raw": 12234,
+      "gzip": 4207
+    },
+    {
+      "path": "assets/checkbox-iydkof7s.js",
+      "raw": 11980,
+      "gzip": 3413
+    },
+    {
+      "path": "assets/BrandingPage-DOhsGeeQ.css",
+      "raw": 11018,
+      "gzip": 2256
+    },
+    {
+      "path": "assets/SupportPage-DvXIyyIn.js",
+      "raw": 11005,
+      "gzip": 3922
+    },
+    {
+      "path": "assets/ServicePage-GNCZEt0B.js",
+      "raw": 10644,
+      "gzip": 3379
+    },
+    {
+      "path": "assets/radiobutton-CvxfVbZj.js",
+      "raw": 10579,
+      "gzip": 3222
+    },
+    {
+      "path": "assets/inter-cyrillic-ext-700-normal-BjwYoWNd.woff2",
+      "raw": 10496,
+      "gzip": 10521
+    },
+    {
+      "path": "assets/vazirmatn-latin-ext-700-normal-BfoXmNMx.woff2",
+      "raw": 10436,
+      "gzip": 10461
+    },
+    {
+      "path": "assets/inter-cyrillic-ext-500-normal-B0yAr1jD.woff2",
+      "raw": 10432,
+      "gzip": 10457
+    },
+    {
+      "path": "assets/vazirmatn-latin-ext-500-normal-CgxvvVrG.woff2",
+      "raw": 10384,
+      "gzip": 10409
+    },
+    {
+      "path": "assets/vazirmatn-latin-ext-400-normal-BdGhO0lm.woff2",
+      "raw": 10240,
+      "gzip": 10265
+    },
+    {
+      "path": "assets/inter-cyrillic-ext-400-normal-BQZuk6qB.woff2",
+      "raw": 10232,
+      "gzip": 10257
+    },
+    {
+      "path": "assets/inter-greek-700-normal-BUv2fZ6O.woff",
+      "raw": 9980,
+      "gzip": 10002
+    },
+    {
+      "path": "assets/inter-greek-500-normal-Xzm54t5V.woff",
+      "raw": 9980,
+      "gzip": 9984
+    },
+    {
+      "path": "assets/inter-cyrillic-500-normal-CxZf_p3X.woff",
+      "raw": 9940,
+      "gzip": 9943
+    },
+    {
+      "path": "assets/inter-greek-400-normal-q2sYcFCs.woff",
+      "raw": 9924,
+      "gzip": 9941
+    },
+    {
+      "path": "assets/inter-cyrillic-700-normal-DrXBdSj3.woff",
+      "raw": 9912,
+      "gzip": 9917
+    },
+    {
+      "path": "assets/inter-cyrillic-400-normal-HOLc17fK.woff",
+      "raw": 9780,
+      "gzip": 9790
+    },
+    {
+      "path": "assets/AccountPage-BaFFTCAI.js",
+      "raw": 9715,
+      "gzip": 3104
+    },
+    {
+      "path": "assets/OverviewPage-jTgHR2tg.js",
+      "raw": 9548,
+      "gzip": 2922
+    },
+    {
+      "path": "assets/DiscountsPage-C6W7hv53.js",
+      "raw": 9190,
+      "gzip": 2966
+    },
+    {
+      "path": "assets/IsoColumns-CMEeSGM1.js",
+      "raw": 8682,
+      "gzip": 3786
+    },
+    {
+      "path": "assets/GatewaysPage-BNUGcClO.css",
+      "raw": 8441,
+      "gzip": 1508
+    },
+    {
+      "path": "assets/charts-DNY2N9dX.css",
+      "raw": 8347,
+      "gzip": 1833
+    },
+    {
+      "path": "assets/settings-Dy-1a4kH.js",
+      "raw": 8011,
+      "gzip": 3159
+    },
+    {
+      "path": "assets/inter-greek-700-normal-C3JjAnD8.woff2",
+      "raw": 7920,
+      "gzip": 7945
+    },
+    {
+      "path": "assets/inter-greek-500-normal-BIZE56-Y.woff2",
+      "raw": 7920,
+      "gzip": 7945
+    },
+    {
+      "path": "assets/inter-cyrillic-700-normal-CjBOestx.woff2",
+      "raw": 7904,
+      "gzip": 7929
+    },
+    {
+      "path": "assets/inter-cyrillic-500-normal-BasfLYem.woff2",
+      "raw": 7900,
+      "gzip": 7925
+    },
+    {
+      "path": "assets/inter-greek-400-normal-B4URO6DV.woff2",
+      "raw": 7776,
+      "gzip": 7801
+    },
+    {
+      "path": "assets/inter-cyrillic-400-normal-obahsSVq.woff2",
+      "raw": 7712,
+      "gzip": 7737
+    },
+    {
+      "path": "assets/OrderPage-cswzSnkw.js",
+      "raw": 7275,
+      "gzip": 2519
+    },
+    {
+      "path": "assets/toggleswitch-D65yS717.js",
+      "raw": 7260,
+      "gzip": 1790
+    },
+    {
+      "path": "assets/inter-greek-ext-700-normal-BoQ6DsYi.woff",
+      "raw": 7216,
+      "gzip": 7147
+    },
+    {
+      "path": "assets/inter-greek-ext-500-normal-2j5mBUwD.woff",
+      "raw": 7192,
+      "gzip": 7125
+    },
+    {
+      "path": "assets/inter-greek-ext-400-normal-KugGGMne.woff",
+      "raw": 7064,
+      "gzip": 7005
+    },
+    {
+      "path": "assets/AuditPage-CVDc6P9x.js",
+      "raw": 6910,
+      "gzip": 2657
+    },
+    {
+      "path": "assets/TiltDonut-DGEm0nOf.js",
+      "raw": 6908,
+      "gzip": 2888
+    },
+    {
+      "path": "assets/inter-vietnamese-700-normal-BZaoP0fm.woff",
+      "raw": 6632,
+      "gzip": 6629
+    },
+    {
+      "path": "assets/inter-vietnamese-500-normal-mJboJaSs.woff",
+      "raw": 6596,
+      "gzip": 6583
+    },
+    {
+      "path": "assets/inter-vietnamese-400-normal-Bbgyi5SW.woff",
+      "raw": 6500,
+      "gzip": 6484
+    },
+    {
+      "path": "assets/SettingsPage-CiX-Smur.css",
+      "raw": 6006,
+      "gzip": 1416
+    },
+    {
+      "path": "assets/MakeResellerDialog-DhIIRvwG.js",
+      "raw": 5828,
+      "gzip": 2394
+    },
+    {
+      "path": "assets/BroadcastStatus-CYVWryg6.js",
+      "raw": 5661,
+      "gzip": 2505
+    },
+    {
+      "path": "assets/BroadcastsPage-CKlWr-fD.js",
+      "raw": 5445,
+      "gzip": 2197
+    },
+    {
+      "path": "assets/inter-greek-ext-700-normal-qfdV9bQt.woff2",
+      "raw": 5444,
+      "gzip": 5469
+    },
+    {
+      "path": "assets/inter-greek-ext-500-normal-C4iEst2y.woff2",
+      "raw": 5428,
+      "gzip": 5453
+    },
+    {
+      "path": "assets/TicketPage-DualJfVW.css",
+      "raw": 5288,
+      "gzip": 1378
+    },
+    {
+      "path": "assets/inter-greek-ext-400-normal-DGGRlc-M.woff2",
+      "raw": 5264,
+      "gzip": 5289
+    },
+    {
+      "path": "assets/SendDialog-DsbVBW-W.js",
+      "raw": 5254,
+      "gzip": 2234
+    },
+    {
+      "path": "assets/textarea-D4K9XVVI.js",
+      "raw": 5207,
+      "gzip": 1725
+    },
+    {
+      "path": "assets/inter-vietnamese-500-normal-DOriooB6.woff2",
+      "raw": 5112,
+      "gzip": 5137
+    },
+    {
+      "path": "assets/inter-vietnamese-700-normal-DlLaEgI2.woff2",
+      "raw": 5104,
+      "gzip": 5129
+    },
+    {
+      "path": "assets/BroadcastEditPage-B5lu4Vih.css",
+      "raw": 5010,
+      "gzip": 1185
+    },
+    {
+      "path": "assets/ReportsPage-TscCdDob.css",
+      "raw": 5009,
+      "gzip": 1340
+    },
+    {
+      "path": "assets/inter-vietnamese-400-normal-DMkecbls.woff2",
+      "raw": 4972,
+      "gzip": 4997
+    },
+    {
+      "path": "assets/progressbar-Dz5FJFyM.js",
+      "raw": 4967,
+      "gzip": 1275
+    },
+    {
+      "path": "assets/api-CVYMcIhV.js",
+      "raw": 4894,
+      "gzip": 2546
+    },
+    {
+      "path": "assets/inputotp-BOlEcMpd.js",
+      "raw": 4508,
+      "gzip": 1755
+    },
+    {
+      "path": "assets/resellers-C7BK0omz.js",
+      "raw": 4413,
+      "gzip": 1764
+    },
+    {
+      "path": "assets/servers-CIZYIRyO.js",
+      "raw": 4109,
+      "gzip": 1669
+    },
+    {
+      "path": "assets/SecretField-BLI0OOvo.js",
+      "raw": 3842,
+      "gzip": 1575
+    },
+    {
+      "path": "assets/chip-DtCHoG7E.js",
+      "raw": 3709,
+      "gzip": 1306
+    },
+    {
+      "path": "assets/LedgerPage-BDUaIWL2.js",
+      "raw": 3548,
+      "gzip": 1498
+    },
+    {
+      "path": "assets/ProfessionalReport-CZzZcsB1.css",
+      "raw": 3503,
+      "gzip": 1037
+    },
+    {
+      "path": "assets/TicketsTable-vQMObpdq.js",
+      "raw": 3405,
+      "gzip": 1510
+    },
+    {
+      "path": "assets/PaymentsTable-DKe6F1L_.js",
+      "raw": 3393,
+      "gzip": 1443
+    },
+    {
+      "path": "assets/SupplierBalance-DKQaY6XW.js",
+      "raw": 3386,
+      "gzip": 1788
+    },
+    {
+      "path": "assets/projection-9L5CP3LB.js",
+      "raw": 3138,
+      "gzip": 1210
+    },
+    {
+      "path": "assets/SettingsCard-CeI3ul-k.css",
+      "raw": 3095,
+      "gzip": 791
+    },
+    {
+      "path": "assets/skeleton-BGx7Lv6e.js",
+      "raw": 3091,
+      "gzip": 1232
+    },
+    {
+      "path": "assets/staff-CTNM-Mfr.js",
+      "raw": 3051,
+      "gzip": 1205
+    },
+    {
+      "path": "assets/BroadcastPage-USlD7cUD.css",
+      "raw": 2945,
+      "gzip": 902
+    },
+    {
+      "path": "assets/ServicesTable-CBipEYLi.js",
+      "raw": 2836,
+      "gzip": 1275
+    },
+    {
+      "path": "assets/eye-BR0-Vlr8.js",
+      "raw": 2809,
+      "gzip": 1456
+    },
+    {
+      "path": "assets/LoginPage-HSDdSYA3.css",
+      "raw": 2654,
+      "gzip": 901
+    },
+    {
+      "path": "assets/ServicesPage-CMb89WhT.js",
+      "raw": 2509,
+      "gzip": 1172
+    },
+    {
+      "path": "assets/TiltDonut-MujgEgyC.css",
+      "raw": 2439,
+      "gzip": 890
+    },
+    {
+      "path": "assets/OrdersTable-CqfDmCkd.js",
+      "raw": 2364,
+      "gzip": 1092
+    },
+    {
+      "path": "assets/UsersPage-8jg24uyy.js",
+      "raw": 2355,
+      "gzip": 976
+    },
+    {
+      "path": "assets/LedgerTable-BGxk8nu8.js",
+      "raw": 2334,
+      "gzip": 1064
+    },
+    {
+      "path": "assets/SessionList-BSbM4LLO.js",
+      "raw": 2270,
+      "gzip": 1153
+    },
+    {
+      "path": "assets/UsersTable-CmeS8gCn.js",
+      "raw": 2216,
+      "gzip": 1049
+    },
+    {
+      "path": "assets/tabpanel-B6jnnAmO.js",
+      "raw": 2201,
+      "gzip": 949
+    },
+    {
+      "path": "assets/ReasonDialog-BzR4PniN.js",
+      "raw": 2122,
+      "gzip": 1070
+    },
+    {
+      "path": "assets/card-vYM-0pzo.js",
+      "raw": 2053,
+      "gzip": 719
+    },
+    {
+      "path": "assets/ServersPage-DdJJKbkZ.css",
+      "raw": 1775,
+      "gzip": 561
+    },
+    {
+      "path": "assets/IsoColumns-DUwu-08w.css",
+      "raw": 1713,
+      "gzip": 667
+    },
+    {
+      "path": "assets/TextPreview-B5PdmvfA.css",
+      "raw": 1681,
+      "gzip": 582
+    },
+    {
+      "path": "assets/reports-CZBzV7CV.js",
+      "raw": 1608,
+      "gzip": 759
+    },
+    {
+      "path": "assets/SupplierPage-CbGtQwuf.css",
+      "raw": 1598,
+      "gzip": 592
+    },
+    {
+      "path": "assets/ResellerPage-CTMvL6_5.css",
+      "raw": 1499,
+      "gzip": 530
+    },
+    {
+      "path": "assets/AccountPage-BgBgCmQv.css",
+      "raw": 1470,
+      "gzip": 564
+    },
+    {
+      "path": "assets/LicensesPage-DvcbXsNT.css",
+      "raw": 1410,
+      "gzip": 466
+    },
+    {
+      "path": "assets/GiftCodesPage-CGSiDI4o.css",
+      "raw": 1314,
+      "gzip": 487
+    },
+    {
+      "path": "assets/StaffPage-CZehDvLE.css",
+      "raw": 1116,
+      "gzip": 409
+    },
+    {
+      "path": "assets/OverviewPage-DdDHu5wH.css",
+      "raw": 1114,
+      "gzip": 414
+    },
+    {
+      "path": "index.html",
+      "raw": 1108,
+      "gzip": 471
+    },
+    {
+      "path": "assets/errors-AWC7MK6E.js",
+      "raw": 1089,
+      "gzip": 532
+    },
+    {
+      "path": "assets/PlansPage-DGLXOIy2.css",
+      "raw": 1076,
+      "gzip": 418
+    },
+    {
+      "path": "assets/ProblemList-6fH3fnBY.js",
+      "raw": 1049,
+      "gzip": 677
+    },
+    {
+      "path": "assets/StatusTag-DIercBmN.js",
+      "raw": 1010,
+      "gzip": 520
+    },
+    {
+      "path": "assets/SupportPage-BAUBfAHT.css",
+      "raw": 998,
+      "gzip": 447
+    },
+    {
+      "path": "assets/SectionPlaceholder-B0ELpzLY.js",
+      "raw": 970,
+      "gzip": 572
+    },
+    {
+      "path": "assets/PaymentsPage-Cp-wn3Mh.css",
+      "raw": 961,
+      "gzip": 444
+    },
+    {
+      "path": "assets/csv-B9g80d-R.js",
+      "raw": 945,
+      "gzip": 577
+    },
+    {
+      "path": "assets/TrafficBar-DDQzsauB.js",
+      "raw": 938,
+      "gzip": 556
+    },
+    {
+      "path": "assets/TicketsTable-CfBa2VKb.css",
+      "raw": 905,
+      "gzip": 389
+    },
+    {
+      "path": "assets/TextPreview-EdumoB40.js",
+      "raw": 862,
+      "gzip": 529
+    },
+    {
+      "path": "assets/UserLink-5mIjcHj0.js",
+      "raw": 849,
+      "gzip": 491
+    },
+    {
+      "path": "assets/BroadcastsPage-CiDVH34a.css",
+      "raw": 840,
+      "gzip": 413
+    },
+    {
+      "path": "assets/useList-DRbcdyxT.js",
+      "raw": 735,
+      "gzip": 475
+    },
+    {
+      "path": "assets/ResellersPage-DRfFUYal.css",
+      "raw": 720,
+      "gzip": 321
+    },
+    {
+      "path": "assets/AuditPage-C98RngjX.css",
+      "raw": 700,
+      "gzip": 357
+    },
+    {
+      "path": "assets/SessionList-bvVmXabW.css",
+      "raw": 683,
+      "gzip": 318
+    },
+    {
+      "path": "assets/SendDialog-DhwY-TXI.css",
+      "raw": 671,
+      "gzip": 288
+    },
+    {
+      "path": "assets/DiscountsPage-CXexmwl4.css",
+      "raw": 614,
+      "gzip": 284
+    },
+    {
+      "path": "assets/BalanceText-DR8kbLtl.js",
+      "raw": 553,
+      "gzip": 371
+    },
+    {
+      "path": "assets/TicketStatusTag-Dr8SEEA9.js",
+      "raw": 482,
+      "gzip": 329
+    },
+    {
+      "path": "assets/SecretField-CwMc9mI2.css",
+      "raw": 479,
+      "gzip": 256
+    },
+    {
+      "path": "assets/UserPage-D2n9Ucev.css",
+      "raw": 468,
+      "gzip": 273
+    },
+    {
+      "path": "assets/ServicePage-vSuijhan.css",
+      "raw": 430,
+      "gzip": 220
+    },
+    {
+      "path": "assets/ProblemList-B8N6S1cm.css",
+      "raw": 379,
+      "gzip": 236
+    },
+    {
+      "path": "assets/OrderPage-8zPUcE8z.css",
+      "raw": 356,
+      "gzip": 201
+    },
+    {
+      "path": "assets/TrafficBar-CKB3HPgC.css",
+      "raw": 328,
+      "gzip": 191
+    },
+    {
+      "path": "assets/SupplierBalance-CNSiwg8E.css",
+      "raw": 299,
+      "gzip": 201
+    },
+    {
+      "path": "assets/MakeResellerDialog-BJbjMICV.css",
+      "raw": 282,
+      "gzip": 172
+    },
+    {
+      "path": "assets/ReasonDialog-BxjeHuvu.css",
+      "raw": 260,
+      "gzip": 152
+    },
+    {
+      "path": "assets/SectionPlaceholder-G-O3B6cC.css",
+      "raw": 222,
+      "gzip": 164
+    },
+    {
+      "path": "assets/UserLink-0K1EUE23.css",
+      "raw": 205,
+      "gzip": 155
+    },
+    {
+      "path": "assets/ServicesTable-BBZZHT5Z.css",
+      "raw": 155,
+      "gzip": 130
+    },
+    {
+      "path": "assets/PaymentsTable-y9HjU4PY.css",
+      "raw": 125,
+      "gzip": 117
+    },
+    {
+      "path": "assets/LedgerPage-7UPEng-N.css",
+      "raw": 118,
+      "gzip": 118
+    },
+    {
+      "path": "assets/OrdersTable-Ct8DM2w5.css",
+      "raw": 117,
+      "gzip": 119
+    },
+    {
+      "path": "assets/ServicesPage-A-Pd8qTY.css",
+      "raw": 96,
+      "gzip": 109
+    },
+    {
+      "path": "assets/LedgerTable--XKI2kCn.css",
+      "raw": 92,
+      "gzip": 81
+    },
+    {
+      "path": "assets/UsersTable-C0uPsQgd.css",
+      "raw": 50,
+      "gzip": 71
+    },
+    {
+      "path": "assets/BalanceText-GYIy1JAE.css",
+      "raw": 47,
+      "gzip": 68
+    }
+  ],
+  "total_raw": 4679189,
+  "total_gzip": 2357247
+}

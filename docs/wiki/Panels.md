@@ -1,6 +1,6 @@
 # Panels
 
-A panel is the 3x-ui or Marzban server that really creates your customers' VPN accounts. BOBRES talks to it through the **provisioner**, the only service that holds the panels' tokens. You can connect several panels at once.
+A panel is the 3x-ui, Marzban, S-UI or Hiddify server that really creates your customers' VPN accounts. BOBRES talks to it through the **provisioner**, the only service that holds the panels' tokens. You can connect several panels at once.
 
 ## Tested versions
 
@@ -8,10 +8,10 @@ A panel is the 3x-ui or Marzban server that really creates your customers' VPN a
 |---|---|
 | 3x-ui | v3.8.5, v3.9.0, v3.10.0 and v3.10.2. CI runs the integration tests against a real panel of each |
 | Marzban | 0.8.4, tested against the real image in CI. Marzban 0.8 is supported |
+| S-UI | v1.6.6, tested against the real image in CI |
+| Hiddify Manager | v14.0.5, tested with a fake panel in every CI run, and against the real image in a CI job that may fail (Hiddify's Docker image is experimental and heavy) |
 
-Marzban 1.0 is still beta, has another API, and is not supported. A panel outside the tested range is marked **Untested** on the Servers page. It may still work.
-
-Other panels, such as S-UI or Hiddify, are not supported yet.
+Marzban 1.0 is still beta, has another API, and is not supported. A 3x-ui panel outside the tested range is marked **Untested** on the Servers page. It may still work.
 
 ## Add a server
 
@@ -20,11 +20,12 @@ Open **Panel servers** and press **Add server**.
 | Field | Meaning |
 |---|---|
 | Name | Shown in Plans and on services. The installer names the first panel after its host |
-| Panel software | 3x-ui or Marzban. It cannot be changed later |
-| Panel address | The panel's full address as you open it in a browser, with port and secret path, for example `https://panel.example.com:2053/path` |
-| API token | 3x-ui only. Create it in 3x-ui under **Settings**, **API tokens**. It is stored encrypted and never shown again |
+| Panel software | 3x-ui, Marzban, S-UI or Hiddify. It cannot be changed later |
+| Panel address | The panel's full address as you open it in a browser, with port and secret path, for example `https://panel.example.com:2053/path`. S-UI: with its web path, `https://panel.example.com:2095/app`. Hiddify: with the admin proxy path, `https://panel.example.com/AdminProxyPath` |
+| API token | 3x-ui: create it under **Settings**, **API tokens**. S-UI: under **Admins**, **API Tokens**, with no expiry. It is stored encrypted and never shown again |
 | Admin login | Marzban only: a dedicated admin written as `username:password` |
-| Subscription address | Optional. Where customers' subscription links point, such as the panel's subscription domain |
+| API key | Hiddify only: the UUID of a dedicated admin, the part of the admin link after the admin proxy path |
+| Subscription address | Optional. Where customers' subscription links point, such as the panel's subscription domain. S-UI: the address before the client's name, `https://sub.example.com:2096/sub/`. Hiddify: with the client proxy path, `https://sub.example.com/ClientProxyPath` |
 | Weight | 1 to 1000. A panel with weight 200 gets about twice the new services of one with 100 |
 | Service limit | Optional. The most services this server takes; empty or 0 means no limit. See [A limit on a server](#a-limit-on-a-server) |
 | Takes new services | When off, no new service goes here. Existing services keep working and renewing |
@@ -53,9 +54,15 @@ The Servers page shows **N / limit** with a bar, an orange chip with the percent
 
 For each server you choose which inbounds new services join (the **attach** switches). The panel's own switch still applies. A choice on a plan wins over the server switch. Existing services keep the inbounds they have. If no inbound is both on in the panel and chosen, new services on that server fail until you fix it.
 
-## Client groups in 3x-ui
+## Client groups in 3x-ui and S-UI
 
-Every client BOBRES makes in a 3x-ui panel is put in the client group `BOBRES`. A reseller's clients go in `BOBRES-<NAME>`, with the name you give the reseller, so you can filter by who made them. A group you set by hand is never touched. Marzban has no groups. See [Resellers](Resellers).
+Every client BOBRES makes in a 3x-ui or S-UI panel is put in the client group `BOBRES`. A reseller's clients go in `BOBRES-<NAME>`, with the name you give the reseller, so you can filter by who made them. A group you set by hand is never touched. Marzban and Hiddify have no groups. See [Resellers](Resellers).
+
+## S-UI and Hiddify: what is different
+
+- **S-UI** builds the share links from the address BOBRES calls it at. Give the panel's public domain as its address (or give the inbounds their own addresses in S-UI). The subscription link is S-UI's own (its subscription settings, or your subscription address, then the client's name).
+- **Hiddify** gives every customer all of its proxies, so a Hiddify server lists one inbound, "all proxies". It counts expiry in whole days by its own calendar (UTC in its Docker image): a service that ends at 15:00 ends at the following midnight there, and BOBRES reads that date back. It has no "unlimited traffic": BOBRES writes its largest quota, 1,000,000 GB, and reads it back as unlimited. The subscription link is Hiddify's automatic one (`.../<UUID>/auto/`). A customer deleted in Hiddify and made again from BOBRES gets the same links back.
+- Names: BOBRES finds its clients by name. If someone else already has the name in S-UI or Hiddify, the new service is refused, as on the other panels.
 
 ## Health
 
@@ -74,7 +81,7 @@ Customers' VPN connections depend on the panel's own host, not on BOBRES. If it 
 - **Core has no internet.** All calls to panels come from the provisioner.
 - **Panel on the same server.** Use `http://host.docker.internal:<port>/...` (the installer rewrites `127.0.0.1` for you) and turn on **Panel on a private network**.
 - **Marzban** listens on the server's loopback only unless it has its own TLS certificate. BOBRES's containers cannot reach it until you put a reverse proxy in front or give it a certificate. A self-signed certificate is refused.
-- **Token refused:** create a new API token in 3x-ui and save it on the server's edit page.
+- **Token refused:** create a new API token in 3x-ui or S-UI (or check the Hiddify admin's UUID) and save it on the server's edit page.
 - **Roles:** the owner and admins can add and edit servers. Only the owner can allow a private network.
 - **License:** the free tier allows 1 server, Standard 3, Pro and the trial any number.
 

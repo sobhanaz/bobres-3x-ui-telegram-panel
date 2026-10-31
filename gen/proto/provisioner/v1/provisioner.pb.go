@@ -384,7 +384,8 @@ type XUIServer struct {
 	CheckedAt   int64  `protobuf:"varint,14,opt,name=checked_at,json=checkedAt,proto3" json:"checked_at,omitempty"` // unix seconds
 	// panel_version is outside the tested range (ListServersResponse).
 	VersionUntested bool `protobuf:"varint,15,opt,name=version_untested,json=versionUntested,proto3" json:"version_untested,omitempty"`
-	// "xui" (3x-ui) or "marzban"; empty reads as "xui".
+	// "xui" (3x-ui), "marzban", "sui" (S-UI) or "hiddify" (Hiddify Manager);
+	// empty reads as "xui".
 	Kind string `protobuf:"bytes,16,opt,name=kind,proto3" json:"kind,omitempty"`
 	// The most clients the server takes; 0 is no limit. A server whose clients
 	// (reservations included) have reached it is skipped for new clients and
@@ -564,9 +565,10 @@ type CreateClientRequest struct {
 	// inbound, as before. Only a fresh reservation reads it: a retry attaches
 	// the same way again.
 	Inbounds []*InboundSelection `protobuf:"bytes,7,rep,name=inbounds,proto3" json:"inbounds,omitempty"`
-	// The 3x-ui client group the client is put in ("" is the default group,
-	// "BOBRES"; a reseller's clients are in "BOBRES-<NAME>"). Marzban has no
-	// groups and ignores it. An older provisioner ignores the field too.
+	// The client group the client is put in on 3x-ui and S-UI ("" is the default
+	// group, "BOBRES"; a reseller's clients are in "BOBRES-<NAME>"). Marzban and
+	// Hiddify have no groups and ignore it. An older provisioner ignores the
+	// field too.
 	Group         string `protobuf:"bytes,8,opt,name=group,proto3" json:"group,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1377,8 +1379,10 @@ type AddServerRequest struct {
 	// for callers from before it existed; false saves it switched off, so it
 	// is never briefly on.
 	Enabled *bool `protobuf:"varint,8,opt,name=enabled,proto3,oneof" json:"enabled,omitempty"`
-	// "xui" (default) or "marzban". Fixed once the server is added. For
-	// "marzban", api_token is "username:password" of a Marzban admin.
+	// "xui" (default), "marzban", "sui" or "hiddify". Fixed once the server is
+	// added. For "marzban", api_token is "username:password" of a Marzban admin;
+	// for "sui" the API token the S-UI panel made; for "hiddify" the API key, the
+	// UUID of a Hiddify admin (base_url then carries the admin proxy path).
 	Kind string `protobuf:"bytes,9,opt,name=kind,proto3" json:"kind,omitempty"`
 	// 0..1000000; 0 = no limit (XUIServer.max_clients).
 	MaxClients    int32 `protobuf:"varint,10,opt,name=max_clients,json=maxClients,proto3" json:"max_clients,omitempty"`
@@ -1760,8 +1764,8 @@ type TestServerRequest struct {
 	BaseUrl      string                 `protobuf:"bytes,2,opt,name=base_url,json=baseUrl,proto3" json:"base_url,omitempty"`
 	ApiToken     string                 `protobuf:"bytes,3,opt,name=api_token,json=apiToken,proto3" json:"api_token,omitempty"`
 	AllowPrivate bool                   `protobuf:"varint,4,opt,name=allow_private,json=allowPrivate,proto3" json:"allow_private,omitempty"`
-	// For candidate settings (no id): "xui" (default) or "marzban". With an id
-	// the server's own kind is used.
+	// For candidate settings (no id): "xui" (default), "marzban", "sui" or
+	// "hiddify". With an id the server's own kind is used.
 	Kind          string `protobuf:"bytes,5,opt,name=kind,proto3" json:"kind,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

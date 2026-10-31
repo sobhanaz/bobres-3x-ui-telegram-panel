@@ -7,7 +7,7 @@ import Dialog from 'primevue/dialog'
 import InputText from 'primevue/inputtext'
 import Message from 'primevue/message'
 import Tag from 'primevue/tag'
-import { isolate } from '../../format'
+import { isolate, rtl, type Lang } from '../../format'
 
 // The last step before "Update now": what will happen (from which version to
 // which, on which channel), that the dashboard and the bot are away for a few
@@ -31,7 +31,7 @@ const visible = defineModel<boolean>('visible', { required: true })
 const emit = defineEmits<{ confirm: [payload: { acceptPrerelease: boolean; code: string }] }>()
 const { t, locale } = useI18n()
 // the arrow from the old version to the new one points the way the line reads
-const arrowIcon = computed(() => (locale.value === 'fa' ? 'pi-arrow-left' : 'pi-arrow-right'))
+const arrowIcon = computed(() => (rtl(locale.value as Lang) ? 'pi-arrow-left' : 'pi-arrow-right'))
 
 const accepted = ref(false)
 const code = ref('')

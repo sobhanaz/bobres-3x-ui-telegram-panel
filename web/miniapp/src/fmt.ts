@@ -66,6 +66,10 @@ export function ledgerKey(kind: string): Key {
     case 'target_bonus':
     case 'wheel_prize':
       return `ledger.${kind}`
+    case 'affiliate_commission':
+    case 'affiliate_reversal':
+    case 'affiliate_payout':
+      return 'ledger.affiliate'
     default:
       return 'ledger.other'
   }

@@ -26,7 +26,7 @@ import {
   weekdayName,
   type Calendar,
 } from '../../calendar'
-import type { Lang } from '../../format'
+import { rtl as isRtl, type Lang } from '../../format'
 
 // A date typed or picked in a calendar, Jalali or Gregorian. The value going in
 // and out is always the Gregorian ISO date the API takes ("2026-10-14", "" when
@@ -136,7 +136,7 @@ function onKey(e: KeyboardEvent) {
   const cell = (e.target as HTMLElement).closest<HTMLElement>('[data-date]')
   const iso = cell?.dataset.date
   if (!iso) return
-  const rtl = lang.value === 'fa' // the page reads right to left in Persian
+  const rtl = isRtl(lang.value) // the page reads right to left in Persian and Arabic
   const offset = (weekday(iso) - firstWeekday(props.calendar) + 7) % 7
   switch (e.key) {
     case 'ArrowLeft':

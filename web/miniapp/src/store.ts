@@ -38,7 +38,7 @@ export function fail(e: unknown): boolean {
 function applyMe(me: Me): void {
   state.me = me
   state.wallets = me.wallets
-  setLang(pickLang(me.user.language))
+  setLang(pickLang(me.user.language, me.languages))
   if (me.brand.color) document.documentElement.style.setProperty('--accent', me.brand.color)
   if (me.maintenance) state.gate = 'maintenance'
 }

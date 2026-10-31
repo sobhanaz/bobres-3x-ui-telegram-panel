@@ -2,7 +2,7 @@
 
 What has shipped, what is still open, and what was left out on purpose. Nothing here is promised for a date. The detailed, ordered list is [docs/ROADMAP.md](https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/blob/main/docs/ROADMAP.md), and each release's notes are in the [changelog](https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/blob/main/CHANGELOG.md).
 
-As of v0.20.0, 2026-10-29.
+As of v0.21.0, 2026-10-31.
 
 ## Shipped
 
@@ -30,6 +30,7 @@ As of v0.20.0, 2026-10-29.
 | v0.18.0 | 2026-10-29 | My codes; USDT plans paid from the wallet; Tether top-up in the Mini App; per-server capacity; Prometheus, uptime and a status page; sign-in approval in Telegram; `bobres rotate-key` |
 | v0.19.0 | 2026-10-29 | Cashback, reseller monthly targets and a daily wheel; Aqayepardakht and automatic TON payments |
 | v0.20.0 | 2026-10-29 | Messages and a weekly settlement reminder for resellers; bot and dashboard buttons for services the panel no longer has |
+| v0.21.0 | 2026-10-31 | S-UI and Hiddify panels; Arabic, Russian and Turkish (beta); new product announcements; the vendor's affiliate program and hosted-store tooling; a benchmark baseline and a faster wallet |
 
 ## New in v0.18.0
 
@@ -43,13 +44,13 @@ Shipped in v0.18.0 (2026-10-29), with the list of codes, the USDT plans paid fro
 
 These are not built:
 
-- **S-UI and Hiddify** panels, if operators ask for them, and an adapter for a newer 3x-ui major version when one exists and is tested. Marzban 1.0 is beta and unsupported.
+- An adapter for a newer 3x-ui major version when one exists and is tested. Marzban 1.0 is beta and unsupported. (S-UI and Hiddify panels are built, in the next release.)
 - **Growth tools**: a lottery with tickets. (Gift codes, Top users, invite cards, cashback, the daily wheel and reseller targets are built; the last three are in the next release.)
 - **More bot languages**: Arabic, Russian and Turkish. The texts are already keys, so the work is translation and review.
 - **Two-factor sign-in inside the bot.**
 - Rotating the **master keys** is built (`sudo bobres rotate-key`).
 - More crypto networks, if a route that works from Iran exists. (Automatic TON is built: not yet tried with a real wallet.)
-- A hosted offering, and an affiliate program for BOBRES itself.
+- A hosted offering: the assisted install, the register of hosted stores and their health are built (in the next release); creating the server through a cloud provider's API is not. The affiliate program for BOBRES itself is built too (next release).
 
 ## Left out on purpose
 
@@ -74,4 +75,4 @@ These belong to the owner, not to the code: the lawyer's review of the license a
 
 ## Tell us what you need
 
-Ideas and changes of order go in the roadmap file. You can also open an issue on the [issue tracker](https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/issues). New panels such as S-UI and Hiddify are planned only if operators ask for them. See [Development](Development) for how a change gets built.
+Ideas and changes of order go in the roadmap file. You can also open an issue on the [issue tracker](https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/issues). Other new panels are planned only if operators ask for them. See [Development](Development) for how a change gets built.

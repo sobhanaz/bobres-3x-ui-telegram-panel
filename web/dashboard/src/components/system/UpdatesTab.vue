@@ -9,7 +9,7 @@ import Skeleton from 'primevue/skeleton'
 import Tag from 'primevue/tag'
 import { api, ApiError } from '../../api'
 import { errorText } from '../../errors'
-import { dateTime, isolate, type Lang } from '../../format'
+import { dateTime, isolate, rtl, type Lang } from '../../format'
 import { channelOf, newerThanLicense, updateDetail, updateReason, updateState, type UpdateState } from '../../system'
 import {
   copyText,
@@ -42,7 +42,7 @@ const toast = useToast()
 const auth = useAuth()
 const lang = computed(() => locale.value as Lang)
 // the arrow from the old version to the new one points the way the line reads
-const arrowIcon = computed(() => (locale.value === 'fa' ? 'pi-arrow-left' : 'pi-arrow-right'))
+const arrowIcon = computed(() => (rtl(locale.value as Lang) ? 'pi-arrow-left' : 'pi-arrow-right'))
 const isOwner = computed(() => auth.can('system.write'))
 
 const state = ref<UpdatesState | null>(null)

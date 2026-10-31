@@ -53,6 +53,10 @@ If your panel is down, the customer keeps a paid order and gets the service when
 - **Gift codes** add credit to the wallet. **Reward codes** are discount codes you hand out after a purchase. **Cashback** puts a share of a delivered order back into the wallet, with a message. The **Daily wheel** gives customers with paid orders one free spin a day. See [Plans and Pricing](Plans-and-Pricing).
 - **My codes** (Wallet, or `/codes`) lists the customer's own codes, newest first, five to a page: each reward code whole (a tap copies it) with what it takes off, its state (not used yet, used, expired, switched off), when it ends and the purchase that gave it; and each gift code the customer applied, as **used by you** with the last characters of the code (a gift code is never kept whole). It lists nothing that is not the customer's: not another customer's codes, not a code you made for everyone, not a gift code nobody applied. The reward message has a **My codes** button, so the code can be found again.
 
+### Languages
+
+The bot, the Mini App and the dashboard speak Persian and English, and in **beta** Arabic, Russian and Turkish. The beta languages are machine-translated: have a native speaker read them before you rely on them. You choose what your customers may pick in the dashboard: **Settings → General → Customer languages**, a box per language and the default among them (by default Persian and English only, so nothing changes until you tick more). The language picker and the Mini App show only those; a customer whose Telegram language is one of them gets it, anyone else your default. If you switch a language off later, its customers read your default until you switch it on again. Arabic reads right to left with Arabic-Indic digits; counting words take each language's plural forms. Your own content (plan names, broadcasts, help pages, terms) stays in Persian and English: a customer of a beta language reads the English version, so write it.
+
 ## For staff
 
 Owners and admins send `/admin` and get a menu made of buttons. Support staff get `/dashboard` only.

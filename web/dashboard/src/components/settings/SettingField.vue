@@ -6,6 +6,7 @@ import Select from 'primevue/select'
 import ToggleSwitch from 'primevue/toggleswitch'
 import PrizesEditor from './PrizesEditor.vue'
 import TiersEditor from './TiersEditor.vue'
+import LanguagesEditor from './LanguagesEditor.vue'
 import Button from 'primevue/button'
 import Message from 'primevue/message'
 import { api } from '../../api'
@@ -184,6 +185,16 @@ async function runCheck() {
         :model-value="modelValue"
         :input-id="id"
         :no-prize-weight="siblings['wheel.no_prize_weight']"
+        :invalid="!!problem || !!serverError"
+        :locked="locked"
+        :described-by="describedBy"
+        @update:model-value="set"
+        @touch="emit('touch')"
+      />
+      <LanguagesEditor
+        v-else-if="item.kind === 'langs'"
+        :model-value="modelValue"
+        :input-id="id"
         :invalid="!!problem || !!serverError"
         :locked="locked"
         :described-by="describedBy"

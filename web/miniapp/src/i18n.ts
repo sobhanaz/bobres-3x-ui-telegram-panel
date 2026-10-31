@@ -1,7 +1,14 @@
-// Two languages, Persian (right to left) and English, in one small table:
-// {name} placeholders are replaced, nothing else is interpreted.
+// Persian (right to left) and English in one small table here, and Arabic
+// (right to left), Russian and Turkish in beta (machine-translated, awaiting a
+// native review) in src/locales/<lang>.json: {name} placeholders are replaced,
+// and a plural selector {name|form|…} picks the form the number takes in the
+// language (the bot's syntax, see internal/bot/i18n/plural.go); nothing else is
+// interpreted.
 import { ref, computed } from 'vue'
-import type { Lang } from './format'
+import { isLang, latinDigits, numberLocale, rtl, type Lang } from './format'
+import ar from './locales/ar.json'
+import ru from './locales/ru.json'
+import trTexts from './locales/tr.json'
 
 const fa = {
   'tab.store': 'فروشگاه',
@@ -79,6 +86,7 @@ const fa = {
   'ledger.gift_code': 'کد هدیه',
   'ledger.license': 'لایسنس BOBRES',
   'ledger.digital': 'حساب دیجیتال',
+  'ledger.affiliate': 'همکاری در فروش',
   'ledger.convert': 'تبدیل تتر به تومان',
   'ledger.other': 'تراکنش',
   'checkout.title': 'تأیید خرید',
@@ -219,6 +227,7 @@ const en: Record<keyof typeof fa, string> = {
   'ledger.gift_code': 'Gift code',
   'ledger.license': 'BOBRES license',
   'ledger.digital': 'Digital account',
+  'ledger.affiliate': 'Affiliate program',
   'ledger.convert': 'USDT converted to Toman',
   'ledger.other': 'Movement',
   'checkout.title': 'Confirm purchase',
@@ -283,36 +292,45 @@ const en: Record<keyof typeof fa, string> = {
   'err.unknown': 'Something went wrong. Try again.',
 }
 
-/** SectionMessages are a section's own texts (src/sections/<name>/messages.ts, its default export). */
+/** SectionMessages are a section's own texts (src/sections/<name>/messages.ts, its default export). A section may carry its
+ * beta languages too; the ones it leaves out are read from src/locales/<lang>.json (a test checks every text is in all five). */
 export interface SectionMessages {
   fa: Record<string, string>
   en: Record<string, string>
+  ar?: Record<string, string>
+  ru?: Record<string, string>
+  tr?: Record<string, string>
 }
 
-/** Key is a text's name: the shop's are known to the compiler, a section's are plain strings (a test checks every one is in both languages). */
+/** Key is a text's name: the shop's are known to the compiler, a section's are plain strings (a test checks every one is in all five languages). */
 export type Key = keyof typeof fa | (string & {})
 
 // `en` is declared as Record<keyof typeof fa, string>: the compiler checks that every text of the shop is in both languages.
-export const messages: Record<Lang, Record<string, string>> = { fa: { ...fa }, en: { ...en } }
+export const messages: Record<Lang, Record<string, string>> = { fa: { ...fa }, en: { ...en }, ar: { ...ar }, ru: { ...ru }, tr: { ...trTexts } }
 
 // The sections add theirs, so a new section touches no shared file.
 for (const t of Object.values(import.meta.glob<SectionMessages>('./sections/*/messages.ts', { eager: true, import: 'default' }))) {
   Object.assign(messages.fa, t.fa)
   Object.assign(messages.en, t.en)
+  for (const l of ['ar', 'ru', 'tr'] as const) Object.assign(messages[l], t[l] ?? {})
 }
 
 export const lang = ref<Lang>('fa')
-export const dir = computed(() => (lang.value === 'fa' ? 'rtl' : 'ltr'))
+export const dir = computed(() => (rtl(lang.value) ? 'rtl' : 'ltr'))
 
-/** pickLang maps a Telegram or browser language code to the app's languages (Persian is the default). */
-export function pickLang(code: string | undefined): Lang {
-  return code?.toLowerCase().startsWith('en') ? 'en' : 'fa'
+/** pickLang maps a Telegram or stored language code to one of the languages the store enabled (the server sends them; Persian
+ * and English until it has), else to the store's default, the first of them. */
+export function pickLang(code: string | undefined, enabled: readonly string[] = ['fa', 'en']): Lang {
+  const langs = enabled.filter(isLang)
+  const c = (code ?? '').toLowerCase().trim()
+  const hit = langs.find((l) => c === l || c.startsWith(l + '-'))
+  return hit ?? langs[0] ?? 'fa'
 }
 
 export function setLang(l: Lang): void {
   lang.value = l
   document.documentElement.lang = l
-  document.documentElement.dir = l === 'fa' ? 'rtl' : 'ltr'
+  document.documentElement.dir = rtl(l) ? 'rtl' : 'ltr'
 }
 
 /** tr looks a message up in the current language and fills {placeholders}. */
@@ -320,9 +338,42 @@ export function tr(key: Key, params: Record<string, string | number> = {}): stri
   return translate(lang.value, key, params)
 }
 
+// The forms of a plural selector, in the order of the language's categories (CLDR).
+const pluralForms: Record<Lang, Record<string, number>> = {
+  fa: { one: 0, other: 1 },
+  en: { one: 0, other: 1 },
+  tr: { one: 0, other: 1 },
+  ru: { one: 0, few: 1, many: 2, other: 1 }, // a fraction takes the "few" form: 1,5 дня
+  ar: { zero: 0, one: 1, two: 2, few: 3, many: 4, other: 5 },
+}
+
+/** countOf reads a value back as a number: a number as it is, a text as the language writes numbers ("1,234", "۱٬۲۳۴",
+ * "١٬٢٣٤", "1 234,5", "1.234,5"); NaN for anything else (an amount with its unit). */
+export function countOf(v: string | number | undefined, l: Lang): number {
+  if (typeof v === 'number') return v
+  const decimal = l === 'ru' || l === 'tr' ? ',' : l === 'fa' || l === 'ar' ? '٫.' : '.'
+  const group = l === 'ru' ? ' \u00a0\u202f' : l === 'tr' ? '.' : ',٬'
+  let s = ''
+  for (const ch of latinDigits(String(v ?? '').trim())) {
+    if (/\d/.test(ch)) s += ch
+    else if (decimal.includes(ch) && s && !s.includes('.')) s += '.'
+    else if (group.includes(ch) && s && !s.includes('.')) continue
+    else if (ch === '-' && !s) s += ch
+    else return NaN
+  }
+  return s && s !== '-' ? Number(s) : NaN
+}
+
 export function translate(l: Lang, key: Key, params: Record<string, string | number> = {}): string {
   const text = messages[l][key] ?? messages.en[key] ?? key
-  return text.replace(/\{(\w+)\}/g, (_, k: string) => String(params[k] ?? ''))
+  return text
+    .replace(/\{(\w+)((?:\|[^{}|\n]*)+)\}/g, (_, k: string, rest: string) => {
+      const forms = rest.slice(1).split('|')
+      const n = countOf(params[k], l)
+      const i = Number.isNaN(n) ? forms.length - 1 : Math.min(pluralForms[l][new Intl.PluralRules(numberLocale(l)).select(Math.abs(n))] ?? forms.length - 1, forms.length - 1)
+      return forms[i].replaceAll('#', String(params[k] ?? ''))
+    })
+    .replace(/\{(\w+)\}/g, (_, k: string) => String(params[k] ?? ''))
 }
 
 /** planName picks a plan's name in the language, falling back to English and then any. */

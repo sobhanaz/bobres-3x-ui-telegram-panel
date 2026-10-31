@@ -6,7 +6,7 @@ import (
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/events"
 )
 
-// Per-server capacity (docs/04-dashboard.md, "Servers"). A 3x-ui or Marzban server may be given a limit on
+// Per-server capacity (docs/04-dashboard.md, "Servers"). A server of any kind may be given a limit on
 // its services (Server.MaxClients; 0 is none). The provisioner keeps to it: it passes over a full server when
 // it picks one for a new service and refuses one that is named. Core only shows how full each server is and,
 // through the watchdog, tells the staff when one is nearly or entirely full, before an order has to wait.

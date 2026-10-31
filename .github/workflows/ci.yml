@@ -529,6 +529,166 @@ jobs:
         if: failure()
         run: docker logs --tail 200 marzban || true
 
+  # The S-UI adapter and the provisioner against a REAL S-UI panel (a sing-box
+  # panel): the alireza7/s-ui image, pinned by tag AND digest (the digest of the
+  # tag's manifest list). tools/suidev signs in with the fresh panel's admin/admin,
+  # makes an API token and adds a VLESS, a Trojan and a mixed (HTTP proxy) inbound;
+  # the traffic test sends real requests through the mixed one. This job is the
+  # check for drift of the fake in internal/suifake. To test another release,
+  # change SUI_VERSION and SUI_DIGEST together. Not a required check.
+  sui:
+    name: S-UI integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      SUI_VERSION: v1.6.6
+      SUI_DIGEST: sha256:c3cc6fa2d8fef0213923ec0aeeb46c912ff67179cbc6481b849b75d6720ed1d2
+      BOBRES_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
+      BOBRES_TEST_REQUIRE_DB: "1"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.26.x"
+          check-latest: true
+          cache: true
+      # The runner's network: the panel (2095), its subscriptions (2096) and the
+      # inbounds (2443-2445) are on 127.0.0.1.
+      - name: Start a real S-UI panel
+        run: docker run -d --name sui --network host "alireza7/s-ui:${SUI_VERSION}@${SUI_DIGEST}"
+      - name: Make the API token and the inbounds
+        run: |
+          set -euo pipefail
+          token=$(go run ./tools/suidev -url http://127.0.0.1:2095/app)
+          echo "::add-mask::$token"
+          echo "SUI_TEST_TOKEN=$token" >> "$GITHUB_ENV"
+      - name: Adapter and provisioner against the panel
+        env:
+          SUI_TEST_REQUIRE: "1"
+          SUI_TEST_URL: http://127.0.0.1:2095/app
+          SUI_TEST_ALLOW_PRIVATE: "1"
+          SUI_TEST_VERSION: ${{ env.SUI_VERSION }}
+          SUI_TEST_PROXY: 127.0.0.1:2445
+          SUI_TEST_SUB: http://127.0.0.1:2096/sub/
+        run: |
+          set -euo pipefail
+          go test -tags integration -count=1 -p 1 -v -run 'IntegrationSUI' ./internal/provisioner/adapter/ ./internal/provisioner/server/
+      - name: Panel logs on failure
+        if: failure()
+        run: docker logs --tail 200 sui || true
+
+  # The Hiddify adapter and the provisioner against a REAL Hiddify Manager panel:
+  # ghcr.io/hiddify/hiddify-manager, pinned by tag AND digest, with the MariaDB and
+  # Redis it needs. NOT a required check, and allowed to fail: Hiddify's Docker
+  # image is marked experimental by Hiddify itself (docs/DOCKER.md upstream), it
+  # is about 700 MB, needs a privileged container on the host network (it binds
+  # 80, 443 and every proxy port) and runs its whole install on every start, which
+  # takes minutes on a runner. The fake in internal/hiddifyfake and the unit tests
+  # carry the adapter's checks; this job confirms them against the real panel when
+  # it comes up. The panel itself answers on 127.0.0.1:9000 (plain http, under the
+  # admin proxy path); `hiddify-panel-cli all-configs` gives that path and the
+  # owner admin's UUID (the API key). To test another release, change
+  # HIDDIFY_VERSION and HIDDIFY_DIGEST together.
+  hiddify:
+    name: Hiddify integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    continue-on-error: true
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      HIDDIFY_VERSION: v14.0.5
+      HIDDIFY_DIGEST: sha256:64853df71f569af95cd21040b0263f71a4d4635b3cc0d038da5f9b7ea51bbd78
+      BOBRES_TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres?sslmode=disable
+      BOBRES_TEST_REQUIRE_DB: "1"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.26.x"
+          check-latest: true
+          cache: true
+      - name: Start a real Hiddify Manager panel
+        run: |
+          set -euo pipefail
+          dbpw=$(openssl rand -hex 16); redispw=$(openssl rand -hex 16)
+          echo "::add-mask::$dbpw"; echo "::add-mask::$redispw"
+          docker run -d --name hiddify-db --network host -e MARIADB_RANDOM_ROOT_PASSWORD=1 \
+            -e MYSQL_DATABASE=hiddifypanel -e MYSQL_USER=hiddifypanel -e MYSQL_PASSWORD="$dbpw" mariadb:11.8
+          docker run -d --name hiddify-redis --network host redis:7-alpine redis-server --requirepass "$redispw"
+          for _ in $(seq 60); do docker exec hiddify-db healthcheck.sh --connect >/dev/null 2>&1 && break; sleep 2; done
+          # On a runner the install's firewall step fails ("Finished with errors in: Firewall"),
+          # and the image's entrypoint (set -e) then exits and stops the container with the
+          # panel it has just started. The panel does not need the firewall: keep the
+          # container up after the entrypoint ends.
+          docker run -d --name hiddify --network host --privileged --cap-add NET_ADMIN \
+            -e SQLALCHEMY_DATABASE_URI="mysql+mysqldb://hiddifypanel:${dbpw}@127.0.0.1:3306/hiddifypanel?charset=utf8mb4" \
+            -e REDIS_URI_MAIN="redis://:${redispw}@127.0.0.1:6379/1" \
+            --entrypoint bash "ghcr.io/hiddify/hiddify-manager:${HIDDIFY_VERSION}@${HIDDIFY_DIGEST}" \
+            -c './scripts/docker-init.sh || echo "docker-init.sh exited with $?"; exec sleep infinity'
+      - name: Wait for the panel and read its admin path and key
+        run: |
+          set -euo pipefail
+          # The panel's CLI, as the manager's own scripts run it (their helpers, the venv and
+          # the panel's configuration file); expanded inside the container.
+          # shellcheck disable=SC2016
+          cli='cd /opt/hiddify-manager && source scripts/common/utils.sh >/dev/null 2>&1; activate_python_venv >/dev/null 2>&1 || . .venv313/bin/activate;
+               export HIDDIFY_CFG_PATH="${HIDDIFY_CFG_PATH:-/opt/hiddify-manager/data/hiddify-panel/app.cfg}"; hiddify-panel-cli all-configs'
+          ok=""
+          for _ in $(seq 90); do
+            if docker exec hiddify bash -c "$cli" > all-configs.out 2> all-configs.err && grep -q '"api_key"' all-configs.out; then
+              ok=1; break
+            fi
+            sleep 10
+          done
+          if [ -z "$ok" ]; then
+            echo "hiddify-panel-cli all-configs gave no configuration; its last error output (UUIDs hidden):"
+            tail -n 40 all-configs.err | sed -E 's/[0-9a-fA-F]{8}-[0-9a-fA-F-]{27}/<uuid>/g'
+            exit 1
+          fi
+          read -r path key < <(python3 -c 'import json; t=open("all-configs.out").read(); d=json.loads(t[t.index("{"):]); print(d["api_path"], d["api_key"])')
+          rm -f all-configs.out all-configs.err
+          echo "::add-mask::$path"; echo "::add-mask::$key"
+          code=""
+          for _ in $(seq 30); do
+            code=$(curl -s -o /dev/null -w '%{http_code}' -H "Hiddify-API-Key: $key" "http://127.0.0.1:9000/$path/api/v2/panel/info/" || true)
+            [ "$code" = 200 ] && break
+            sleep 5
+          done
+          echo "The panel's info answered HTTP $code"
+          [ "$code" = 200 ]
+          echo "HIDDIFY_TEST_URL=http://127.0.0.1:9000/$path" >> "$GITHUB_ENV"
+          echo "HIDDIFY_TEST_KEY=$key" >> "$GITHUB_ENV"
+      - name: Adapter and provisioner against the panel
+        env:
+          HIDDIFY_TEST_REQUIRE: "1"
+          HIDDIFY_TEST_ALLOW_PRIVATE: "1"
+          HIDDIFY_TEST_VERSION: ${{ env.HIDDIFY_VERSION }}
+        run: |
+          set -euo pipefail
+          go test -tags integration -count=1 -p 1 -v -run 'IntegrationHiddify' ./internal/provisioner/adapter/ ./internal/provisioner/server/
+      - name: Panel logs on failure
+        if: failure()
+        run: |
+          docker logs --tail 200 hiddify || true
+          docker exec hiddify bash -c 'tail -n 100 /opt/hiddify-manager/data/log/*.log' || true
+
   secrets:
     name: Secret scan
     runs-on: ubuntu-latest
