@@ -778,8 +778,7 @@ adapters for older 3x-ui versions (built only when a customer needs one). What i
   and transactions while goroutines wait (`internal/core/domain`, `internal/core/store`) to
   prove a test does not need a big machine; CI does.
 - The adapter and provisioner tests against a **real** panel run in CI: 3x-ui v3.8.5, v3.9.0, v3.10.0 and v3.10.2,
-  Marzban, S-UI v1.6.6 and Hiddify Manager v14.0.5 (`go test -tags integration`, see `.github/workflows/ci.yml`; the
-  Hiddify job is still allowed to fail while its upstream image is experimental).
+  Marzban, S-UI v1.6.6 and Hiddify Manager v14.0.5 (`go test -tags integration`, see `.github/workflows/ci.yml`).
 - `tools/bench/run.sh` measures the performance and size baseline again ([docs/21-benchmark.md](docs/21-benchmark.md)),
   and `go test -bench` runs the benchmark functions in the packages.
 
