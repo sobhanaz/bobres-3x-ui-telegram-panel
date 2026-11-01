@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/brand/bobres-banner.webp" alt="BOBRES, the beaver mascot with a teal shield: Your VPN store on Telegram" width="100%">
+  <img src="docs/readme/hero.svg" alt="BOBRES: your VPN store on Telegram, in one command. Self-hosted, white-label, signed updates." width="100%">
 </p>
 
 <h1 align="center">BOBRES 3x-ui Telegram Panel</h1>
@@ -33,52 +33,22 @@ dashboard**; and one **`bobres` command** on the server installs, updates, backs
 It is white-label and single-tenant: each operator runs it on their own server, with their own domain, bot, panels and
 brand. Nothing goes through anyone else's servers.
 
-<table>
-  <tr>
-    <td align="center" width="20%"><h3>1 command</h3><sub>to install, update,<br>back up and repair</sub></td>
-    <td align="center" width="20%"><h3>4 panels</h3><sub>3x-ui · Marzban<br>S-UI · Hiddify</sub></td>
-    <td align="center" width="20%"><h3>10 ways to pay</h3><sub>cards, USDT, TON,<br>Iranian gateways, Stars</sub></td>
-    <td align="center" width="20%"><h3>5 languages</h3><sub>Persian, English<br>+ ar · ru · tr (beta)</sub></td>
-    <td align="center" width="20%"><h3>~400 / s</h3><sub>purchases on one machine<br>(<a href="docs/21-benchmark.md">benchmark</a>)</sub></td>
-  </tr>
-</table>
+<p align="center">
+  <img src="docs/readme/stats.svg" alt="1 command to install, update and repair · 4 panels: 3x-ui, Marzban, S-UI, Hiddify · 10 ways to pay · 5 languages · about 400 purchases a second on one machine (see docs/21-benchmark.md)" width="100%">
+</p>
 
 ## ✨ At a glance
 
 <table>
   <tr>
-    <td width="33%" valign="top">
-      <h4>🛒 Customers</h4>
-      A Telegram bot and Mini App: plans in groups, wallet, free trial, renewals, traffic packages, bulk purchase, gift and
-      reward codes, invite links, support, a page for every service, news of new products for those who want it.
-    </td>
-    <td width="33%" valign="top">
-      <h4>🤝 Resellers</h4>
-      A panel in the bot and the Mini App: buy for customers at tier prices on credit, manage their services, earn
-      commission. Their configs carry their own prefix and group in your panel; you can message them and remind them to settle.
-    </td>
-    <td width="33%" valign="top">
-      <h4>🧭 You</h4>
-      A dashboard for plans, payments, orders, users, resellers, reports, branding, panels, gateways, staff, backups,
-      updates and licenses; Telegram alerts; <code>/admin</code> in the bot; Prometheus, an uptime view and a status page.
-    </td>
+    <td width="33%"><img src="docs/readme/card-customers.svg" alt="Customers: a Telegram bot and Mini App store; wallet, free trial, renewals; gift and reward codes, invite links, support, news of new products" width="100%"></td>
+    <td width="33%"><img src="docs/readme/card-resellers.svg" alt="Resellers: buy for customers at tier prices on credit; their own prefix and group in your panel; messages and a weekly settlement reminder" width="100%"></td>
+    <td width="33%"><img src="docs/readme/card-you.svg" alt="You: a dashboard for plans, payments, users, resellers, reports, branding, panels, gateways, staff, backups, updates and licenses; Telegram alerts; Prometheus, uptime and a status page" width="100%"></td>
   </tr>
   <tr>
-    <td valign="top">
-      <h4>💳 Payments</h4>
-      One Toman wallet with its USDT value, card to card, USDT (manual, and automatic on TRON), automatic TON, Zarinpal,
-      IDPay, NextPay, Aqayepardakht and Telegram Stars. Every payment settles exactly once.
-    </td>
-    <td valign="top">
-      <h4>🛰️ Panels</h4>
-      3x-ui v3.8.5 to v3.10.2, Marzban 0.8, S-UI 1.6 and Hiddify Manager 14, several at once, with weights and a client
-      limit per server. Each kind is tested against the real panel in CI.
-    </td>
-    <td valign="top">
-      <h4>🖥️ Server</h4>
-      <code>bobres</code>: install, status, logs, update with automatic rollback, encrypted backups and restore, HTTPS,
-      hardening and health checks. The store comes back by itself after a reboot.
-    </td>
+    <td width="33%"><img src="docs/readme/card-payments.svg" alt="Payments: one Toman wallet; card to card, USDT manual and automatic on TRON, automatic TON, Zarinpal, IDPay, NextPay, Aqayepardakht, Telegram Stars; each settles exactly once" width="100%"></td>
+    <td width="33%"><img src="docs/readme/card-panels.svg" alt="Panels: 3x-ui v3.8.5 to v3.10.2, Marzban 0.8, S-UI 1.6, Hiddify Manager 14; several at once with weights and a client limit per server; each tested against the real panel in CI" width="100%"></td>
+    <td width="33%"><img src="docs/readme/card-server.svg" alt="Server: the bobres command installs, updates with automatic rollback, backs up encrypted, restores, manages HTTPS and hardens the server" width="100%"></td>
   </tr>
 </table>
 
@@ -101,6 +71,8 @@ the import links on the subscription page have not been tried on real devices, a
 against every Telegram client. Two parts were set aside on purpose: third-party crypto processors (they exclude Iran) and
 adapters for older 3x-ui versions (built only when a customer needs one). What is left before selling widely is in
 [docs/launch-checklist.md](docs/launch-checklist.md).
+
+<p align="center"><img src="docs/readme/divider.svg" alt="" width="100%"></p>
 
 ## 🚀 Install
 
@@ -240,6 +212,8 @@ credit. The stable channel is the default; `updates.channel` can be set to beta 
 It touches only what it can prove is BOBRES's, never SSH settings or the SSH firewall rule, and can be run again after an
 interruption. What installing BOBRES changes on a server, flag by flag, and how to restore the final backup on a new
 server: [docs/06-installer.md](docs/06-installer.md) and [docs/runbooks/uninstall.md](docs/runbooks/uninstall.md).
+
+<p align="center"><img src="docs/readme/divider.svg" alt="" width="100%"></p>
 
 ## 📦 Features
 
@@ -404,6 +378,8 @@ at `https://<domain>/admin`
   in Telegram, a strict CSP and an append-only audit log. Details and the threat model: [docs/07-security.md](docs/07-security.md), [SECURITY.md](SECURITY.md).
 
 </details>
+
+<p align="center"><img src="docs/readme/divider.svg" alt="" width="100%"></p>
 
 ## 🏗️ Architecture
 
@@ -687,6 +663,8 @@ directly. An install never needs the license server to keep running ([docs/05-li
 | `web/dashboard`, `web/miniapp` | The Vue 3 dashboard and Mini App, built into the `core` binary |
 | `deploy/`, `install/` | The compose files, Caddy and systemd units; `install.sh` and the embedded public keys |
 | `tools/`, `tests/`, `site/` | Build and signing tools, dev panels for tests (`xuidev`, `marzbandev`, `suidev`), the load test and the benchmark (`loadtest`, `bench`), the assisted install of hosted stores (`hosted`); end-to-end tests; the public site |
+
+<p align="center"><img src="docs/readme/divider.svg" alt="" width="100%"></p>
 
 ## 📚 Docs
 
