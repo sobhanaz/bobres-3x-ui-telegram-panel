@@ -8,6 +8,10 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+## [0.21.1] — 2026-11-01
+
+**Two fixes on 0.21.0.** No migration; core and the bot update together as always.
+
 ### Fixed
 - No "monitor: CI facts" warning on the System page right after an update or a reboot: core starts a few seconds before the bot, so a bot that does not answer in core's first two minutes is logged as information. Later it is a warning, as before.
 - Callers that find the install's id missing at the same moment no longer fail with "no rows": one makes it and the others read it. A real install has the id from its first migration; the v0.19.0 benchmark hit this in its test setup, where most of 320 concurrent orders failed.
