@@ -11,6 +11,11 @@ import (
 // 45 seconds; core's client waits 50).
 const ciTimeout = 55 * time.Second
 
+// botStartGrace is how long after core starts a bot that does not answer is expected: an update or a reboot
+// starts core a few seconds before the bot (whose name does not even resolve yet), so a failure then is logged
+// as information, not as a warning the owner sees on the System page.
+const botStartGrace = 2 * time.Minute
+
 // ciStatus is the CI facts as last read from the bot (never blocks).
 func (m *Monitor) ciStatus() cicd.Status {
 	m.ciMu.Lock()
@@ -50,7 +55,11 @@ func (m *Monitor) refreshCI(ctx context.Context) {
 	defer m.ciMu.Unlock()
 	m.ciTried = m.now()
 	if err != nil || st == nil {
-		m.log.Warn("monitor: CI facts", "err", err)
+		if m.ciTried.Sub(m.start) < botStartGrace {
+			m.log.Info("monitor: CI facts (the bot is still starting)", "err", err)
+		} else {
+			m.log.Warn("monitor: CI facts", "err", err)
+		}
 		keep := m.ci
 		keep.Error, keep.Detail = cicd.ErrUnreachable, "the bot did not answer"
 		keep.Available = keep.CheckedAt > 0
