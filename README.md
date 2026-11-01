@@ -14,7 +14,6 @@
   <a href="https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/sobhanaz/bobres-3x-ui-telegram-panel/ci.yml?branch=main&style=for-the-badge&label=CI"></a>
   <a href="go.mod"><img alt="Go version" src="https://img.shields.io/github/go-mod/go-version/sobhanaz/bobres-3x-ui-telegram-panel?style=for-the-badge&color=0b2530"></a>
   <a href="LICENSE"><img alt="License: source-available" src="https://img.shields.io/badge/license-source--available-8b5a2b?style=for-the-badge"></a>
-  <a href="https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/sobhanaz/bobres-3x-ui-telegram-panel?style=for-the-badge&color=f2e6d0&labelColor=0b2530"></a>
 </p>
 
 <p align="center">
