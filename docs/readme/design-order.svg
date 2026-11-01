@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1280 450" width="1280" height="450" role="img" aria-label="Order Flow: Money is whole numbers in minor units, never floats; the ledger is append-only and every money call carries an idempotency key. Events go through an outbox and an inbox.">
+<style>.sans { font-family: -apple-system, 'Segoe UI', Inter, Helvetica, Arial, sans-serif; } .mono { font-family: 'SF Mono', SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace; } .fa { font-family: Vazirmatn, Tahoma, 'Geeza Pro', 'Noto Naskh Arabic', 'Segoe UI', sans-serif; }
+.run { animation: run 9s linear infinite; } @keyframes run { to { stroke-dashoffset: -1000; } } .live { animation: live 1.6s ease-in-out infinite; } @keyframes live { 50% { opacity: .25; } } .flowdot { animation: drop 1.6s ease-in infinite; } @keyframes drop { 0% { transform: translateY(0); opacity: 1; } 100% { transform: translateY(6px); opacity: .2; } } .step { animation: glowstep 4.8s ease-in-out infinite; } @keyframes glowstep { 50% { opacity: .78; } }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; } }</style>
+<defs>
+  <linearGradient id="edged2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#22d3ee"/><stop offset="1" stop-color="#a855f7"/></linearGradient>
+  <radialGradient id="gad2" cx=".12" cy=".1" r=".7"><stop offset="0" stop-color="#22d3ee" stop-opacity=".32"/><stop offset="1" stop-color="#22d3ee" stop-opacity="0"/></radialGradient>
+  <radialGradient id="gbd2" cx=".92" cy=".95" r=".6"><stop offset="0" stop-color="#a855f7" stop-opacity=".30"/><stop offset="1" stop-color="#a855f7" stop-opacity="0"/></radialGradient>
+  <pattern id="dotsd2" width="22" height="22" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1" fill="#94a3b8" opacity=".12"/></pattern>
+  <clipPath id="clipd2"><rect x="10" y="10" width="1260" height="430" rx="28"/></clipPath><linearGradient id="ttd2" x1="0" x2="1"><stop offset="0" stop-color="#22d3ee"/><stop offset="1" stop-color="#a855f7"/></linearGradient></defs>
+
+<g clip-path="url(#clipd2)">
+  <rect x="10" y="10" width="1260" height="430" fill="#0a0e1a"/>
+  <rect x="10" y="10" width="1260" height="430" fill="url(#dotsd2)"/>
+  <rect x="10" y="10" width="1260" height="430" fill="url(#gad2)"/>
+  <rect x="10" y="10" width="1260" height="430" fill="url(#gbd2)"/>
+</g>
+<rect x="10.75" y="10.75" width="1258.5" height="428.5" rx="27.5" fill="none" stroke="url(#edged2)" stroke-opacity=".55" stroke-width="1.5"/>
+<rect class="run" x="10.75" y="10.75" width="1258.5" height="428.5" rx="27.5" fill="none" stroke="url(#edged2)" stroke-width="2.5" stroke-dasharray="80 920" pathLength="1000"/>
+<text class="mono" x="60" y="74" font-size="13" letter-spacing="2.5" xml:space="preserve"><tspan fill="#22d3ee" font-weight="700">06</tspan><tspan fill="#64748b">   FLOW · FROM TAP TO CONFIG</tspan></text>
+<text class="sans" x="56" y="158" font-size="70" font-weight="900" fill="url(#ttd2)">Order Flow</text>
+<g transform="translate(552 70)"><rect x="0" y="-14" width="138" height="28" rx="14" fill="#0b1220" stroke="#a855f7" stroke-opacity=".7"/><text class="mono" x="13" y="4.5" font-size="12.5" font-weight="700" letter-spacing="1.5" fill="#a855f7">EXACTLY ONCE</text></g>
+<text class="sans" x="60" y="214" font-size="19" fill="#cbd5e1"><tspan font-weight="700" fill="#f8fafc">Money is whole numbers</tspan> in minor units, never floats;</text><text class="sans" x="60" y="243" font-size="19" fill="#cbd5e1">the ledger is append-only and every money call carries</text><text class="sans" x="60" y="272" font-size="19" fill="#cbd5e1">an idempotency key. Events go through an outbox and an inbox.</text>
+<text class="sans" x="60" y="334" font-size="40" font-weight="900" fill="#f8fafc">21</text><text class="mono" x="62" y="358" font-size="11.5" letter-spacing="2" fill="#64748b">EVENT TYPES</text><text class="sans" x="265" y="334" font-size="40" font-weight="900" fill="#f8fafc">0</text><text class="mono" x="267" y="358" font-size="11.5" letter-spacing="2" fill="#64748b">FLOATS FOR MONEY</text><text class="sans" x="470" y="334" font-size="40" font-weight="900" fill="#f8fafc">1</text><text class="mono" x="472" y="358" font-size="11.5" letter-spacing="2" fill="#64748b">APPEND-ONLY LEDGER</text>
+<rect x="60" y="382" width="68" height="28" rx="14" fill="#0f172a" stroke="#334155"/><text class="mono" x="94" y="400.5" font-size="12.5" fill="#cbd5e1" text-anchor="middle">outbox</text><rect x="138" y="382" width="60" height="28" rx="14" fill="#0f172a" stroke="#334155"/><text class="mono" x="168" y="400.5" font-size="12.5" fill="#cbd5e1" text-anchor="middle">inbox</text><rect x="208" y="382" width="106" height="28" rx="14" fill="#0f172a" stroke="#334155"/><text class="mono" x="260" y="400.5" font-size="12.5" fill="#cbd5e1" text-anchor="middle">idempotency</text><rect x="323" y="382" width="113" height="28" rx="14" fill="#0f172a" stroke="#334155"/><text class="mono" x="380" y="400.5" font-size="12.5" fill="#cbd5e1" text-anchor="middle">dead letters</text>
+<g class="step" style="animation-delay:-0.0s">
+  <rect x="740" y="51.0" width="490" height="60" rx="14" fill="#0b1020" stroke="#22d3ee" stroke-opacity=".75" stroke-width="1.5"/>
+  <rect x="752" y="61.0" width="40" height="40" rx="10" fill="#22d3ee" fill-opacity=".14" stroke="#22d3ee" stroke-opacity=".5"/>
+  <text x="772" y="88.0" font-size="20" text-anchor="middle">👆</text>
+  <text class="sans" x="806" y="77.0" font-size="17" font-weight="700" fill="#f1f5f9">Customer taps Buy</text>
+  <text class="mono" x="806" y="97.0" font-size="12" fill="#64748b">bot → core · CreateOrder, idempotent</text>
+  <text class="fa" x="1214" y="87.0" font-size="15" font-weight="700" fill="#22d3ee" text-anchor="end">سفارش</text>
+</g><line x1="772" y1="111.0" x2="772" y2="123.0" stroke="#22d3ee" stroke-opacity=".5" stroke-width="2" stroke-dasharray="3 4"/><circle class="flowdot" style="animation-delay:-0.0s" cx="772" cy="114.0" r="3.5" fill="#22d3ee"/><g class="step" style="animation-delay:-0.6s">
+  <rect x="740" y="123.0" width="490" height="60" rx="14" fill="#0b1020" stroke="#22d3ee" stroke-opacity=".75" stroke-width="1.5"/>
+  <rect x="752" y="133.0" width="40" height="40" rx="10" fill="#22d3ee" fill-opacity=".14" stroke="#22d3ee" stroke-opacity=".5"/>
+  <text x="772" y="160.0" font-size="20" text-anchor="middle">💰</text>
+  <text class="sans" x="806" y="149.0" font-size="17" font-weight="700" fill="#f1f5f9">Wallet or a gateway</text>
+  <text class="mono" x="806" y="169.0" font-size="12" fill="#64748b">payments verifies with the provider</text>
+  <text class="fa" x="1214" y="159.0" font-size="15" font-weight="700" fill="#22d3ee" text-anchor="end">پرداخت</text>
+</g><line x1="772" y1="183.0" x2="772" y2="195.0" stroke="#22d3ee" stroke-opacity=".5" stroke-width="2" stroke-dasharray="3 4"/><circle class="flowdot" style="animation-delay:-0.4s" cx="772" cy="186.0" r="3.5" fill="#22d3ee"/><g class="step" style="animation-delay:-1.2s">
+  <rect x="740" y="195.0" width="490" height="60" rx="14" fill="#0b1020" stroke="#22d3ee" stroke-opacity=".75" stroke-width="1.5"/>
+  <rect x="752" y="205.0" width="40" height="40" rx="10" fill="#22d3ee" fill-opacity=".14" stroke="#22d3ee" stroke-opacity=".5"/>
+  <text x="772" y="232.0" font-size="20" text-anchor="middle">✅</text>
+  <text class="sans" x="806" y="221.0" font-size="17" font-weight="700" fill="#f1f5f9">Order paid, once</text>
+  <text class="mono" x="806" y="241.0" font-size="12" fill="#64748b">outbox event · order.paid.v1</text>
+  <text class="fa" x="1214" y="231.0" font-size="15" font-weight="700" fill="#22d3ee" text-anchor="end">تأیید</text>
+</g><line x1="772" y1="255.0" x2="772" y2="267.0" stroke="#22d3ee" stroke-opacity=".5" stroke-width="2" stroke-dasharray="3 4"/><circle class="flowdot" style="animation-delay:-0.8s" cx="772" cy="258.0" r="3.5" fill="#22d3ee"/><g class="step" style="animation-delay:-1.8s">
+  <rect x="740" y="267.0" width="490" height="60" rx="14" fill="#0b1020" stroke="#a855f7" stroke-opacity=".75" stroke-width="1.5"/>
+  <rect x="752" y="277.0" width="40" height="40" rx="10" fill="#a855f7" fill-opacity=".14" stroke="#a855f7" stroke-opacity=".5"/>
+  <text x="772" y="304.0" font-size="20" text-anchor="middle">🛰️</text>
+  <text class="sans" x="806" y="293.0" font-size="17" font-weight="700" fill="#f1f5f9">Client on the panel</text>
+  <text class="mono" x="806" y="313.0" font-size="12" fill="#64748b">provisioner · create or renew</text>
+  <text class="fa" x="1214" y="303.0" font-size="15" font-weight="700" fill="#a855f7" text-anchor="end">ساخت</text>
+</g><line x1="772" y1="327.0" x2="772" y2="339.0" stroke="#a855f7" stroke-opacity=".5" stroke-width="2" stroke-dasharray="3 4"/><circle class="flowdot" style="animation-delay:-1.2s" cx="772" cy="330.0" r="3.5" fill="#a855f7"/><g class="step" style="animation-delay:-2.4s">
+  <rect x="740" y="339.0" width="490" height="60" rx="14" fill="#0b1020" stroke="#a855f7" stroke-opacity=".75" stroke-width="1.5"/>
+  <rect x="752" y="349.0" width="40" height="40" rx="10" fill="#a855f7" fill-opacity=".14" stroke="#a855f7" stroke-opacity=".5"/>
+  <text x="772" y="376.0" font-size="20" text-anchor="middle">📲</text>
+  <text class="sans" x="806" y="365.0" font-size="17" font-weight="700" fill="#f1f5f9">Link, QR and a page</text>
+  <text class="mono" x="806" y="385.0" font-size="12" fill="#64748b">subscription.provisioned.v1 → chat</text>
+  <text class="fa" x="1214" y="375.0" font-size="15" font-weight="700" fill="#a855f7" text-anchor="end">تحویل</text>
+</g>
+</svg>

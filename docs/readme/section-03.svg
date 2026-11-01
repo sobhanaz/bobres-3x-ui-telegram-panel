@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1280 80" width="1280" height="80" role="img" aria-label="03 RUN IT">
+<style>.sans { font-family: -apple-system, 'Segoe UI', Inter, Helvetica, Arial, sans-serif; } .mono { font-family: 'SF Mono', SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace; } .fa { font-family: Vazirmatn, Tahoma, 'Geeza Pro', 'Noto Naskh Arabic', 'Segoe UI', sans-serif; }
+.dot { animation: travel 4s ease-in-out infinite; } @keyframes travel { 50% { transform: translateX(714px); } }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; } }</style>
+<defs><linearGradient id="t" x1="0" x2="1"><stop offset="0" stop-color="#22c55e"/><stop offset="1" stop-color="#22d3ee"/></linearGradient>
+  <linearGradient id="ln" x1="246" x2="1080" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#22d3ee"/><stop offset="1" stop-color="#22d3ee" stop-opacity="0"/></linearGradient></defs>
+<text class="mono" x="20" y="51" font-size="17" fill="#22c55e">/03</text>
+<text class="sans" x="70" y="53" font-size="34" font-weight="900" letter-spacing="1.5" fill="url(#t)">RUN IT</text>
+<line x1="246" y1="41" x2="1080" y2="41" stroke="url(#ln)" stroke-width="2.5"/>
+<circle cx="246" cy="41" r="5" fill="#22d3ee"/>
+<circle class="dot" cx="306" cy="41" r="3.5" fill="#22c55e"/>
+<text class="fa" x="1260" y="50" font-size="22" font-weight="700" fill="#94a3b8" text-anchor="end">نصب و اجرا</text>
+</svg>

@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1280 450" width="1280" height="450" role="img" aria-label="Panels + Pay: Four panel kinds, several at once, with weights and a client limit per server. Ten ways to pay: cards, USDT on TRON, TON, Iranian gateways and Telegram Stars.">
+<style>.sans { font-family: -apple-system, 'Segoe UI', Inter, Helvetica, Arial, sans-serif; } .mono { font-family: 'SF Mono', SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace; } .fa { font-family: Vazirmatn, Tahoma, 'Geeza Pro', 'Noto Naskh Arabic', 'Segoe UI', sans-serif; }
+.run { animation: run 9s linear infinite; } @keyframes run { to { stroke-dashoffset: -1000; } } .live { animation: live 1.6s ease-in-out infinite; } @keyframes live { 50% { opacity: .25; } } .flowdot { animation: drop 1.6s ease-in infinite; } @keyframes drop { 0% { transform: translateY(0); opacity: 1; } 100% { transform: translateY(12px); opacity: .2; } } .step { animation: glowstep 4.8s ease-in-out infinite; } @keyframes glowstep { 50% { opacity: .78; } }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; } }</style>
+<defs>
+  <linearGradient id="edgep4" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#22c55e"/><stop offset="1" stop-color="#14b8a6"/></linearGradient>
+  <radialGradient id="gap4" cx=".12" cy=".1" r=".7"><stop offset="0" stop-color="#22c55e" stop-opacity=".32"/><stop offset="1" stop-color="#22c55e" stop-opacity="0"/></radialGradient>
+  <radialGradient id="gbp4" cx=".92" cy=".95" r=".6"><stop offset="0" stop-color="#14b8a6" stop-opacity=".30"/><stop offset="1" stop-color="#14b8a6" stop-opacity="0"/></radialGradient>
+  <pattern id="dotsp4" width="22" height="22" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1" fill="#94a3b8" opacity=".12"/></pattern>
+  <clipPath id="clipp4"><rect x="10" y="10" width="1260" height="430" rx="28"/></clipPath><linearGradient id="ttp4" x1="0" x2="1"><stop offset="0" stop-color="#22c55e"/><stop offset="1" stop-color="#14b8a6"/></linearGradient></defs>
+
+<g clip-path="url(#clipp4)">
+  <rect x="10" y="10" width="1260" height="430" fill="#0a0e1a"/>
+  <rect x="10" y="10" width="1260" height="430" fill="url(#dotsp4)"/>
+  <rect x="10" y="10" width="1260" height="430" fill="url(#gap4)"/>
+  <rect x="10" y="10" width="1260" height="430" fill="url(#gbp4)"/>
+</g>
+<rect x="10.75" y="10.75" width="1258.5" height="428.5" rx="27.5" fill="none" stroke="url(#edgep4)" stroke-opacity=".55" stroke-width="1.5"/>
+<rect class="run" x="10.75" y="10.75" width="1258.5" height="428.5" rx="27.5" fill="none" stroke="url(#edgep4)" stroke-width="2.5" stroke-dasharray="80 920" pathLength="1000"/>
+<text class="mono" x="60" y="74" font-size="13" letter-spacing="2.5" xml:space="preserve"><tspan fill="#22c55e" font-weight="700">04</tspan><tspan fill="#64748b">   PANELS · PAYMENTS</tspan></text>
+<text class="sans" x="56" y="158" font-size="70" font-weight="900" fill="url(#ttp4)">Panels + Pay</text>
+<g transform="translate(469 70)"><rect x="0" y="-14" width="221" height="28" rx="14" fill="#0b1220" stroke="#14b8a6" stroke-opacity=".7"/><text class="mono" x="13" y="4.5" font-size="12.5" font-weight="700" letter-spacing="1.5" fill="#14b8a6">TESTED ON REAL PANELS</text></g>
+<text class="sans" x="60" y="214" font-size="19" fill="#cbd5e1"><tspan font-weight="700" fill="#f8fafc">Four panel kinds</tspan>, several at once, with weights and a</text><text class="sans" x="60" y="243" font-size="19" fill="#cbd5e1">client limit per server. <tspan font-weight="700" fill="#f8fafc">Ten ways to pay</tspan>: cards, USDT</text><text class="sans" x="60" y="272" font-size="19" fill="#cbd5e1">on TRON, TON, Iranian gateways and Telegram Stars.</text>
+<text class="sans" x="60" y="334" font-size="40" font-weight="900" fill="#f8fafc">4</text><text class="mono" x="62" y="358" font-size="11.5" letter-spacing="2" fill="#64748b">PANEL KINDS</text><text class="sans" x="265" y="334" font-size="40" font-weight="900" fill="#f8fafc">7</text><text class="mono" x="267" y="358" font-size="11.5" letter-spacing="2" fill="#64748b">REAL-PANEL CI JOBS</text><text class="sans" x="470" y="334" font-size="40" font-weight="900" fill="#f8fafc">1×</text><text class="mono" x="472" y="358" font-size="11.5" letter-spacing="2" fill="#64748b">EACH PAYMENT SETTLES</text>
+<rect x="60" y="382" width="83" height="28" rx="14" fill="#0f172a" stroke="#334155"/><text class="mono" x="101" y="400.5" font-size="12.5" fill="#cbd5e1" text-anchor="middle">Zarinpal</text><rect x="153" y="382" width="60" height="28" rx="14" fill="#0f172a" stroke="#334155"/><text class="mono" x="183" y="400.5" font-size="12.5" fill="#cbd5e1" text-anchor="middle">IDPay</text><rect x="223" y="382" width="75" height="28" rx="14" fill="#0f172a" stroke="#334155"/><text class="mono" x="260" y="400.5" font-size="12.5" fill="#cbd5e1" text-anchor="middle">NextPay</text><rect x="308" y="382" width="52" height="28" rx="14" fill="#0f172a" stroke="#334155"/><text class="mono" x="334" y="400.5" font-size="12.5" fill="#cbd5e1" text-anchor="middle">TRON</text><rect x="370" y="382" width="45" height="28" rx="14" fill="#0f172a" stroke="#334155"/><text class="mono" x="393" y="400.5" font-size="12.5" fill="#cbd5e1" text-anchor="middle">TON</text>
+<g class="step" style="animation-delay:-0.0s">
+  <rect x="740" y="74.0" width="490" height="62" rx="14" fill="#0b1020" stroke="#22c55e" stroke-opacity=".75" stroke-width="1.5"/>
+  <rect x="752" y="85.0" width="40" height="40" rx="10" fill="#22c55e" fill-opacity=".14" stroke="#22c55e" stroke-opacity=".5"/>
+  <text x="772" y="112.0" font-size="20" text-anchor="middle">🟢</text>
+  <text class="sans" x="806" y="101.0" font-size="17" font-weight="700" fill="#f1f5f9">3x-ui</text>
+  <text class="mono" x="806" y="121.0" font-size="12" fill="#64748b">v3.8.5 → v3.10.2 · groups · inbounds</text>
+  <text class="fa" x="1214" y="111.0" font-size="15" font-weight="700" fill="#22c55e" text-anchor="end">ایکس‌یوآی</text>
+</g><line x1="772" y1="136.0" x2="772" y2="154.0" stroke="#22c55e" stroke-opacity=".5" stroke-width="2" stroke-dasharray="3 4"/><circle class="flowdot" style="animation-delay:-0.0s" cx="772" cy="139.0" r="3.5" fill="#22c55e"/><g class="step" style="animation-delay:-0.6s">
+  <rect x="740" y="154.0" width="490" height="62" rx="14" fill="#0b1020" stroke="#22c55e" stroke-opacity=".75" stroke-width="1.5"/>
+  <rect x="752" y="165.0" width="40" height="40" rx="10" fill="#22c55e" fill-opacity=".14" stroke="#22c55e" stroke-opacity=".5"/>
+  <text x="772" y="192.0" font-size="20" text-anchor="middle">🟣</text>
+  <text class="sans" x="806" y="181.0" font-size="17" font-weight="700" fill="#f1f5f9">Marzban</text>
+  <text class="mono" x="806" y="201.0" font-size="12" fill="#64748b">0.8 · admin login · all proxies</text>
+  <text class="fa" x="1214" y="191.0" font-size="15" font-weight="700" fill="#22c55e" text-anchor="end">مرزبان</text>
+</g><line x1="772" y1="216.0" x2="772" y2="234.0" stroke="#22c55e" stroke-opacity=".5" stroke-width="2" stroke-dasharray="3 4"/><circle class="flowdot" style="animation-delay:-0.4s" cx="772" cy="219.0" r="3.5" fill="#22c55e"/><g class="step" style="animation-delay:-1.2s">
+  <rect x="740" y="234.0" width="490" height="62" rx="14" fill="#0b1020" stroke="#14b8a6" stroke-opacity=".75" stroke-width="1.5"/>
+  <rect x="752" y="245.0" width="40" height="40" rx="10" fill="#14b8a6" fill-opacity=".14" stroke="#14b8a6" stroke-opacity=".5"/>
+  <text x="772" y="272.0" font-size="20" text-anchor="middle">🔵</text>
+  <text class="sans" x="806" y="261.0" font-size="17" font-weight="700" fill="#f1f5f9">S-UI</text>
+  <text class="mono" x="806" y="281.0" font-size="12" fill="#64748b">1.6 · sing-box · API token · groups</text>
+  <text class="fa" x="1214" y="271.0" font-size="15" font-weight="700" fill="#14b8a6" text-anchor="end">اس‌یوآی</text>
+</g><line x1="772" y1="296.0" x2="772" y2="314.0" stroke="#14b8a6" stroke-opacity=".5" stroke-width="2" stroke-dasharray="3 4"/><circle class="flowdot" style="animation-delay:-0.8s" cx="772" cy="299.0" r="3.5" fill="#14b8a6"/><g class="step" style="animation-delay:-1.8s">
+  <rect x="740" y="314.0" width="490" height="62" rx="14" fill="#0b1020" stroke="#14b8a6" stroke-opacity=".75" stroke-width="1.5"/>
+  <rect x="752" y="325.0" width="40" height="40" rx="10" fill="#14b8a6" fill-opacity=".14" stroke="#14b8a6" stroke-opacity=".5"/>
+  <text x="772" y="352.0" font-size="20" text-anchor="middle">🟠</text>
+  <text class="sans" x="806" y="341.0" font-size="17" font-weight="700" fill="#f1f5f9">Hiddify Manager</text>
+  <text class="mono" x="806" y="361.0" font-size="12" fill="#64748b">14 · admin UUID · days-based expiry</text>
+  <text class="fa" x="1214" y="351.0" font-size="15" font-weight="700" fill="#14b8a6" text-anchor="end">هیدیفای</text>
+</g>
+</svg>
