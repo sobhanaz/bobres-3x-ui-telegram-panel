@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Report a security problem privately
+    url: https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/security/advisories/new
+    about: Issues are public. Send vulnerabilities here instead, and never paste bot tokens, keys or private data in an issue.
+  - name: Security policy (English + فارسی)
+    url: https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/blob/main/SECURITY.md
+    about: What is in scope, what to include in a report, and which versions are supported.
