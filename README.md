@@ -1,8 +1,30 @@
-![BOBRES, the beaver mascot with a teal shield: Your VPN store on Telegram](docs/brand/bobres-banner.webp)
+<p align="center">
+  <img src="docs/brand/bobres-banner.webp" alt="BOBRES, the beaver mascot with a teal shield: Your VPN store on Telegram" width="100%">
+</p>
 
-# BOBRES 3x-ui Telegram Panel
+<h1 align="center">BOBRES 3x-ui Telegram Panel</h1>
 
-**Launch your own VPN store on Telegram in one command.**
+<p align="center">
+  <b>Launch your own VPN store on Telegram in one command.</b><br>
+  Sell, renew and support VPN subscriptions on 3x-ui, Marzban, S-UI and Hiddify, from a Telegram bot, a Mini App and a web dashboard.
+</p>
+
+<p align="center">
+  <a href="https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/sobhanaz/bobres-3x-ui-telegram-panel?style=for-the-badge&color=0f766e&label=release"></a>
+  <a href="https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/sobhanaz/bobres-3x-ui-telegram-panel/ci.yml?branch=main&style=for-the-badge&label=CI"></a>
+  <a href="go.mod"><img alt="Go version" src="https://img.shields.io/github/go-mod/go-version/sobhanaz/bobres-3x-ui-telegram-panel?style=for-the-badge&color=0b2530"></a>
+  <a href="LICENSE"><img alt="License: source-available" src="https://img.shields.io/badge/license-source--available-8b5a2b?style=for-the-badge"></a>
+  <a href="https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/sobhanaz/bobres-3x-ui-telegram-panel?style=for-the-badge&color=f2e6d0&labelColor=0b2530"></a>
+</p>
+
+<p align="center">
+  <a href="https://bobresai.cv"><b>Website</b></a> ·
+  <a href="#-install"><b>Install</b></a> ·
+  <a href="docs/README.md"><b>Docs</b></a> ·
+  <a href="https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/wiki"><b>Wiki</b></a> ·
+  <a href="https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/wiki/FA-Home"><b>فارسی</b></a> ·
+  <a href="CHANGELOG.md"><b>Changelog</b></a>
+</p>
 
 BOBRES sells and manages VPN subscriptions on [3x-ui](https://github.com/MHSanaei/3x-ui) (Xray) panels, and on Marzban,
 [S-UI](https://github.com/alireza0/s-ui) (sing-box) and [Hiddify Manager](https://github.com/hiddify/Hiddify-Manager). Your
@@ -12,26 +34,67 @@ dashboard**; and one **`bobres` command** on the server installs, updates, backs
 It is white-label and single-tenant: each operator runs it on their own server, with their own domain, bot, panels and
 brand. Nothing goes through anyone else's servers.
 
-Website: <https://bobresai.cv> · Latest release: **v0.21.0** · [Changelog](CHANGELOG.md) · [Docs](docs/README.md)
+<table>
+  <tr>
+    <td align="center" width="20%"><h3>1 command</h3><sub>to install, update,<br>back up and repair</sub></td>
+    <td align="center" width="20%"><h3>4 panels</h3><sub>3x-ui · Marzban<br>S-UI · Hiddify</sub></td>
+    <td align="center" width="20%"><h3>10 ways to pay</h3><sub>cards, USDT, TON,<br>Iranian gateways, Stars</sub></td>
+    <td align="center" width="20%"><h3>5 languages</h3><sub>Persian, English<br>+ ar · ru · tr (beta)</sub></td>
+    <td align="center" width="20%"><h3>~400 / s</h3><sub>purchases on one machine<br>(<a href="docs/21-benchmark.md">benchmark</a>)</sub></td>
+  </tr>
+</table>
 
-## At a glance
+## ✨ At a glance
 
-| | |
-|---|---|
-| **Customers** | A Telegram bot and Mini App in Persian and English (Arabic, Russian and Turkish in beta): plans (in groups with a text each), wallet, free trial, renewals, traffic packages, bulk purchase, gift and reward codes (with a list of their own), invite links, support, a page for every service, news of new products for those who want it |
-| **Resellers** | A panel in the bot and the Mini App: buy for customers at tier prices on credit, manage their services, commission; their configs carry their own prefix and group in your 3x-ui panel; messages and a weekly settlement reminder from you |
-| **You** | A dashboard for plans, payments, orders, users, resellers, reports, branding, panels, gateways, staff, backups, updates and licenses; Telegram alerts; `/admin` in the bot; a Prometheus endpoint, an uptime view and a public status page |
-| **Payments** | Wallet, card to card, USDT (manual and automatic on TRON), TON (automatic), Zarinpal, IDPay, NextPay, Aqayepardakht, Telegram Stars |
-| **Panels** | 3x-ui v3.8.5 to v3.10.2, Marzban 0.8, S-UI 1.6 and Hiddify Manager 14, several at once with a client limit per server, each tested against the real panel in CI |
-| **Server** | `bobres`: install, status, logs, update with automatic rollback, encrypted backups and restore, HTTPS, hardening, health checks |
-| **Pricing** | Free core, paid premium: a free tier, a 30-day trial of everything, then a license per install ([docs/pricing.md](docs/pricing.md)) |
+<table>
+  <tr>
+    <td width="33%" valign="top">
+      <h4>🛒 Customers</h4>
+      A Telegram bot and Mini App: plans in groups, wallet, free trial, renewals, traffic packages, bulk purchase, gift and
+      reward codes, invite links, support, a page for every service, news of new products for those who want it.
+    </td>
+    <td width="33%" valign="top">
+      <h4>🤝 Resellers</h4>
+      A panel in the bot and the Mini App: buy for customers at tier prices on credit, manage their services, earn
+      commission. Their configs carry their own prefix and group in your panel; you can message them and remind them to settle.
+    </td>
+    <td width="33%" valign="top">
+      <h4>🧭 You</h4>
+      A dashboard for plans, payments, orders, users, resellers, reports, branding, panels, gateways, staff, backups,
+      updates and licenses; Telegram alerts; <code>/admin</code> in the bot; Prometheus, an uptime view and a status page.
+    </td>
+  </tr>
+  <tr>
+    <td valign="top">
+      <h4>💳 Payments</h4>
+      One Toman wallet with its USDT value, card to card, USDT (manual, and automatic on TRON), automatic TON, Zarinpal,
+      IDPay, NextPay, Aqayepardakht and Telegram Stars. Every payment settles exactly once.
+    </td>
+    <td valign="top">
+      <h4>🛰️ Panels</h4>
+      3x-ui v3.8.5 to v3.10.2, Marzban 0.8, S-UI 1.6 and Hiddify Manager 14, several at once, with weights and a client
+      limit per server. Each kind is tested against the real panel in CI.
+    </td>
+    <td valign="top">
+      <h4>🖥️ Server</h4>
+      <code>bobres</code>: install, status, logs, update with automatic rollback, encrypted backups and restore, HTTPS,
+      hardening and health checks. The store comes back by itself after a reboot.
+    </td>
+  </tr>
+</table>
 
-## Status
+> **Free core, paid premium.** A store runs without a license on the free tier; every install starts with a 30-day trial of
+> everything, then a license per install unlocks more ([docs/pricing.md](docs/pricing.md)).
 
-Phases 0 to 7 of the plan are built and tested in CI ([docs/PLAN.md](docs/PLAN.md) §10, [CHANGELOG.md](CHANGELOG.md)).
-The first public release, v0.1.0, came out on 2026-10-14; releases since then are signed, built for amd64 and arm64, and
-verified by the installer and by `bobres update`. They were tried in a Docker lab with two Ubuntu servers
-([docs/11-staging-run.md](docs/11-staging-run.md)), and the vendor runs its own store on them.
+## 🚦 Status
+
+**Latest release: v0.21.0 (2026-10-31)**: S-UI and Hiddify panels, Arabic, Russian and Turkish (beta), new product
+announcements, and the vendor's affiliate program and hosted stores ([CHANGELOG.md](CHANGELOG.md)).
+
+Phases 0 to 7 of the plan are built and tested in CI ([docs/PLAN.md](docs/PLAN.md) §10). The first public release, v0.1.0,
+came out on 2026-10-14, and 28 stable releases have followed. Each one is signed, built for amd64 and arm64, and verified by the
+installer and by `bobres update`. Releases are tried in a Docker lab with two Ubuntu servers
+([docs/11-staging-run.md](docs/11-staging-run.md)), and the vendor's own store runs every one of them.
 
 Still open: the legal review, the brand checks (domain, bot name, trademark), a native speaker's review of the Arabic,
 Russian and Turkish texts, and two checks only the real world can give:
@@ -40,7 +103,7 @@ against every Telegram client. Two parts were set aside on purpose: third-party 
 adapters for older 3x-ui versions (built only when a customer needs one). What is left before selling widely is in
 [docs/launch-checklist.md](docs/launch-checklist.md).
 
-## Install
+## 🚀 Install
 
 You need:
 
@@ -81,9 +144,12 @@ same server, S3 copies of the backups, Zarinpal, a different SSH port, hardening
    pay), **Branding** (your name, logo and every bot text), **Settings**.
 3. Run `sudo bobres check` to see every part of the install in PASS/WARN/FAIL lines.
 
-## The `bobres` command
+## 🧰 The `bobres` command
 
-Run `sudo bobres` for the management menu, or use any item as a command. The header is a live status board (services, license, HTTPS certificate, newest backup, dashboard address); the numbers below are the menu's choices:
+Run `sudo bobres` for the management menu, or use any item as a command. The header is a live status board (services, license, HTTPS certificate, newest backup, dashboard address); each line of the menu is a numbered choice:
+
+<details>
+<summary><b>The menu (<code>sudo bobres</code>)</b></summary>
 
 ```text
    n____n   BOBRES manager  bobres v0.21.0
@@ -124,6 +190,8 @@ Run `sudo bobres` for the management menu, or use any item as a command. The hea
   21. About BOBRES (version, license, links)
    0. Exit
 ```
+
+</details>
 
 | Command | What it does |
 |---|---|
@@ -174,10 +242,16 @@ It touches only what it can prove is BOBRES's, never SSH settings or the SSH fir
 interruption. What installing BOBRES changes on a server, flag by flag, and how to restore the final backup on a new
 server: [docs/06-installer.md](docs/06-installer.md) and [docs/runbooks/uninstall.md](docs/runbooks/uninstall.md).
 
-## Features
+## 📦 Features
 
-**Telegram bot, for customers** (Persian and English, in your own name, texts and links; Arabic, Russian and Turkish are
-machine-translated betas each store can turn on in Settings > General > Customer languages)
+Every group folds open. The details of each part are in the [docs](docs/README.md).
+
+<details>
+<summary><b>🛒 Telegram bot, for customers</b></summary>
+
+In Persian and English, in your own name, texts and links. Arabic, Russian and Turkish are machine-translated betas each
+store can turn on in Settings > General > Customer languages.
+
 - **Buy a plan** (traffic-limited, time-only or both), with an optional discount code. The service arrives with its
   subscription link and a QR code. A bottom menu keeps the main buttons one tap away.
 - **Plan groups:** put plans in named groups with a text for each (what the group is for, who it suits). The customer picks
@@ -205,7 +279,11 @@ machine-translated betas each store can turn on in Settings > General > Customer
 - **New product announcements** (off by default): an **Announce** button on a plan posts a card with a Buy button in the
   store's channel and sends it to the customers who said yes when the bot asked them, once, whether they want news.
 
-**Resellers, in the bot and the Mini App**
+</details>
+
+<details>
+<summary><b>🤝 Resellers, in the bot and the Mini App</b></summary>
+
 - A reseller panel: buy for customers at the tier's prices, on credit up to a limit; name and find their services;
   a statement; an invite link that earns a commission on their customers' purchases.
 - Manage their customers' services: pause and resume, delete (after a confirmation), a private note, the list in
@@ -217,7 +295,11 @@ machine-translated betas each store can turn on in Settings > General > Customer
 - **Messages only for resellers** (to those who owe, to all, or to one tier, with their debt, balance and credit filled
   in) and a **weekly settlement reminder** to those in debt, off until you use them.
 
-**Staff**
+</details>
+
+<details>
+<summary><b>👥 Staff</b></summary>
+
 - In the bot: `/admin` (stats, find a user, adjust a balance, ban, the payments to review with their receipts), `/set`,
   plans, trials, traffic packages, discount codes, and `/dashboard` for a one-time dashboard login link.
 - **Alerts in Telegram:** payments to review, new tickets, failed deliveries, sales (optional) and system problems.
@@ -227,7 +309,12 @@ machine-translated betas each store can turn on in Settings > General > Customer
   day, get no expiry reminders, and are made again or deleted with a button, one by one or all at once, in the bot and the
   dashboard.
 
-**Web dashboard** at `https://<domain>/admin`
+</details>
+
+<details>
+<summary><b>🧭 Web dashboard</b></summary>
+
+at `https://<domain>/admin`
 - Log in with a one-time link from the bot, or with a password and an authenticator code. Roles: owner, admin, support.
   Persian and English (Arabic, Russian and Turkish in beta), dark and light. Sign-ins can be set to wait for an approval
   in Telegram (Settings > Sign-in security, off by default).
@@ -239,7 +326,11 @@ machine-translated betas each store can turn on in Settings > General > Customer
   top plans and which provider paid, with CSV files, a printable professional report and an optional daily summary in
   Telegram.
 
-**Payments**
+</details>
+
+<details>
+<summary><b>💳 Payments</b></summary>
+
 - One wallet, in Toman, shown with its USDT equivalent at the live price; plans priced in USDT can be paid from it.
 - Card to card, USDT (TRC20 or ERC20) and a Zarinpal payment link, each with a screenshot staff approve; Zarinpal online;
   Telegram Stars; **automatic USDT on TRON (TRC20)**, which matches an exact, unique amount on the chain; **automatic
@@ -247,7 +338,11 @@ machine-translated betas each store can turn on in Settings > General > Customer
   credentials are set).
 - Each payment settles exactly once. The ledger is append-only, and amounts are whole numbers in minor units.
 
-**3x-ui, Marzban, S-UI and Hiddify**
+</details>
+
+<details>
+<summary><b>🛰️ 3x-ui, Marzban, S-UI and Hiddify</b></summary>
+
 - Several panel servers, each 3x-ui (**v3.8.5 to v3.10.2**, every release in that range tested against the real panel in
   CI), Marzban 0.8, S-UI 1.6 (tested with v1.6.6) or Hiddify Manager 14 (tested with v14.0.5), with health checks,
   weights, servers per plan, inbound choices per server and a **client limit per server** (a full server gets no new
@@ -256,7 +351,11 @@ machine-translated betas each store can turn on in Settings > General > Customer
   so you can filter on what the bot made in the panel; a group you set by hand is never touched. Marzban and Hiddify
   have no client groups.
 
-**Operations**
+</details>
+
+<details>
+<summary><b>⚙️ Operations</b></summary>
+
 - A one-command install on Ubuntu or Debian, and the `bobres` menu and commands on the server.
 - Daily **encrypted backups**: the newest 7 kept on the server, each sent to the owner on Telegram, optional copies in
   S3-compatible storage; download and restore from the dashboard; `bobres restore` puts one back.
@@ -271,7 +370,11 @@ machine-translated betas each store can turn on in Settings > General > Customer
 - **Monitoring from outside:** a Prometheus endpoint (`/metrics`, off until you make its token; Grafana setup in
   [docs/runbooks/monitoring.md](docs/runbooks/monitoring.md#prometheus-and-grafana)), an uptime view per service and panel server, and an optional public status page.
 
-**Free core, paid premium**
+</details>
+
+<details>
+<summary><b>🏷️ Free core, paid premium</b></summary>
+
 - No license is needed to run a store. An install without one has a free tier: 1 server, 25 active services, 2 staff
   seats, the Zarinpal, Stars and manual payment methods, and security updates always. Resellers, automatic USDT, more
   servers, services, staff and required channels, and removing "Powered by BOBRES" come with a license.
@@ -286,7 +389,11 @@ machine-translated betas each store can turn on in Settings > General > Customer
   stores the vendor hosts with their health from each store's `/metrics`) are locked behind an entitlement no tier has:
   they are hidden, refused and off in every customer's install.
 
-**Security**
+</details>
+
+<details>
+<summary><b>🔒 Security</b></summary>
+
 - Four services, each with its own database role and service token. Only the provisioner holds the panels' tokens, only
   payments holds the gateway secrets, and **core has no internet access** (what it needs from the internet goes through
   the bot's narrow internal endpoints).
@@ -297,7 +404,9 @@ machine-translated betas each store can turn on in Settings > General > Customer
 - The dashboard has CSRF protection, authenticator codes for every password login, an optional approval of each sign-in
   in Telegram, a strict CSP and an append-only audit log. Details and the threat model: [docs/07-security.md](docs/07-security.md), [SECURITY.md](SECURITY.md).
 
-## Architecture
+</details>
+
+## 🏗️ Architecture
 
 BOBRES is a Go monorepo that runs as nine Docker Compose services on one server: Caddy, PostgreSQL, Redis, and the
 BOBRES services. Four of them do the work (`core`, `bot`, `payments`, `provisioner`). Each has its own database role, its
@@ -353,7 +462,8 @@ Solid arrows are calls the store always makes; dotted ones are optional or exist
 only vendor-run server a store talks to is the license server, and a store works without it on the free tier. Nothing
 is relayed through the vendor: the store calls the services above directly.
 
-### Inside one install
+<details>
+<summary><b>Inside one install</b></summary>
 
 ```mermaid
 %%{init: {"flowchart": {"wrappingWidth": 300}}}%%
@@ -411,7 +521,10 @@ flowchart TB
 - **Money** is a whole number in minor units with a currency, never a float. The ledger is append-only, a wallet balance
   is a cached sum of it, and every money-moving call carries an idempotency key with a unique index.
 
-### Housekeeping: HTTPS, updates, monitoring and backups
+</details>
+
+<details>
+<summary><b>Housekeeping: HTTPS, updates, monitoring and backups</b></summary>
 
 ```mermaid
 %%{init: {"flowchart": {"wrappingWidth": 300}}}%%
@@ -446,7 +559,10 @@ a root systemd unit or the `tls-agent` picks up, and the host's monitoring snaps
 The `tls-agent` is core's image with no network; it checks a request again and answers `invalid` to any name that is not
 the install's own.
 
-### An order, from tap to config
+</details>
+
+<details>
+<summary><b>An order, from tap to config</b></summary>
 
 ```mermaid
 %%{init: {"sequence": {"wrap": true, "width": 130, "actorMargin": 24, "messageMargin": 32, "boxMargin": 6, "noteMargin": 6}}}%%
@@ -484,7 +600,10 @@ A wallet payment skips the payment step. A gateway's callback is never trusted a
 the provider. Card to card and manual USDT end with a receipt that staff approve. A renewal with a plan adds the plan's
 traffic and starts its days again from today.
 
-### Releases and updates
+</details>
+
+<details>
+<summary><b>Releases and updates</b></summary>
 
 ```mermaid
 %%{init: {"sequence": {"wrap": true, "width": 130, "actorMargin": 24, "messageMargin": 32, "boxMargin": 6, "noteMargin": 6}}}%%
@@ -519,7 +638,10 @@ The trust chain: two offline root keys sign the list of release keys, a release 
 `bobres` binary carries the digests of its images, and the stack runs by those digests. Pages (`site/`) and the Wiki
 (`docs/wiki/`) are published by their own workflows when those folders change on `main`.
 
-### Licenses
+</details>
+
+<details>
+<summary><b>Licenses</b></summary>
 
 ```mermaid
 %%{init: {"sequence": {"wrap": true, "width": 130, "actorMargin": 24, "messageMargin": 32, "boxMargin": 6, "noteMargin": 6}}}%%
@@ -552,6 +674,8 @@ servers and are never part of a customer's install. `bobres license activate` on
 directly. An install never needs the license server to keep running ([docs/05-license.md](docs/05-license.md),
 [docs/13-license-server.md](docs/13-license-server.md)).
 
+</details>
+
 ### Where the code is
 
 | Path | Contents |
@@ -565,7 +689,7 @@ directly. An install never needs the license server to keep running ([docs/05-li
 | `deploy/`, `install/` | The compose files, Caddy and systemd units; `install.sh` and the embedded public keys |
 | `tools/`, `tests/`, `site/` | Build and signing tools, dev panels for tests (`xuidev`, `marzbandev`, `suidev`), the load test and the benchmark (`loadtest`, `bench`), the assisted install of hosted stores (`hosted`); end-to-end tests; the public site |
 
-## Docs
+## 📚 Docs
 
 - [Docs index](docs/README.md): every document, with what it covers.
 - [Wiki](https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/wiki): guides for the people who run a store, in English and Persian (فارسی). The pages are in [`docs/wiki/`](docs/wiki/) and are published to the wiki after each merge.
@@ -581,7 +705,10 @@ directly. An install never needs the license server to keep running ([docs/05-li
 - [Launch material](docs/marketing/README.md): posts, outreach texts, a pitch, a price-list template and the claims checklist; the public site is in [`site/`](site/).
 - [Changelog](CHANGELOG.md).
 
-## Development
+## 🛠️ Development
+
+<details>
+<summary><b>Build, test, lint and the Docker lab</b></summary>
 
 - Go 1.26 or newer (`go.mod` says `go 1.26.0`; CI and the Docker image track the latest 1.26 patch).
   `make` forces `GOTOOLCHAIN=local`, so it builds with the `go` on your PATH: use a 1.26.x for
@@ -609,7 +736,9 @@ directly. An install never needs the license server to keep running ([docs/05-li
 - `tools/bench/run.sh` measures the performance and size baseline again ([docs/21-benchmark.md](docs/21-benchmark.md)),
   and `go test -bench` runs the benchmark functions in the packages.
 
-## License
+</details>
+
+## 📜 License
 
 BOBRES is **source-available, all rights reserved**: the [LICENSE](LICENSE) (a draft, to be reviewed by a lawyer before the
 public launch) lets anyone read and audit the code. Without a paid license you may run an official release for your own store
@@ -617,12 +746,10 @@ on the free tier. Copying or redistributing the code, hosting it for others, res
 license from the owner. The tiers and prices are in [docs/pricing.md](docs/pricing.md). The licenses of the components BOBRES
 uses are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
-## Credits
+---
 
-© 2026 BOBRES, all rights reserved. Made by TECSO-DEV.
-
-## Meet BOBRES
-
-<img src="docs/brand/bobres-wave.webp" alt="BOBRES the beaver waving" width="160">
-
-The beaver is BOBRES: a friendly, sturdy builder whose shield stands for security. The brand kit and its rules are in `docs/08-brand.md`.
+<p align="center">
+  <img src="docs/brand/bobres-wave.webp" alt="BOBRES the beaver waving" width="140"><br>
+  <b>Meet BOBRES</b>: a friendly, sturdy builder whose shield stands for security. The brand kit and its rules are in <a href="docs/08-brand.md">docs/08-brand.md</a>.<br><br>
+  <sub>© 2026 BOBRES, all rights reserved · Made by TECSO-DEV · <a href="https://bobresai.cv">bobresai.cv</a></sub>
+</p>
