@@ -24,6 +24,8 @@ FA = "Vazirmatn, Tahoma, 'Geeza Pro', 'Noto Naskh Arabic', 'Segoe UI', sans-seri
 REDUCED = "@media (prefers-reduced-motion: reduce) { * { animation: none !important; } }"
 BASE_CSS = f".sans {{ font-family: {SANS}; }} .mono {{ font-family: {MONO}; }} .fa {{ font-family: {FA}; }}"
 
+VERSION = "0.21.1"
+
 # Counted from the code on 2026-11-01 (v0.21.0).
 NUMBERS = {
     "go_tests": "3,103", "web_tests": "1,464", "go_lines": "150K", "rpcs": "129", "routes": "294",
@@ -105,7 +107,7 @@ def hero():
         streaks.append(f'<rect class="streak" style="animation-duration:{dur}s;animation-delay:-{(i * 1.7) % dur:.1f}s" x="{(i * 263) % 1100}" y="{y}" width="{length}" height="2.5" rx="1.25" fill="url(#st{i % 3})"/>')
     corners = "".join(f'<path d="{d}" fill="none" stroke="{CYAN}" stroke-width="3" stroke-linecap="round"/>' for d in (
         "M40 66 V40 H66", f"M{w - 66} 40 H{w - 40} V66", f"M40 {h - 66} V{h - 40} H66", f"M{w - 66} {h - 40} H{w - 40} V{h - 66}"))
-    p, pw = pill(0, 0, "LIVE  v0.21.0 · STABLE", GREEN)
+    p, pw = pill(0, 0, f"LIVE  v{VERSION} · STABLE", GREEN)
     css = f'''{FRAME_CSS} {PILL_CSS}
 .streak {{ animation: streak 8s linear infinite; }}
 @keyframes streak {{ from {{ transform: translateX(1300px); }} to {{ transform: translateX(-1400px); }} }}
@@ -126,7 +128,7 @@ def hero():
 <text class="sans" x="640" y="232" font-size="118" font-weight="900" letter-spacing="6" fill="url(#title)" text-anchor="middle">BOBRES</text>
 <text class="mono" x="640" y="272" font-size="15" letter-spacing="5" fill="#94a3b8" text-anchor="middle">TELEGRAM  ·  3X-UI  ·  MARZBAN  ·  S-UI  ·  HIDDIFY</text>
 <text class="sans" x="640" y="314" font-size="26" font-weight="600" fill="#f1f5f9" text-anchor="middle">Launch your own VPN store on Telegram, in one command.</text>'''
-    return svg(w, h, "BOBRES: launch your own VPN store on Telegram, in one command. Live v0.21.0.", css, body, defs)
+    return svg(w, h, f"BOBRES: launch your own VPN store on Telegram, in one command. Live v{VERSION}.", css, body, defs)
 
 
 # ---------------------------------------------------------------- whoami: the beaver and a terminal
@@ -166,7 +168,7 @@ def whoami():
     css = f'''{FRAME_CSS} {TERM_CSS}
 .orbit {{ animation: spin 30s linear infinite; transform-origin: 250px 215px; }} @keyframes spin {{ to {{ transform: rotate(360deg); }} }}
 .float {{ animation: float 5s ease-in-out infinite; }} @keyframes float {{ 50% {{ transform: translateY(-10px); }} }}'''
-    lines = [("cmd", "bash <(curl -fsSL …/install/install.sh)"), ("ok", "bobres v0.21.0 · signature and checksum verified"),
+    lines = [("cmd", "bash <(curl -fsSL …/install/install.sh)"), ("ok", f"bobres v{VERSION} · signature and checksum verified"),
              ("ok", "3x-ui token checked against the real panel"), ("ok", "caddy · core · bot · payments · provisioner healthy"),
              ("gap", ""), ("cmd", "sudo bobres status"), ("out", "  store running (9/9) · license Pro · backup 6 h ago"),
              ("gap", ""), ("cmd", "echo $MOTTO"), ("fa", "فروشگاه خودت، روی سرور خودت"), ("caret", "")]
@@ -314,7 +316,7 @@ def browser(c1, c2):
 
 
 def cli_terminal():
-    lines = [("cmd", "sudo bobres"), ("out", "   n____n   BOBRES manager  bobres v0.21.0"), ("out", "  ( o  o )  Store   running (9/9 services)"),
+    lines = [("cmd", "sudo bobres"), ("out", f"   n____n   BOBRES manager  bobres v{VERSION}"), ("out", "  ( o  o )  Store   running (9/9 services)"),
              ("out", "   \\_||_/   License Pro · HTTPS auto · backup 6 h"), ("gap", ""), ("out", "   1. Status         10. Back up now"),
              ("out", "   2. Live logs      13. Update BOBRES"), ("out", "   7. Bot token      19. HTTPS certificate"), ("caret", "")]
     return terminal(740, 40, 490, 370, "root@shop — bobres", lines, "c"), TERM_CSS
