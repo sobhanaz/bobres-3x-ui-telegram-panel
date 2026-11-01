@@ -102,6 +102,11 @@ func (ins *installer) summary(env map[string]string, dir string) {
 	} {
 		row(l.label, l.url)
 	}
+	star := "*"
+	if t.unicode {
+		star = "★"
+	}
+	fmt.Fprintf(ins.out, "\n  %s Like BOBRES? A star on GitHub helps other sellers find it: %s\n", t.paint(roleTeal, star), brandRepo)
 	copyright := brandCopyright
 	if !t.unicode {
 		copyright = strings.ReplaceAll(copyright, "©", "(c)")
