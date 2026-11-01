@@ -2,6 +2,8 @@
 
 # BOBRES 3x-ui Telegram Panel
 
+[![GitHub stars](https://img.shields.io/github/stars/sobhanaz/bobres-3x-ui-telegram-panel?style=social)](https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/stargazers)
+
 **Launch your own VPN store on Telegram in one command.**
 
 BOBRES sells and manages VPN subscriptions on [3x-ui](https://github.com/MHSanaei/3x-ui) (Xray) panels, and on Marzban,
@@ -13,6 +15,10 @@ It is white-label and single-tenant: each operator runs it on their own server, 
 brand. Nothing goes through anyone else's servers.
 
 Website: <https://bobresai.cv> · Latest release: **v0.21.0** · [Changelog](CHANGELOG.md) · [Docs](docs/README.md)
+
+⭐ If BOBRES helps your store, a star on GitHub helps other sellers find it.
+
+<p dir="rtl">⭐ اگر BOBRES به کارتان آمد، با یک ستاره در گیت‌هاب کمک کنید فروشنده‌های دیگر هم پیدایش کنند.</p>
 
 ## At a glance
 

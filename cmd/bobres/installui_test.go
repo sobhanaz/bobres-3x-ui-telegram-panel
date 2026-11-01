@@ -106,6 +106,7 @@ func TestSummaryCard(t *testing.T) {
 		"BOBRES is ready", "https://panel.example.com", "@shop_bot", "sudo bobres admin link", "/opt/bobres  (version 1.2.3)", "/var/log/bobres-install.log",
 		"Health", "healthy", "License", "30-day trial", "Docs", brandIssues, brandSecurity, "(c) 2026 BOBRES, all rights reserved\nMade by TECSO-DEV",
 		"Off-site backups (optional): sudo bobres install --s3-endpoint",
+		"* Like BOBRES? A star on GitHub helps other sellers find it: " + brandRepo,
 	} {
 		if !strings.Contains(s, want) {
 			t.Errorf("the card misses %q:\n%s", want, s)

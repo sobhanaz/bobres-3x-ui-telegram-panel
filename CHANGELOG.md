@@ -8,6 +8,9 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+### Changed
+- The card at the end of `bobres install` and the README ask, in one line, for a star on GitHub if BOBRES helps.
+
 ### Fixed
 - Callers that find the install's id missing at the same moment no longer fail with "no rows": one makes it and the others read it. A real install has the id from its first migration; the v0.19.0 benchmark hit this in its test setup, where most of 320 concurrent orders failed.
 
