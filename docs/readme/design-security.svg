@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1280 450" width="1280" height="450" role="img" aria-label="Security: Secrets are sealed with a master key per service; only the provisioner holds panel tokens, only payments holds gateway secrets; a sealed tls-agent writes Caddy's files.">
+<style>.sans { font-family: -apple-system, 'Segoe UI', Inter, Helvetica, Arial, sans-serif; } .mono { font-family: 'SF Mono', SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace; } .fa { font-family: Vazirmatn, Tahoma, 'Geeza Pro', 'Noto Naskh Arabic', 'Segoe UI', sans-serif; }
+.run { animation: run 9s linear infinite; } @keyframes run { to { stroke-dashoffset: -1000; } } .live { animation: live 1.6s ease-in-out infinite; } @keyframes live { 50% { opacity: .25; } } .flowdot { animation: drop 1.6s ease-in infinite; } @keyframes drop { 0% { transform: translateY(0); opacity: 1; } 100% { transform: translateY(6px); opacity: .2; } } .step { animation: glowstep 4.8s ease-in-out infinite; } @keyframes glowstep { 50% { opacity: .78; } }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; } }</style>
+<defs>
+  <linearGradient id="edged4" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3b82f6"/><stop offset="1" stop-color="#a855f7"/></linearGradient>
+  <radialGradient id="gad4" cx=".12" cy=".1" r=".7"><stop offset="0" stop-color="#3b82f6" stop-opacity=".32"/><stop offset="1" stop-color="#3b82f6" stop-opacity="0"/></radialGradient>
+  <radialGradient id="gbd4" cx=".92" cy=".95" r=".6"><stop offset="0" stop-color="#a855f7" stop-opacity=".30"/><stop offset="1" stop-color="#a855f7" stop-opacity="0"/></radialGradient>
+  <pattern id="dotsd4" width="22" height="22" patternUnits="userSpaceOnUse"><circle cx="2" cy="2" r="1" fill="#94a3b8" opacity=".12"/></pattern>
+  <clipPath id="clipd4"><rect x="10" y="10" width="1260" height="430" rx="28"/></clipPath><linearGradient id="ttd4" x1="0" x2="1"><stop offset="0" stop-color="#3b82f6"/><stop offset="1" stop-color="#a855f7"/></linearGradient></defs>
+
+<g clip-path="url(#clipd4)">
+  <rect x="10" y="10" width="1260" height="430" fill="#0a0e1a"/>
+  <rect x="10" y="10" width="1260" height="430" fill="url(#dotsd4)"/>
+  <rect x="10" y="10" width="1260" height="430" fill="url(#gad4)"/>
+  <rect x="10" y="10" width="1260" height="430" fill="url(#gbd4)"/>
+</g>
+<rect x="10.75" y="10.75" width="1258.5" height="428.5" rx="27.5" fill="none" stroke="url(#edged4)" stroke-opacity=".55" stroke-width="1.5"/>
+<rect class="run" x="10.75" y="10.75" width="1258.5" height="428.5" rx="27.5" fill="none" stroke="url(#edged4)" stroke-width="2.5" stroke-dasharray="80 920" pathLength="1000"/>
+<text class="mono" x="60" y="74" font-size="13" letter-spacing="2.5" xml:space="preserve"><tspan fill="#3b82f6" font-weight="700">08</tspan><tspan fill="#64748b">   SECURITY · NETWORKS AND SECRETS</tspan></text>
+<text class="sans" x="56" y="158" font-size="70" font-weight="900" fill="url(#ttd4)">Security</text>
+<g transform="translate(515 70)"><rect x="0" y="-14" width="175" height="28" rx="14" fill="#0b1220" stroke="#a855f7" stroke-opacity=".7"/><text class="mono" x="13" y="4.5" font-size="12.5" font-weight="700" letter-spacing="1.5" fill="#a855f7">NO DOCKER SOCKET</text></g>
+<text class="sans" x="60" y="214" font-size="19" fill="#cbd5e1"><tspan font-weight="700" fill="#f8fafc">Secrets are sealed</tspan> with a master key per service; only</text><text class="sans" x="60" y="243" font-size="19" fill="#cbd5e1">the provisioner holds panel tokens, only payments holds</text><text class="sans" x="60" y="272" font-size="19" fill="#cbd5e1">gateway secrets; a sealed tls-agent writes Caddy's files.</text>
+<text class="sans" x="60" y="334" font-size="40" font-weight="900" fill="#f8fafc">5</text><text class="mono" x="62" y="358" font-size="11.5" letter-spacing="2" fill="#64748b">NETWORKS</text><text class="sans" x="265" y="334" font-size="40" font-weight="900" fill="#f8fafc">42</text><text class="mono" x="267" y="358" font-size="11.5" letter-spacing="2" fill="#64748b">ALERT KINDS</text><text class="sans" x="470" y="334" font-size="40" font-weight="900" fill="#f8fafc">0</text><text class="mono" x="472" y="358" font-size="11.5" letter-spacing="2" fill="#64748b">DOCKER SOCKETS</text>
+<rect x="60" y="382" width="52" height="28" rx="14" fill="#0f172a" stroke="#334155"/><text class="mono" x="86" y="400.5" font-size="12.5" fill="#cbd5e1" text-anchor="middle">CSRF</text><rect x="122" y="382" width="45" height="28" rx="14" fill="#0f172a" stroke="#334155"/><text class="mono" x="145" y="400.5" font-size="12.5" fill="#cbd5e1" text-anchor="middle">CSP</text><rect x="177" y="382" width="52" height="28" rx="14" fill="#0f172a" stroke="#334155"/><text class="mono" x="203" y="400.5" font-size="12.5" fill="#cbd5e1" text-anchor="middle">TOTP</text><rect x="240" y="382" width="90" height="28" rx="14" fill="#0f172a" stroke="#334155"/><text class="mono" x="285" y="400.5" font-size="12.5" fill="#cbd5e1" text-anchor="middle">audit log</text><rect x="340" y="382" width="98" height="28" rx="14" fill="#0f172a" stroke="#334155"/><text class="mono" x="389" y="400.5" font-size="12.5" fill="#cbd5e1" text-anchor="middle">rotate-key</text>
+<g class="step" style="animation-delay:-0.0s">
+  <rect x="740" y="51.0" width="490" height="60" rx="14" fill="#0b1020" stroke="#3b82f6" stroke-opacity=".75" stroke-width="1.5"/>
+  <rect x="752" y="61.0" width="40" height="40" rx="10" fill="#3b82f6" fill-opacity=".14" stroke="#3b82f6" stroke-opacity=".5"/>
+  <text x="772" y="88.0" font-size="20" text-anchor="middle">🌍</text>
+  <text class="sans" x="806" y="77.0" font-size="17" font-weight="700" fill="#f1f5f9">public</text>
+  <text class="mono" x="806" y="97.0" font-size="12" fill="#64748b">caddy only · ports 80 and 443</text>
+  <text class="fa" x="1214" y="87.0" font-size="15" font-weight="700" fill="#3b82f6" text-anchor="end">عمومی</text>
+</g><line x1="772" y1="111.0" x2="772" y2="123.0" stroke="#3b82f6" stroke-opacity=".5" stroke-width="2" stroke-dasharray="3 4"/><circle class="flowdot" style="animation-delay:-0.0s" cx="772" cy="114.0" r="3.5" fill="#3b82f6"/><g class="step" style="animation-delay:-0.6s">
+  <rect x="740" y="123.0" width="490" height="60" rx="14" fill="#0b1020" stroke="#3b82f6" stroke-opacity=".75" stroke-width="1.5"/>
+  <rect x="752" y="133.0" width="40" height="40" rx="10" fill="#3b82f6" fill-opacity=".14" stroke="#3b82f6" stroke-opacity=".5"/>
+  <text x="772" y="160.0" font-size="20" text-anchor="middle">🔁</text>
+  <text class="sans" x="806" y="149.0" font-size="17" font-weight="700" fill="#f1f5f9">edge</text>
+  <text class="mono" x="806" y="169.0" font-size="12" fill="#64748b">internal · caddy ↔ services</text>
+  <text class="fa" x="1214" y="159.0" font-size="15" font-weight="700" fill="#3b82f6" text-anchor="end">لبه</text>
+</g><line x1="772" y1="183.0" x2="772" y2="195.0" stroke="#3b82f6" stroke-opacity=".5" stroke-width="2" stroke-dasharray="3 4"/><circle class="flowdot" style="animation-delay:-0.4s" cx="772" cy="186.0" r="3.5" fill="#3b82f6"/><g class="step" style="animation-delay:-1.2s">
+  <rect x="740" y="195.0" width="490" height="60" rx="14" fill="#0b1020" stroke="#3b82f6" stroke-opacity=".75" stroke-width="1.5"/>
+  <rect x="752" y="205.0" width="40" height="40" rx="10" fill="#3b82f6" fill-opacity=".14" stroke="#3b82f6" stroke-opacity=".5"/>
+  <text x="772" y="232.0" font-size="20" text-anchor="middle">🗄️</text>
+  <text class="sans" x="806" y="221.0" font-size="17" font-weight="700" fill="#f1f5f9">backend</text>
+  <text class="mono" x="806" y="241.0" font-size="12" fill="#64748b">internal · services ↔ PostgreSQL, Redis</text>
+  <text class="fa" x="1214" y="231.0" font-size="15" font-weight="700" fill="#3b82f6" text-anchor="end">داده</text>
+</g><line x1="772" y1="255.0" x2="772" y2="267.0" stroke="#3b82f6" stroke-opacity=".5" stroke-width="2" stroke-dasharray="3 4"/><circle class="flowdot" style="animation-delay:-0.8s" cx="772" cy="258.0" r="3.5" fill="#3b82f6"/><g class="step" style="animation-delay:-1.8s">
+  <rect x="740" y="267.0" width="490" height="60" rx="14" fill="#0b1020" stroke="#a855f7" stroke-opacity=".75" stroke-width="1.5"/>
+  <rect x="752" y="277.0" width="40" height="40" rx="10" fill="#a855f7" fill-opacity=".14" stroke="#a855f7" stroke-opacity=".5"/>
+  <text x="772" y="304.0" font-size="20" text-anchor="middle">🔒</text>
+  <text class="sans" x="806" y="293.0" font-size="17" font-weight="700" fill="#f1f5f9">offline</text>
+  <text class="mono" x="806" y="313.0" font-size="12" fill="#64748b">core · no route out at all</text>
+  <text class="fa" x="1214" y="303.0" font-size="15" font-weight="700" fill="#a855f7" text-anchor="end">آفلاین</text>
+</g><line x1="772" y1="327.0" x2="772" y2="339.0" stroke="#a855f7" stroke-opacity=".5" stroke-width="2" stroke-dasharray="3 4"/><circle class="flowdot" style="animation-delay:-1.2s" cx="772" cy="330.0" r="3.5" fill="#a855f7"/><g class="step" style="animation-delay:-2.4s">
+  <rect x="740" y="339.0" width="490" height="60" rx="14" fill="#0b1020" stroke="#a855f7" stroke-opacity=".75" stroke-width="1.5"/>
+  <rect x="752" y="349.0" width="40" height="40" rx="10" fill="#a855f7" fill-opacity=".14" stroke="#a855f7" stroke-opacity=".5"/>
+  <text x="772" y="376.0" font-size="20" text-anchor="middle">📤</text>
+  <text class="sans" x="806" y="365.0" font-size="17" font-weight="700" fill="#f1f5f9">egress</text>
+  <text class="mono" x="806" y="385.0" font-size="12" fill="#64748b">bot · payments · provisioner only</text>
+  <text class="fa" x="1214" y="375.0" font-size="15" font-weight="700" fill="#a855f7" text-anchor="end">خروجی</text>
+</g>
+</svg>
