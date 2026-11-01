@@ -588,8 +588,9 @@ jobs:
 
   # The Hiddify adapter and the provisioner against a REAL Hiddify Manager panel:
   # ghcr.io/hiddify/hiddify-manager, pinned by tag AND digest, with the MariaDB and
-  # Redis it needs. NOT a required check, and allowed to fail: Hiddify's Docker
-  # image is marked experimental by Hiddify itself (docs/DOCKER.md upstream), it
+  # Redis it needs. Hiddify's Docker image is marked experimental by Hiddify
+  # itself (docs/DOCKER.md upstream); the job waits for its install and starts a
+  # panel that exited again (#158), and has passed every run since. The image
   # is about 700 MB, needs a privileged container on the host network (it binds
   # 80, 443 and every proxy port) and runs its whole install on every start, which
   # takes minutes on a runner. The fake in internal/hiddifyfake and the unit tests
@@ -602,7 +603,6 @@ jobs:
     name: Hiddify integration
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    continue-on-error: true
     services:
       postgres:
         image: postgres:16-alpine

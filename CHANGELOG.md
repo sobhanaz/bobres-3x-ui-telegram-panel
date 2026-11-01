@@ -8,6 +8,9 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+### Changed
+- CI: the Hiddify real-panel job may no longer fail quietly. It has passed every run since it learned to wait for the panel's install (0.21.1), and the ruleset file now lists every CI job as required, Mini App, Marzban, S-UI, Hiddify and 3x-ui v3.10 included.
+
 ## [0.21.1] — 2026-11-01
 
 **Two fixes on 0.21.0.** No migration; core and the bot update together as always.

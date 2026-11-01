@@ -86,6 +86,22 @@
           {
             "context": "3x-ui integration (v3.10.2)",
             "integration_id": 15368
+          },
+          {
+            "context": "Mini App (types, tests, build)",
+            "integration_id": 15368
+          },
+          {
+            "context": "Marzban integration",
+            "integration_id": 15368
+          },
+          {
+            "context": "S-UI integration",
+            "integration_id": 15368
+          },
+          {
+            "context": "Hiddify integration",
+            "integration_id": 15368
           }
         ]
       }
