@@ -2,7 +2,7 @@
 
 What has shipped, what is still open, and what was left out on purpose. Nothing here is promised for a date. The detailed, ordered list is [docs/ROADMAP.md](https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/blob/main/docs/ROADMAP.md), and each release's notes are in the [changelog](https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/blob/main/CHANGELOG.md).
 
-As of v0.21.1, 2026-11-01.
+As of v0.22.0, 2026-11-02.
 
 ## Shipped
 
@@ -31,6 +31,7 @@ As of v0.21.1, 2026-11-01.
 | v0.19.0 | 2026-10-29 | Cashback, reseller monthly targets and a daily wheel; Aqayepardakht and automatic TON payments |
 | v0.20.0 | 2026-10-29 | Messages and a weekly settlement reminder for resellers; bot and dashboard buttons for services the panel no longer has |
 | v0.21.0 | 2026-10-31 | S-UI and Hiddify panels; Arabic, Russian and Turkish (beta); new product announcements; the vendor's affiliate program and hosted-store tooling; a benchmark baseline and a faster wallet |
+| v0.22.0 | 2026-11-02 | Config names: buyers choose a config's name and rename it (3x-ui, Hiddify), checked as unique on every panel before payment; off by default |
 | v0.21.1 | 2026-11-01 | No startup warning after an update or a reboot; the install id is made safely by concurrent callers; the Hiddify CI job starts reliably |
 
 ## New in v0.18.0

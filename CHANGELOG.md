@@ -8,6 +8,10 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+## [0.22.0] — 2026-11-02
+
+**Config names: buyers choose the name of a new config, and rename one they have, checked as unique on every panel.** Off until the owner turns it on (Settings > Config names, one switch for customers and one for resellers). One additive migration (core 00056); the bot, core and the provisioner update together (the update does that).
+
 ### Updating
 - One database migration, additive, in core: 00056 (`orders.client_name`, the config name a buyer chose, with an index). Its Down drops the column. Config names are off until the owner switches them on; update the bot, core and the provisioner together (new gRPC calls; the update does that).
 
