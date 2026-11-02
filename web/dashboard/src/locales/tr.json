@@ -536,7 +536,7 @@
     "rename": "Yeniden adlandır",
     "rename_intro": "Hizmete panelinde yeni bir yapılandırma adı verir. Abonelik bağlantısı aynı kalır, müşterinin bir şey yapması gerekmez. Bayinin öneki adın önünde kalır.",
     "rename_name": "Yeni yapılandırma adı",
-    "rename_hint": "4 ile 20 karakter: küçük harf a–z ve rakam 0–9, en az bir harf ve bir rakam (örneğin sobhan1234).",
+    "rename_hint": "4 ile 20 karakter: İngilizce harf a–z ve rakam 0–9, en az bir harf ve bir rakam; büyük harfler küçük kaydedilir (örneğin USERNAME12345).",
     "done_rename": "Yapılandırma adı değiştirildi",
     "rename_reason": {
       "off": "Bu müşteri için yapılandırma adları kapalı.",

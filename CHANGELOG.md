@@ -10,7 +10,11 @@ What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## [0.22.1] — 2026-11-02
 
-**The Config names card on the Settings page.** No migration.
+**The Config names card on the Settings page, and a faster name lookup.** One additive migration (provisioner 00009, an index).
+
+### Changed
+- The example config name in the bot, the Mini App and the dashboard is now `USERNAME12345`. Capitals were always accepted and saved as small letters (`username12345`); the Mini App and dashboard texts now say so instead of "lowercase only".
+- Provisioner migration 00009 adds an index on `client_map.email`: the name check and the rename look a client up by its name on any server, which the unique `(server_id, email)` index could not serve.
 
 ### Fixed
 - The dashboard's **Settings > Config names** card (the two switches of 0.22.0) did not show: core did not list its group among the Settings page's, so the page had no card and could not save the switches. They could be turned on only from the bot's settings. Core now lists the group, and a test reads and saves the switches through the dashboard's settings API.
