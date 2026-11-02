@@ -536,7 +536,7 @@
     "rename": "Rename",
     "rename_intro": "Gives the service a new config name on its panel. The subscription link stays the same, so the customer does not have to do anything. A reseller's prefix stays in front of the name.",
     "rename_name": "New config name",
-    "rename_hint": "4 to 20 characters: lowercase letters a to z and digits 0 to 9, with at least one of each (for example sobhan1234).",
+    "rename_hint": "4 to 20 characters: English letters a to z and digits 0 to 9, with at least one of each; capitals are saved as small letters (for example USERNAME12345).",
     "done_rename": "Config name changed",
     "rename_reason": {
       "off": "Config names are switched off for this customer.",

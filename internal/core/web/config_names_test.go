@@ -9,6 +9,7 @@ import (
 
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/domain"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/store"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/testdb"
 )
 
 // renamingRegistry is a server registry where the server of sub renames its clients (renames) or not.
@@ -134,5 +135,30 @@ func TestMiniAppConfigNames(t *testing.T) {
 	other := m.signIn("tg:8702:omid:en")
 	if code, _ = m.call(http.MethodPost, "/api/mini/v1/services/"+sub.ID+"/rename", other, map[string]any{"name": "abcd1234"}); code != 404 {
 		t.Fatalf("another customer's service: %d", code)
+	}
+}
+
+// The two switches are a card of the Settings page (group config_names): listed, off by default, and saved there, so
+// the owner can turn config names on from the dashboard.
+func TestConfigNamesSettingsCard(t *testing.T) {
+	f, b, _ := setupFixture(t)
+	t.Cleanup(func() {
+		if err := testdb.Truncate(context.Background(), f.st.DB(), `core.settings`); err != nil {
+			t.Error(err)
+		}
+	})
+	code, out := b.do(http.MethodGet, "/api/v1/settings", nil)
+	if code != 200 || !strings.Contains(asJSON(out["groups"]), `"config_names"`) {
+		t.Fatalf("groups: %d %v", code, out["groups"])
+	}
+	for _, key := range []string{domain.SettingConfigNamesCustomers, domain.SettingConfigNamesResellers} {
+		if it := settingByKey(out, key); it == nil || it["group"] != "config_names" || it["kind"] != "bool" || it["default"] != "false" || it["editable"] != true {
+			t.Errorf("%s: %v", key, it)
+		}
+	}
+	code, out = b.do(http.MethodPut, "/api/v1/settings", map[string]any{"values": map[string]string{
+		domain.SettingConfigNamesCustomers: "true", domain.SettingConfigNamesResellers: "true"}})
+	if code != 200 || settingByKey(out, domain.SettingConfigNamesCustomers)["value"] != "true" || settingByKey(out, domain.SettingConfigNamesResellers)["value"] != "true" {
+		t.Fatalf("put: %d %v", code, out)
 	}
 }
