@@ -17,7 +17,7 @@ import (
 // adapter is a ClientRenamer.
 func TestRenamesClientsFollowsTheAdapters(t *testing.T) {
 	tokens := map[string]string{
-		store.KindXUI: "panel-token-0123456789", store.KindMarzban: "admin:pw", store.KindSUI: suiPanelTok, store.KindHiddify: hiddifyAPIKey,
+		store.KindXUI: "panel-token-0123456789", store.KindMarzban: "admin:pw", store.KindSUI: suiPanelTok, store.KindHiddify: hiddifyAPIKey, //gitleaks:allow test fixture
 	}
 	for kind, token := range tokens {
 		a, err := newAdapter(kind, "https://panel.example.com/path", token)
@@ -67,7 +67,7 @@ func TestCheckClientName(t *testing.T) {
 
 	// A disabled server is not asked; an enabled one that does not answer makes
 	// the answer "unchecked", never "available".
-	off, err := f.client.AddServer(ctx, &provisionerv1.AddServerRequest{Name: "off", BaseUrl: "http://127.0.0.1:1", ApiToken: "x-token-0123456789",
+	off, err := f.client.AddServer(ctx, &provisionerv1.AddServerRequest{Name: "off", BaseUrl: "http://127.0.0.1:1", ApiToken: "x-token-0123456789", //gitleaks:allow test fixture
 		AllowPrivate: true, SkipCheck: true, Enabled: proto.Bool(false)})
 	if err != nil {
 		t.Fatal(err)

@@ -108,6 +108,7 @@ var contexts = map[string]Context{
 	"trial.unavailable":      CtxToastHTML,
 	"codes.unavailable":      CtxToastHTML, // My codes on a core older than the bot: a popup
 	"sub.not_ready":          CtxToastHTML,
+	"cfg.bad.not_renamable":  CtxToastHTML, // a popup on a Rename button of a menu from before, or a message
 	"pay.already_submitted":  CtxToastHTML,
 	"sub.not_extendable":     CtxToastHTML,
 	"plan.unavailable":       CtxToastHTML,

@@ -89,6 +89,10 @@ type Checkout struct {
 	// confirming button sends back (core charges exactly that, while it holds).
 	OrderID string `json:"oid,omitempty"`
 	Quote   string `json:"quote,omitempty"`
+	// A new service's config name, chosen and checked (handler/confignames.go): as typed, which the order carries, and the
+	// full name core said it gets (a reseller's prefix in front), which the menu shows. Both "" = the automatic name.
+	ClientName string `json:"cn,omitempty"`
+	ClientFull string `json:"cnf,omitempty"`
 }
 
 func checkoutKey(userID int64, nonce string) string {

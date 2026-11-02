@@ -104,7 +104,8 @@ fifth container, `backup`, makes the daily encrypted backups (Phase 4 milestone 
 
 ## 4. 3x-ui integration (from upstream OpenAPI, v3.8.5)
 - Auth: `Authorization: Bearer <API token>` (Settings -> Security). Token is effectively full-admin.
-- Client key = email. Built as `u{telegramId}-{8 random characters}`; we store our own client_ref.
+- Client key = email. Built as `u{telegramId}-{8 random characters}`; we store our own client_ref. Since 2026-11-02 the owner can let
+  buyers choose it instead (config names, off by default: 03-bot-ux.md), checked on every panel before payment.
 - Endpoints: clients/add, update/{email}, del/{email}, bulkAdjust (renew: addDays/addBytes),
   resetTraffic/{email}, traffic/{email}, links/{email}, subLinks/{subId}, get/tgId/{tgId}, onlines.
 - clients/update REPLACES the row (not a patch): use per-client lock + read-modify-write. That includes the client's

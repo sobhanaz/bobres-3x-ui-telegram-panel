@@ -297,6 +297,10 @@ func (h *Handler) showCheckout(r *req, c state.Checkout) {
 	}
 	kb := &tg.Keyboard{}
 	available := w.GetBalance() + w.GetCreditLimit()
+	names := c.Type == "new" && h.configNamesOn(r) // the config name of a new service (confignames.go)
+	if names {
+		kb.Row(checkoutNameButtons(r, c, n)...)
+	}
 	var wallet *tg.Button
 	switch {
 	case !reseller:
@@ -327,6 +331,9 @@ func (h *Handler) showCheckout(r *req, c state.Checkout) {
 	}
 	if off > 0 {
 		text += "\n" + r.t("discount.applied", "code", esc(c.DiscountCode), "off", r.money(off, cur))
+	}
+	if names {
+		text += "\n" + checkoutNameLine(r, c)
 	}
 	if usdtPlan { // about what the wallet would be charged, at the rate the bot knows now; the quote after the tap is the exact price
 		if hint := h.usdtHint(r, price); hint != "" {
@@ -384,7 +391,15 @@ func (h *Handler) onPay(r *req, rest string) {
 		DiscountCode: c.DiscountCode, IdempotencyKey: fmt.Sprintf("ord:%d:%s:%s", r.from.ID, c.PlanID, n),
 		Label:      c.Label, // kept by core for a reseller's new service only
 		LinkSecret: c.LinkSecret,
+		ClientName: c.ClientName, // a new service's config name ("" = automatic); core ignores it on renewals and top-ups
 	})
+	if reason := orderNameReason(err); reason != "" {
+		// The name was taken since it was checked (or names were switched off): say so, and offer the menu again.
+		r.send(configNameText(r, reason), nil)
+		c.ClientName, c.ClientFull = "", ""
+		h.showCheckout(r, c)
+		return
+	}
 	if err != nil {
 		r.fail(err)
 		return

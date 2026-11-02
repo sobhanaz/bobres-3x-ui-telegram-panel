@@ -532,6 +532,21 @@
       "done_recreate": "Clients made again",
       "done_delete": "Services deleted",
       "close": "Close"
+    },
+    "rename": "Rename",
+    "rename_intro": "Gives the service a new config name on its panel. The subscription link stays the same, so the customer does not have to do anything. A reseller's prefix stays in front of the name.",
+    "rename_name": "New config name",
+    "rename_hint": "4 to 20 characters: lowercase letters a to z and digits 0 to 9, with at least one of each (for example sobhan1234).",
+    "done_rename": "Config name changed",
+    "rename_reason": {
+      "off": "Config names are switched off for this customer.",
+      "length": "The name must be 4 to 20 characters long.",
+      "chars": "Use only lowercase letters a to z and digits 0 to 9.",
+      "mix": "The name needs at least one letter and at least one digit.",
+      "automatic": "The name must not start with u and a digit: that is how automatic names look.",
+      "taken": "This name is taken. Try another one.",
+      "unchecked": "A server did not answer, so the name could not be checked. Try again in a minute.",
+      "not_renamable": "This service's server cannot rename a config and keep its link (Marzban, S-UI)."
     }
   },
   "plan": {
@@ -1793,6 +1808,11 @@
         "title": "Product announcements",
         "desc": "Announce a new product, with a Buy button, in the store's channel and in private messages to the customers who want product news.",
         "note": "You announce each product by hand, with the Announce button on its page (plans, digital accounts, licenses). While this is on, the bot asks every customer once whether they want news of new products; only those who say yes get private messages, and they can change it later in the bot (🌐 Language) and in the Mini App. The bot must be an admin of the channel, allowed to post. Off until you turn it on."
+      },
+      "config_names": {
+        "title": "Config names",
+        "desc": "Let buyers choose the name of a new service's config instead of the automatic one, and rename their services.",
+        "note": "A name is 4 to 20 lowercase letters and digits with at least one of each, and is checked on every server before payment; if a server took it by the time the service is made, the service gets the automatic name and the customer is told. Renaming keeps the subscription link, so it is offered only for services on 3x-ui and Hiddify servers (not Marzban or S-UI). Renewals and traffic packages never ask for a name. Staff can always rename a service from its page. Off until you turn it on."
       }
     },
     "field": {
@@ -2113,6 +2133,16 @@
           "label": "Quiet hours end",
           "help": "Announcements that waited go out at this time."
         }
+      },
+      "config_names": {
+        "customers": {
+          "label": "Customers choose config names",
+          "help": "On: customers can pick \"Choose a name\" when buying a new service in the bot or the Mini App, and rename their services from My services."
+        },
+        "resellers": {
+          "label": "Resellers choose config names",
+          "help": "On: resellers can name a service they buy for a customer and rename their services; their prefix stays in front (sob-name1234)."
+        }
       }
     },
     "payments_moved": "Payment methods and their details:",
@@ -2321,7 +2351,8 @@
         "enable": "Service turned on",
         "disable": "Service turned off",
         "reset_traffic": "Traffic reset",
-        "delete": "Service deleted"
+        "delete": "Service deleted",
+        "rename": "Config name changed"
       },
       "order": {
         "retry": "Order retried",

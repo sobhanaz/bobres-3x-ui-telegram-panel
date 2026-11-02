@@ -61,6 +61,9 @@ export interface ServiceItem {
   /** when the panel first answered that it has no client for this service (an operator deleted it there):
    * unix seconds, null while the panel has one. Older cores leave it out. */
   panel_missing_since?: number | null
+  /** staff can give it a new config name: its server keeps the link when a client is renamed (3x-ui, Hiddify).
+   * The one-service endpoints only; older cores leave it out. */
+  renamable?: boolean
 }
 
 export interface OrderItem {

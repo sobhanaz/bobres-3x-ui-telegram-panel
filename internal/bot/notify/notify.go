@@ -169,8 +169,14 @@ func (n *Notifier) Handle(ctx context.Context, m eventbus.Message) error {
 		if u := links.GetPageUrl(); u != "" {
 			kb.Row(tg.Link(n.cat.T(lang, "btn.open_page"), pageLink(u, lang)))
 		}
-		if err := n.send(ctx, e.TelegramID, n.labelled(lang, e.Label, n.cat.T(lang, "sub.ready",
-			"link", html.EscapeString(e.SubscriptionLink), "expires", expires, "traffic", traffic)), kb); err != nil {
+		text := n.cat.T(lang, "sub.ready", "link", html.EscapeString(e.SubscriptionLink), "expires", expires, "traffic", traffic)
+		switch { // the config name the buyer chose, or that it was taken meanwhile and the automatic one was given
+		case e.ClientName != "":
+			text += "\n" + n.cat.T(lang, "cfg.sub_line", "name", html.EscapeString(e.ClientName))
+		case e.NameTaken != "":
+			text += "\n\n" + n.cat.T(lang, "cfg.delivered_taken", "name", html.EscapeString(e.NameTaken))
+		}
+		if err := n.send(ctx, e.TelegramID, n.labelled(lang, e.Label, text), kb); err != nil {
 			return err
 		}
 		n.sendQR(ctx, lang, e, links)

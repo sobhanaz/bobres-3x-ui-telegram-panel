@@ -4,7 +4,8 @@
 // result. The order's request key stays the same for the same purchase, so a
 // double tap or a retry never makes a second order. A plan priced in USDT is paid
 // from the wallet (which is in Toman) in one more step: the customer is quoted the
-// price in Toman at today's rate, for two minutes, and confirms it.
+// price in Toman at today's rate, for two minutes, and confirms it. A new service
+// may get a config name the buyer chooses (sections/names), checked before the order.
 import { computed, onBeforeUnmount, ref } from 'vue'
 import { api, ApiError, type Intent, type Order, type Quote, type WalletQuote } from '../api'
 import { errorKey, gateFor, staleQuote } from '../errors'
@@ -18,6 +19,8 @@ import { haptic } from '../telegram'
 import type { Plan } from '../api'
 import Methods from '../components/Methods.vue'
 import PayPanel from '../components/PayPanel.vue'
+import NameChoice from '../sections/names/NameChoice.vue'
+import { nameError, namesOn } from '../sections/names/api'
 
 // label: the name a reseller gave the new service they buy for a customer
 const props = defineProps<{ plan: Plan; type: 'new' | 'renew' | 'traffic_topup'; subscriptionId?: string; label?: string }>()
@@ -42,6 +45,10 @@ const renewed = ref(false)
 const asking = ref(false)
 const failed = ref(false)
 const noRate = ref(false)
+// the name step (a new service, while the store lets this user choose names), and the full name the order got
+const nameChoice = ref<InstanceType<typeof NameChoice> | null>(null)
+const naming = computed(() => props.type === 'new' && namesOn())
+const chosenName = ref('')
 let key = newKey()
 let timer: ReturnType<typeof setInterval> | undefined
 let alive = true
@@ -107,11 +114,24 @@ async function create() {
   error.value = ''
   busy.value = true
   try {
-    order.value = await api.createOrder({ ...request(), key })
+    // A name the buyer chose goes with the order once core said it is free; while it is not, nothing is ordered.
+    let clientName = ''
+    if (naming.value && nameChoice.value) {
+      const n = await nameChoice.value.ensure()
+      if (n === null) return
+      clientName = n
+    }
+    order.value = await api.createOrder({ ...request(), key, client_name: clientName || undefined })
+    chosenName.value = clientName ? (nameChoice.value?.chosen() ?? '') : ''
     if (isPaid(order.value.status)) await finish()
     else stage.value = 'pay'
   } catch (e) {
-    oops(e)
+    // taken in the moment between the check and the order: the buyer types another name or goes automatic
+    if (e instanceof ApiError && e.code === 'config_name' && nameChoice.value) {
+      nameChoice.value.refused(e.reason)
+      error.value = nameError(e)
+      haptic('error')
+    } else oops(e)
   } finally {
     busy.value = false
   }
@@ -327,6 +347,8 @@ const doneKey = computed(() => {
       <p v-if="type === 'renew'" class="muted small" role="note">{{ tr('renew.note') }}</p>
       <p class="muted">{{ planFacts(plan) }}</p>
       <p v-if="label && type === 'new'" class="muted">🏷 {{ label }}</p>
+      <p v-if="chosenName && stage !== 'review'" class="muted">🔖 {{ tr('names.chosen', { name: chosenName }) }}</p>
+      <NameChoice v-if="naming && stage === 'review'" ref="nameChoice" :disabled="busy" />
       <template v-if="stage === 'review' && !reseller">
         <label class="field">
           <span>{{ tr('checkout.discount') }}</span>

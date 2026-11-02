@@ -2,7 +2,8 @@
 // One of the reseller's customer services: its name, status, time left and
 // usage, and (opened) what can be done to it: the link and page to hand to
 // the customer, renew and add traffic through the shop's own checkout, a new
-// name, a private note, pause or resume, and delete after a confirmation.
+// name, a new config name (where the store allows it: sections/names), a private
+// note, pause or resume, and delete after a confirmation.
 // Core decides what is allowed; the buttons follow the can_* answers.
 import { computed, ref } from 'vue'
 import { fmtBytes, fmtDate, fmtNum, statusKey } from '../../fmt'
@@ -12,11 +13,12 @@ import { tr } from '../../i18n'
 import { fail } from '../../store'
 import { errText, isGone, resellerApi, type ResellerService } from './api'
 import { cleanLabel, cleanNote, MAX_LABEL, MAX_NOTE } from './text'
+import RenameForm from '../names/RenameForm.vue'
 
 const props = defineProps<{ service: ResellerService; open: boolean }>()
 const emit = defineEmits<{ toggle: []; renew: []; topup: []; changed: [done: string] }>()
 
-type Mode = '' | 'rename' | 'note' | 'delete'
+type Mode = '' | 'rename' | 'config' | 'note' | 'delete'
 const mode = ref<Mode>('')
 const draft = ref('')
 const busy = ref(false)
@@ -72,6 +74,12 @@ const pause = () => run(() => resellerApi.pause(props.service.id), 'reseller.don
 const resume = () => run(() => resellerApi.resume(props.service.id), 'reseller.done.resumed')
 const remove = () => run(() => resellerApi.remove(props.service.id), 'reseller.done.deleted')
 
+// The config was renamed on its panel: the list loads the service again.
+function renamed() {
+  mode.value = ''
+  emit('changed', 'reseller.done.saved')
+}
+
 function saveName() {
   const label = cleanLabel(draft.value)
   if (label === null) error.value = tr('reseller.err.bad_text')
@@ -107,6 +115,7 @@ async function copy() {
       <span v-if="service.traffic_total" class="bar" role="progressbar" :aria-valuenow="percent" aria-valuemin="0" aria-valuemax="100">
         <span :style="{ width: percent + '%' }"></span>
       </span>
+      <span v-if="service.config_name" class="muted small rs-line" dir="auto">{{ tr('names.current', { name: service.config_name }) }}</span>
       <span v-if="service.note" class="rs-note">📝 {{ service.note }}</span>
     </button>
 
@@ -126,6 +135,9 @@ async function copy() {
           {{ tr('reseller.action.resume') }}
         </button>
         <button class="btn secondary" type="button" :aria-expanded="mode === 'rename'" @click="edit(mode === 'rename' ? '' : 'rename')">{{ tr('reseller.action.rename') }}</button>
+        <button v-if="service.renamable" class="btn secondary" type="button" :aria-expanded="mode === 'config'" @click="edit(mode === 'config' ? '' : 'config')">
+          {{ tr('names.rename') }}
+        </button>
         <button class="btn secondary" type="button" :aria-expanded="mode === 'note'" @click="edit(mode === 'note' ? '' : 'note')">{{ tr('reseller.action.note') }}</button>
         <button v-if="service.can_delete" class="btn secondary rs-danger" type="button" :aria-expanded="mode === 'delete'" @click="edit(mode === 'delete' ? '' : 'delete')">
           {{ tr('reseller.action.delete') }}
@@ -142,6 +154,8 @@ async function copy() {
           <button class="btn secondary" type="button" @click="edit('')">{{ tr('reseller.action.cancel') }}</button>
         </div>
       </form>
+
+      <RenameForm v-else-if="mode === 'config'" :service-id="service.id" :current="service.config_name" @done="renamed" @cancel="edit('')" />
 
       <form v-else-if="mode === 'note'" class="rs-grid" @submit.prevent="saveNote">
         <label class="field">

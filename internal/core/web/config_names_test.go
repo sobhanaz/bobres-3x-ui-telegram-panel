@@ -75,7 +75,7 @@ func TestMiniAppConfigNames(t *testing.T) {
 	m := newMiniFixture(t, true)
 	tok := m.signIn("tg:8701:sara:en")
 	u := m.user(8701)
-	p := m.fixture.plan("Monthly", 30, 50<<30, 1000)
+	p := m.plan("Monthly", 30, 50<<30, 1000)
 	_, sub := m.orderSub(u, p, "active", "active", time.Now().Add(48*time.Hour), 50<<30)
 	m.api.cfg.Servers = renamingRegistry(sub, true)
 

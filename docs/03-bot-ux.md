@@ -284,6 +284,30 @@ Mini App name it too. Core refuses an application from a reseller, staff, a bann
 in the license (the bot says only that it is not available), and counts it as a support message for
 `limits.tickets_per_day`.
 
+**Config names** (built 2026-11-02; `cn:c:<nonce>`, `cn:a:<nonce>`, `cn:r:<service id>`): instead of the automatic name of a new
+service's config (`u<telegram id>-<random>`, a reseller's `<prefix>-u<id>-<random>`), the buyer may choose it, and rename a service they
+have. Two settings, **off by default**: `config_names.customers` and `config_names.resellers` (dashboard **Settings > Config names**, and
+`/set` in the bot). While the one of their role is on:
+- **Buying a new service** (Buy, and a reseller's **Buy for a customer** after the customer's label): the payment menu says *🔤 Config name:
+  automatic* and has **✏️ Choose a config name**. The bot asks for the name with the rules (4 to 20 characters, English letters `a`–`z` and
+  digits `0`–`9` only, at least one letter and one digit, e.g. `sobhan1234`) and an **Automatic name** button; core checks it
+  (`CheckConfigName`): the rules (trimmed and lowercased; Persian and Arabic digits count as 0–9; no name starting with `u` and a digit, the
+  shape of the automatic ones), and that it is free in BOBRES and on every enabled panel. A refusal is explained in the buyer's language
+  (`cfg.bad.<reason>`: length, chars, mix, automatic, taken, unchecked "could not check, try again") and the question stays open: they type
+  again or tap Automatic name. A name core takes goes back on the menu (*Config name: `sob-ali1234`*, the reseller's prefix in front) with
+  **Another name** and **Automatic name**; the saved checkout carries it (`cn`, and the full name `cnf`) and the order sends it
+  (`CreateOrder.client_name`). An order refused for the name (taken since the check) says why and shows the menu again with the automatic
+  name. Renewals, traffic packages and bulk purchases never ask. The delivery message adds *🔤 Config name: …*; when a panel had a client of
+  that name by the time the service was made, the service gets the automatic name and the message says so (`cfg.delivered_taken`), never a
+  failed delivery.
+- **My services** (a customer's, and a reseller's customers' services, which are the same screen): the service shows its config name, and
+  **🔤 Change config name** while core says it can be renamed (`Subscription.renamable`: delivered, and on a server that keeps the link: 3x-ui
+  or Hiddify, not Marzban or S-UI). The bot shows the current name, says the link stays the same, and asks for the new one with the same rules;
+  core renames it on the panel (`RenameService`, audited `subscription.rename`) and the bot confirms (`cfg.renamed`) and shows the service. A
+  name refused is explained and asked again; a service that cannot be renamed any more (names switched off, or not renamable) says so and
+  returns to the service.
+With the setting off nothing shows: no line, no button, and an old menu's button falls back to the automatic name.
+
 ## Admin in bot (every task is a button; the dashboard stays the full tool)
 `/admin` is the front door for owners and admins (it says when maintenance mode is on). Nobody has to remember a
 command: the old ones still work, and each usage text ends with "open /admin and use the buttons".

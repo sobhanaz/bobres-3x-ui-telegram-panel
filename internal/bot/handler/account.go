@@ -144,6 +144,9 @@ func (h *Handler) showService(r *req, id string) {
 	} else {
 		kb.Row(r.button("btn.qr", "qr:"+id))
 	}
+	if s.GetRenamable() { // a new config name (confignames.go); the link stays
+		kb.Row(r.button("btn.cfg_rename", "cn:r:"+id))
+	}
 	// The branded page (the core fills page_url while the page is on): a URL
 	// button, in the customer's language.
 	if u := s.GetPageUrl(); u != "" {
@@ -159,6 +162,9 @@ func (h *Handler) showService(r *req, id string) {
 		text += "\n" + r.t("sub.usage", "used", i18n.Bytes(r.lang, used), "total", i18n.Bytes(r.lang, total), "bar", usageBar(used, total))
 	case used > 0:
 		text += "\n" + r.t("sub.usage_unlimited", "used", i18n.Bytes(r.lang, used))
+	}
+	if h.configNamesOn(r) && s.GetClientEmail() != "" { // the config's name, which the buyer may choose
+		text += "\n" + r.t("cfg.sub_line", "name", esc(s.GetClientEmail()))
 	}
 	if r.isReseller() && s.GetNote() != "" { // the reseller's private note
 		text += "\n\n" + r.t("sub.note_line", "note", esc(s.GetNote()))

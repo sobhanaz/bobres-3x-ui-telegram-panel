@@ -593,6 +593,8 @@ func (h *Handler) dispatch(r *req, data string) {
 		h.onPickForSub(r, rest)
 	case "dc":
 		h.askDiscount(r, rest)
+	case "cn": // config names (confignames.go)
+		h.onConfigName(r, rest)
 	case "ref":
 		h.showReferral(r)
 	case "aff":
@@ -784,6 +786,10 @@ func (h *Handler) onScene(r *req, st state.State) {
 		h.onTicket(r, st)
 	case sceneDiscount:
 		h.onDiscountCode(r, st)
+	case sceneConfigName:
+		h.onConfigNameText(r, st)
+	case sceneConfigRename:
+		h.onConfigRenameText(r, st)
 	case sceneGiftCode:
 		h.onGiftCode(r)
 	case sceneAdminFind, sceneAdminAdjust, sceneAdminReason, sceneAdminInput:

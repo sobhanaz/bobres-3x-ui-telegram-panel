@@ -90,6 +90,9 @@ export interface Service {
   page_url: string
   can_renew: boolean
   can_topup: boolean
+  /** the config's name on the panel, and whether the customer may rename it now (absent from an older core: no) */
+  config_name?: string
+  renamable?: boolean
 }
 export interface LedgerEntry { kind: string; amount: number; currency: string; balance_after: number; at: number; scale: number }
 export interface Order {
@@ -196,8 +199,17 @@ export interface Intent {
  * the call that started it answered, so the same payment screen can be drawn again, and when it began (unix seconds).
  */
 export interface PendingPayment extends Intent { created_at: number }
-/** label names a new service a reseller buys for a customer (core ignores it for anyone else). */
-export interface OrderRequest { plan_id: string; type?: string; subscription_id?: string; discount_code?: string; key?: string; label?: string }
+/** label names a new service a reseller buys for a customer (core ignores it for anyone else); client_name is the config name
+ * the buyer chose for a new service (absent: the automatic name; sections/names). */
+export interface OrderRequest {
+  plan_id: string
+  type?: string
+  subscription_id?: string
+  discount_code?: string
+  key?: string
+  label?: string
+  client_name?: string
+}
 
 let token = ''
 let signingIn: Promise<Me> | null = null
