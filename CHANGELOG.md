@@ -8,6 +8,13 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+## [0.22.1] — 2026-11-02
+
+**The Config names card on the Settings page.** No migration.
+
+### Fixed
+- The dashboard's **Settings > Config names** card (the two switches of 0.22.0) did not show: core did not list its group among the Settings page's, so the page had no card and could not save the switches. They could be turned on only from the bot's settings. Core now lists the group, and a test reads and saves the switches through the dashboard's settings API.
+
 ## [0.22.0] — 2026-11-02
 
 **Config names: buyers choose the name of a new config, and rename one they have, checked as unique on every panel.** Off until the owner turns it on (Settings > Config names, one switch for customers and one for resellers). One additive migration (core 00056); the bot, core and the provisioner update together (the update does that).
