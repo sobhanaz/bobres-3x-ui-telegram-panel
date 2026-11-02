@@ -153,6 +153,11 @@ var SettingSpecs = []SettingSpec{
 		Help: "true = the bot's home menu has a Bulk purchase button: a customer buys several services of one plan at once and pays from the wallet; false = no button, and core refuses bulk purchases"},
 	{Key: SettingBulkMax, Group: "shop", Kind: KindInt, Perm: permSettings, Default: strconv.Itoa(DefaultBulkMax), Min: MinBulkQuantity, Max: MaxBulkQuantity,
 		Help: "the most services one bulk purchase may hold (2 to 100)"},
+	// Config names (config_names.go): a buyer chooses the name of a new service's config, and can rename one. Off by default.
+	{Key: SettingConfigNamesCustomers, Group: "config_names", Kind: KindBool, Perm: permSettings, Default: "false",
+		Help: "true = customers may choose the name of a new service's config while buying (or keep the automatic name) and rename their services from My services, in the bot and the Mini App: 4 to 20 lowercase letters and digits with at least one of each, checked on every server before payment; a service on a Marzban or S-UI server cannot be renamed (its link would change); false = automatic names only (the default)"},
+	{Key: SettingConfigNamesResellers, Group: "config_names", Kind: KindBool, Perm: permSettings, Default: "false",
+		Help: "true = resellers may choose the config name of a service they buy for a customer and rename their services, as customers can; the reseller's prefix stays in front (sob-name1234); false = automatic names only (the default)"},
 	{Key: "support.autoclose_days", Group: "support", Kind: KindInt, Perm: permSettings, Default: "7", Min: 0, Max: 90,
 		Help: "close a ticket this many days after staff answered, when the customer does not write back (0 = never)"},
 	{Key: "limits.bot_per_10s", Group: "limits", Kind: KindInt, Perm: permSettings, Default: "20", Min: 5, Max: 200,

@@ -284,6 +284,8 @@ func (s *Server) CreateOrder(ctx context.Context, req *corev1.CreateOrderRequest
 		DiscountCode:   req.GetDiscountCode(),
 		Label:          req.GetLabel(),
 		LinkSecret:     req.GetLinkSecret(),
+		ClientName:     req.GetClientName(),
+		Names:          s.names(),
 	})
 	if err != nil {
 		return nil, fail(err)
@@ -316,6 +318,9 @@ func orderToProto(o *store.Order) *corev1.Order {
 	}
 	if o.Label != nil {
 		out.Label = *o.Label
+	}
+	if o.ClientName != nil {
+		out.ClientName = *o.ClientName
 	}
 	if o.ListAmount != nil && o.ListCurrency != nil && o.Rate != nil {
 		out.ListPrice = &commonv1.Money{Amount: *o.ListAmount, Currency: *o.ListCurrency}
@@ -445,9 +450,11 @@ func (s *Server) ListSubscriptions(ctx context.Context, req *corev1.ListSubscrip
 		}
 		out.PageInfo = &commonv1.PageInfo{Page: page, PageSize: size, Total: total}
 	}
-	page := s.pageLinks(ctx)
+	page, renamable := s.pageLinks(ctx), s.renamable(ctx, req.GetUserId())
 	for i := range subs {
-		out.Subscriptions = append(out.Subscriptions, subscriptionToProto(&subs[i], page))
+		sp := subscriptionToProto(&subs[i], page)
+		sp.Renamable = renamable(&subs[i])
+		out.Subscriptions = append(out.Subscriptions, sp)
 	}
 	return out, nil
 }

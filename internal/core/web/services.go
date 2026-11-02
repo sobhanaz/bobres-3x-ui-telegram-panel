@@ -31,6 +31,9 @@ type serviceJSON struct {
 	// PageURL is the branded page's address (the one service endpoints only;
 	// "" while the page is off or the service is not ready).
 	PageURL string `json:"page_url,omitempty"`
+	// Renamable: staff can give the service a new config name (its server keeps the link: 3x-ui, Hiddify), the one
+	// service endpoints only.
+	Renamable bool `json:"renamable"`
 }
 
 func serviceOf(r *store.SubscriptionRow) serviceJSON {
@@ -99,6 +102,7 @@ func (s *Server) getService(w http.ResponseWriter, r *http.Request) {
 	}
 	svc := serviceOf(row)
 	svc.PageURL = s.pageURL(r, &row.Subscription)
+	svc.Renamable = s.cfg.Domain.StaffRenamable(r.Context(), s.cfg.Servers, &row.Subscription)
 	writeJSON(w, http.StatusOK, map[string]any{"service": svc, "orders": items})
 }
 
@@ -111,6 +115,7 @@ func (s *Server) serviceResult(w http.ResponseWriter, r *http.Request, id string
 	}
 	svc := serviceOf(row)
 	svc.PageURL = s.pageURL(r, &row.Subscription)
+	svc.Renamable = s.cfg.Domain.StaffRenamable(r.Context(), s.cfg.Servers, &row.Subscription)
 	out := map[string]any{"service": svc}
 	for k, v := range extra {
 		out[k] = v
@@ -210,6 +215,32 @@ func (s *Server) setServiceEnabled(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	s.serviceResult(w, r, id, extra)
+}
+
+// renameService: POST /api/v1/services/{id}/rename {name, reason} gives the service a new config name on its panel,
+// keeping its subscription link (audited as subscription.rename). The owner's reseller prefix stays in front; the config
+// name settings do not apply to staff. A name core does not take is 400 {error: config_name, reason}.
+func (s *Server) renameService(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	var req struct {
+		Name   string `json:"name"`
+		Reason string `json:"reason"`
+	}
+	if !readJSON(w, r, &req) {
+		return
+	}
+	if s.cfg.Provisioner == nil {
+		writeError(w, http.StatusServiceUnavailable, "unavailable", "the provisioner is not reachable")
+		return
+	}
+	if _, err := s.cfg.Domain.RenameSubscription(r.Context(), actor(r), s.cfg.Provisioner, s.cfg.Servers, id, req.Name, req.Reason); err != nil {
+		s.fail(w, "rename service", err)
+		return
+	}
+	s.serviceResult(w, r, id, nil)
 }
 
 // panelMissingBody is the body of recreate-client and delete. OnlyMissing (the Services page's bulk actions

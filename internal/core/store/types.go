@@ -106,8 +106,10 @@ type Order struct {
 	ListAmount   *int64
 	ListCurrency *string
 	Rate         *int64
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	// ClientName is the config name the buyer chose for a new service (with a reseller's prefix in front); nil = the automatic name.
+	ClientName *string
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
 }
 
 // Bulk mirrors core.bulk_orders: a purchase of Quantity services of one plan

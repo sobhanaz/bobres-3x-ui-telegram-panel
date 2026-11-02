@@ -187,6 +187,7 @@ func (s *Server) Register(mux *http.ServeMux) {
 	s.route(api, "POST /api/v1/services/{id}/enabled", PermServicesWrite, s.setServiceEnabled)
 	s.route(api, "POST /api/v1/services/{id}/recreate-client", PermServicesWrite, s.recreateService)
 	s.route(api, "POST /api/v1/services/{id}/delete", PermServicesWrite, s.deleteService)
+	s.route(api, "POST /api/v1/services/{id}/rename", PermServicesWrite, s.renameService)
 	s.route(api, "POST /api/v1/services/{id}/page-token/regenerate", PermServicesWrite, s.regeneratePage)
 
 	// Sales.

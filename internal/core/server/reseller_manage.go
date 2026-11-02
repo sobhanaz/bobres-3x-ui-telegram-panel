@@ -46,9 +46,11 @@ func (s *Server) ListResellerServices(ctx context.Context, req *corev1.ListResel
 		Counts: &corev1.ServiceCounts{Total: got.Counts.Total, Active: got.Counts.Active, ExpiringSoon: got.Counts.ExpiringSoon,
 			Expired: got.Counts.Expired, Paused: got.Counts.Paused, Pending: got.Counts.Pending},
 	}
-	links := s.pageLinks(ctx)
+	links, renamable := s.pageLinks(ctx), s.renamable(ctx, req.GetUserId())
 	for i := range got.Items {
-		out.Subscriptions = append(out.Subscriptions, subscriptionToProto(&got.Items[i], links))
+		sp := subscriptionToProto(&got.Items[i], links)
+		sp.Renamable = renamable(&got.Items[i])
+		out.Subscriptions = append(out.Subscriptions, sp)
 	}
 	return out, nil
 }

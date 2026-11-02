@@ -39,6 +39,14 @@ type fakeProvisioner struct {
 	groupErr    error
 	// recreated are the limits of the RecreateClient calls, in order.
 	recreated []limitsCall
+	// Config names: panelNames are the names some panel has (CheckClientName says "taken", CreateClient refuses them);
+	// checkReason, when set, is CheckClientName's answer for any other name ("unchecked"), checkErr its error; renamed
+	// records RenameClient calls ("<sub>|<name>"), renameErr is returned from them.
+	panelNames  map[string]bool
+	checkReason string
+	checkErr    error
+	renamed     []string
+	renameErr   error
 }
 
 func (f *fakeProvisioner) op(subscriptionID, what string) error {
@@ -154,6 +162,9 @@ func (f *fakeProvisioner) CreateClient(_ context.Context, subscriptionID, email 
 	f.days, f.traffic = days, traffic
 	f.candidates = append([]string(nil), candidates...)
 	f.inbounds = append([]store.PlanInbound(nil), inbounds...)
+	if f.panelNames[email] {
+		return ProvisionedClient{}, ErrClientNameTaken
+	}
 	if f.failures > 0 {
 		f.failures--
 		return ProvisionedClient{}, errors.New("panel unreachable")

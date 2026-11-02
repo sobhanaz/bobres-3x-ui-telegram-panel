@@ -86,26 +86,33 @@ func (s *Server) miniServices(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out := make([]map[string]any, 0, len(subs))
+	renamable := s.miniRenamable(ctx, c.user)
 	for i := range subs {
-		sub := &subs[i]
-		renewable := sub.SubLink != "" && (sub.Status == "active" || sub.Status == "expiring_soon" || sub.Status == "expired" || sub.Status == "depleted")
-		var expires any
-		if sub.ExpiresAt != nil {
-			expires = sub.ExpiresAt.Unix()
-		}
-		label := ""
-		if sub.Label != nil {
-			label = *sub.Label
-		}
-		out = append(out, map[string]any{
-			"id": sub.ID, "label": label, "status": sub.Status, "expires_at": expires,
-			"traffic_total": miniUnix(sub.TrafficTotal), "traffic_used": sub.TrafficUsed,
-			"link": sub.SubLink, "page_url": s.pageURL(r, sub),
-			"can_renew": renewable,
-			"can_topup": renewable && sub.TrafficTotal != nil && *sub.TrafficTotal > 0 && sub.Status != "expired",
-		})
+		out = append(out, s.miniServiceBody(r, &subs[i], renamable))
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"services": out})
+}
+
+// miniServiceBody is one of the customer's services: usage, link, its config name and what can be done to it.
+func (s *Server) miniServiceBody(r *http.Request, sub *store.Subscription, renamable func(*store.Subscription) bool) map[string]any {
+	renewable := sub.SubLink != "" && (sub.Status == "active" || sub.Status == "expiring_soon" || sub.Status == "expired" || sub.Status == "depleted")
+	var expires any
+	if sub.ExpiresAt != nil {
+		expires = sub.ExpiresAt.Unix()
+	}
+	label := ""
+	if sub.Label != nil {
+		label = *sub.Label
+	}
+	return map[string]any{
+		"id": sub.ID, "label": label, "status": sub.Status, "expires_at": expires,
+		"traffic_total": miniUnix(sub.TrafficTotal), "traffic_used": sub.TrafficUsed,
+		"link": sub.SubLink, "page_url": s.pageURL(r, sub),
+		"can_renew":   renewable,
+		"can_topup":   renewable && sub.TrafficTotal != nil && *sub.TrafficTotal > 0 && sub.Status != "expired",
+		"config_name": sub.ClientEmail,
+		"renamable":   renamable(sub),
+	}
 }
 
 // miniWallet: GET /api/mini/v1/wallet, balances and the latest movements.
@@ -174,6 +181,8 @@ type miniOrderIn struct {
 	// Label is a reseller's name for the new service they buy for a customer
 	// (core ignores it for anyone else, and on renewals and top-ups).
 	Label string `json:"label"`
+	// ClientName is the config name the buyer chose for a new service ("" = the automatic name; config-name/check first).
+	ClientName string `json:"client_name"`
 }
 
 func (in *miniOrderIn) check() error {
@@ -184,7 +193,7 @@ func (in *miniOrderIn) check() error {
 	default:
 		return errInvalid("unknown order type")
 	}
-	if !miniUUIDRe.MatchString(in.PlanID) || (in.SubscriptionID != "" && !miniUUIDRe.MatchString(in.SubscriptionID)) || len(in.DiscountCode) > 64 {
+	if !miniUUIDRe.MatchString(in.PlanID) || (in.SubscriptionID != "" && !miniUUIDRe.MatchString(in.SubscriptionID)) || len(in.DiscountCode) > 64 || len(in.ClientName) > 200 {
 		return errInvalid("a plan is required")
 	}
 	if (in.Type == domain.OrderNew) != (in.SubscriptionID == "") {
@@ -249,7 +258,8 @@ func (s *Server) miniCreateOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	o, err := s.cfg.Domain.CreateOrder(ctx, domain.CreateOrderParams{UserID: c.user.ID, PlanID: in.PlanID, Type: in.Type,
-		SubscriptionID: in.SubscriptionID, DiscountCode: in.DiscountCode, Label: in.Label, IdempotencyKey: "mini:" + c.user.ID + ":" + in.Key})
+		SubscriptionID: in.SubscriptionID, DiscountCode: in.DiscountCode, Label: in.Label, IdempotencyKey: "mini:" + c.user.ID + ":" + in.Key,
+		ClientName: in.ClientName, Names: s.miniNames()})
 	if err != nil {
 		s.miniFail(w, "mini app order", err)
 		return
