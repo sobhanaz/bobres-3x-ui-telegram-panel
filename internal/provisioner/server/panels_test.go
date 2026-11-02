@@ -111,6 +111,42 @@ func panelFlow(t *testing.T, f *fixture, kind string, removeBehind func(email st
 		t.Fatalf("usage after reset = %+v, %v", u, err)
 	}
 
+	// Config names: the client's name is taken, a new one is free, and a rename
+	// keeps the subscription link (or is refused where it could not).
+	if res, err := f.client.CheckClientName(ctx, &provisionerv1.CheckClientNameRequest{Name: panelFlowEmail}); err != nil || res.GetAvailable() || res.GetReason() != NameTaken {
+		t.Fatalf("check of the client's own name = %+v, %v", res, err)
+	}
+	const renamed = "flow1234"
+	if res, err := f.client.CheckClientName(ctx, &provisionerv1.CheckClientNameRequest{Name: renamed}); err != nil || !res.GetAvailable() {
+		t.Fatalf("check of a free name = %+v, %v", res, err)
+	}
+	_, err = f.client.RenameClient(ctx, &provisionerv1.RenameClientRequest{SubscriptionId: sub1, NewName: renamed})
+	if !renamesClients(kind) {
+		if status.Code(err) != codes.FailedPrecondition {
+			t.Fatalf("rename on a %s server: %v", kind, err)
+		}
+	} else {
+		if err != nil {
+			t.Fatalf("RenameClient: %v", err)
+		}
+		l2, err := f.client.GetLinks(ctx, &provisionerv1.GetLinksRequest{SubscriptionId: sub1})
+		if err != nil || noFragment(l2.GetSubscriptionLink()) != noFragment(links.GetSubscriptionLink()) {
+			t.Fatalf("links after a rename = %+v, %v; was %q", l2, err, links.GetSubscriptionLink())
+		}
+		if u, err = f.client.GetUsage(ctx, &provisionerv1.GetUsageRequest{SubscriptionId: sub1}); err != nil || u.GetClientMissing() || u.GetTrafficTotalBytes() != 21<<30 {
+			t.Fatalf("usage after a rename = %+v, %v", u, err)
+		}
+		if res, err := f.client.CheckClientName(ctx, &provisionerv1.CheckClientNameRequest{Name: panelFlowEmail}); err != nil || !res.GetAvailable() {
+			t.Fatalf("the old name after a rename = %+v, %v", res, err)
+		}
+		if _, err := f.client.RenameClient(ctx, &provisionerv1.RenameClientRequest{SubscriptionId: sub1, NewName: renamed}); err != nil {
+			t.Fatalf("the same rename again: %v", err)
+		}
+		if _, err := f.client.RenameClient(ctx, &provisionerv1.RenameClientRequest{SubscriptionId: sub1, NewName: panelFlowEmail}); err != nil {
+			t.Fatalf("rename back: %v", err)
+		}
+	}
+
 	// Deleted on the panel behind BOBRES's back: an answer, not a failure.
 	removeBehind(panelFlowEmail)
 	u, err = f.client.GetUsage(ctx, &provisionerv1.GetUsageRequest{SubscriptionId: sub1})
@@ -149,6 +185,13 @@ func panelFlow(t *testing.T, f *fixture, kind string, removeBehind func(email st
 	if _, err := f.client.DeleteClient(ctx, &provisionerv1.DeleteClientRequest{SubscriptionId: sub1}); err != nil {
 		t.Fatalf("second DeleteClient: %v", err)
 	}
+}
+
+// noFragment is a link without its #fragment: Hiddify's link ends with the
+// user's name there, which apps show and the panel never sees.
+func noFragment(link string) string {
+	before, _, _ := strings.Cut(link, "#")
+	return before
 }
 
 func TestSUIServerFlow(t *testing.T) {

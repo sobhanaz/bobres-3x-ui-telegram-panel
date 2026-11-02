@@ -52,6 +52,9 @@ type Server struct {
 	// MaxClients is the most clients the server takes (0: no limit). A server whose Clients have reached it
 	// gets no new services; the ones it has keep working.
 	MaxClients int32
+	// RenamesClients: a client of this server can be renamed and keep its subscription link (3x-ui, Hiddify; not
+	// Marzban or S-UI), so its services may get a new config name.
+	RenamesClients bool
 }
 
 // ServerList is every server and the panel versions BOBRES is tested with.

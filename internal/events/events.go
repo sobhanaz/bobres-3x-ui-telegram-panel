@@ -278,6 +278,11 @@ type SubscriptionProvisionedEvent struct {
 	// bot sends nothing for this service on its own. A service that is ready
 	// after that message carries no BulkID and is delivered like any other.
 	BulkID string `json:"bulk_id,omitempty"`
+	// ClientName is the config name the buyer chose, when the service got it. NameTaken is the name chosen when a panel
+	// had a client of that name by the time the service was made: the service got the automatic name instead, and the
+	// customer is told. Both are empty for a service with the automatic name nobody chose.
+	ClientName string `json:"client_name,omitempty"`
+	NameTaken  string `json:"name_taken,omitempty"`
 }
 
 // RewardCodeIssuedEvent: the buyer of a plan that gives a reward got a discount code, bound to them, one use, for any plan. It is a percent

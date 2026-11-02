@@ -144,6 +144,29 @@ func TestIntegrationRealPanel(t *testing.T) {
 	if got, err := a.ClientSubID(ctx, email); err != nil || got != subID {
 		t.Fatalf("subscription id after set enabled: %q %v", got, err)
 	}
+
+	// A rename (a customer's config name) keeps the client: its subscription id
+	// (so the subscription link), its limits and its group; the old name is gone.
+	renamed := email + "r"
+	t.Cleanup(func() { _ = a.Delete(context.Background(), renamed) }) // a failed run may leave it
+	if err := a.RenameClient(ctx, email, renamed); err != nil {
+		t.Fatalf("rename: %v", err)
+	}
+	if got, err := a.ClientSubID(ctx, renamed); err != nil || got != subID {
+		t.Fatalf("subscription id after rename: %q %v", got, err)
+	}
+	if st, err := a.Status(ctx, renamed); err != nil || st.ExpiryMs != exp || st.TotalBytes != 3<<30 || !st.Enabled {
+		t.Fatalf("status after rename: %+v %v", st, err)
+	}
+	if _, err := a.ClientSubID(ctx, email); err == nil {
+		t.Fatal("the old name is still on the panel after a rename")
+	}
+	if links, err := a.SubLinks(ctx, subID); err != nil || len(links) == 0 {
+		t.Fatalf("sub links after rename: %v %v", links, err)
+	}
+	if err := a.RenameClient(ctx, renamed, email); err != nil {
+		t.Fatalf("rename back: %v", err)
+	}
 	if err := a.Delete(ctx, email); err != nil {
 		t.Fatalf("delete: %v", err)
 	}

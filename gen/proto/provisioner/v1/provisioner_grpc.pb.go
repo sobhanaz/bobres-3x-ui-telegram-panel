@@ -32,6 +32,8 @@ const (
 	ProvisionerService_ListInbounds_FullMethodName     = "/provisioner.v1.ProvisionerService/ListInbounds"
 	ProvisionerService_SetInboundAttach_FullMethodName = "/provisioner.v1.ProvisionerService/SetInboundAttach"
 	ProvisionerService_SetClientGroups_FullMethodName  = "/provisioner.v1.ProvisionerService/SetClientGroups"
+	ProvisionerService_CheckClientName_FullMethodName  = "/provisioner.v1.ProvisionerService/CheckClientName"
+	ProvisionerService_RenameClient_FullMethodName     = "/provisioner.v1.ProvisionerService/RenameClient"
 	ProvisionerService_AddServer_FullMethodName        = "/provisioner.v1.ProvisionerService/AddServer"
 	ProvisionerService_ListServers_FullMethodName      = "/provisioner.v1.ProvisionerService/ListServers"
 	ProvisionerService_UpdateServer_FullMethodName     = "/provisioner.v1.ProvisionerService/UpdateServer"
@@ -62,6 +64,14 @@ type ProvisionerServiceClient interface {
 	// SetClientGroups changes the 3x-ui group clients should be in (a reseller's
 	// existing clients move to the reseller's group); see SetClientGroupsRequest.
 	SetClientGroups(ctx context.Context, in *SetClientGroupsRequest, opts ...grpc.CallOption) (*SetClientGroupsResponse, error)
+	// CheckClientName says whether a name is free in the provisioner's records
+	// and on every enabled server (CheckClientNameResponse).
+	CheckClientName(ctx context.Context, in *CheckClientNameRequest, opts ...grpc.CallOption) (*CheckClientNameResponse, error)
+	// RenameClient renames a provisioned client on its panel and in the client
+	// map; a retry after a lost answer changes nothing. FailedPrecondition for a
+	// server whose kind does not rename (XUIServer.renames_clients), AlreadyExists
+	// when another client has the name, NotFound for a client not provisioned.
+	RenameClient(ctx context.Context, in *RenameClientRequest, opts ...grpc.CallOption) (*Client, error)
 	AddServer(ctx context.Context, in *AddServerRequest, opts ...grpc.CallOption) (*XUIServer, error)
 	ListServers(ctx context.Context, in *ListServersRequest, opts ...grpc.CallOption) (*ListServersResponse, error)
 	UpdateServer(ctx context.Context, in *UpdateServerRequest, opts ...grpc.CallOption) (*XUIServer, error)
@@ -202,6 +212,26 @@ func (c *provisionerServiceClient) SetClientGroups(ctx context.Context, in *SetC
 	return out, nil
 }
 
+func (c *provisionerServiceClient) CheckClientName(ctx context.Context, in *CheckClientNameRequest, opts ...grpc.CallOption) (*CheckClientNameResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CheckClientNameResponse)
+	err := c.cc.Invoke(ctx, ProvisionerService_CheckClientName_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *provisionerServiceClient) RenameClient(ctx context.Context, in *RenameClientRequest, opts ...grpc.CallOption) (*Client, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Client)
+	err := c.cc.Invoke(ctx, ProvisionerService_RenameClient_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *provisionerServiceClient) AddServer(ctx context.Context, in *AddServerRequest, opts ...grpc.CallOption) (*XUIServer, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(XUIServer)
@@ -293,6 +323,14 @@ type ProvisionerServiceServer interface {
 	// SetClientGroups changes the 3x-ui group clients should be in (a reseller's
 	// existing clients move to the reseller's group); see SetClientGroupsRequest.
 	SetClientGroups(context.Context, *SetClientGroupsRequest) (*SetClientGroupsResponse, error)
+	// CheckClientName says whether a name is free in the provisioner's records
+	// and on every enabled server (CheckClientNameResponse).
+	CheckClientName(context.Context, *CheckClientNameRequest) (*CheckClientNameResponse, error)
+	// RenameClient renames a provisioned client on its panel and in the client
+	// map; a retry after a lost answer changes nothing. FailedPrecondition for a
+	// server whose kind does not rename (XUIServer.renames_clients), AlreadyExists
+	// when another client has the name, NotFound for a client not provisioned.
+	RenameClient(context.Context, *RenameClientRequest) (*Client, error)
 	AddServer(context.Context, *AddServerRequest) (*XUIServer, error)
 	ListServers(context.Context, *ListServersRequest) (*ListServersResponse, error)
 	UpdateServer(context.Context, *UpdateServerRequest) (*XUIServer, error)
@@ -348,6 +386,12 @@ func (UnimplementedProvisionerServiceServer) SetInboundAttach(context.Context, *
 }
 func (UnimplementedProvisionerServiceServer) SetClientGroups(context.Context, *SetClientGroupsRequest) (*SetClientGroupsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetClientGroups not implemented")
+}
+func (UnimplementedProvisionerServiceServer) CheckClientName(context.Context, *CheckClientNameRequest) (*CheckClientNameResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CheckClientName not implemented")
+}
+func (UnimplementedProvisionerServiceServer) RenameClient(context.Context, *RenameClientRequest) (*Client, error) {
+	return nil, status.Error(codes.Unimplemented, "method RenameClient not implemented")
 }
 func (UnimplementedProvisionerServiceServer) AddServer(context.Context, *AddServerRequest) (*XUIServer, error) {
 	return nil, status.Error(codes.Unimplemented, "method AddServer not implemented")
@@ -607,6 +651,42 @@ func _ProvisionerService_SetClientGroups_Handler(srv interface{}, ctx context.Co
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ProvisionerService_CheckClientName_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CheckClientNameRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProvisionerServiceServer).CheckClientName(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProvisionerService_CheckClientName_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProvisionerServiceServer).CheckClientName(ctx, req.(*CheckClientNameRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProvisionerService_RenameClient_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RenameClientRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProvisionerServiceServer).RenameClient(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProvisionerService_RenameClient_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProvisionerServiceServer).RenameClient(ctx, req.(*RenameClientRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ProvisionerService_AddServer_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(AddServerRequest)
 	if err := dec(in); err != nil {
@@ -787,6 +867,14 @@ var ProvisionerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SetClientGroups",
 			Handler:    _ProvisionerService_SetClientGroups_Handler,
+		},
+		{
+			MethodName: "CheckClientName",
+			Handler:    _ProvisionerService_CheckClientName_Handler,
+		},
+		{
+			MethodName: "RenameClient",
+			Handler:    _ProvisionerService_RenameClient_Handler,
 		},
 		{
 			MethodName: "AddServer",

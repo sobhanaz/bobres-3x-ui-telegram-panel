@@ -301,7 +301,7 @@ func gatedCases() []gatedCase {
 	// Every verb of the buttons, and the ones a stale or crafted button has.
 	for _, data := range []string{
 		"lang", "lang:fa", "lang:en", "home", "cancel",
-		"buy", "pg:g1", "pg:-", "plan:p1", "pay:c:n1", "pay:w:p1:n1", "pq:n1", "subs", "sub:s1", "rnw:s1", "tup:s1", "rp:n1:p1", "dc:n1", "ref", "qr:s1",
+		"buy", "pg:g1", "pg:-", "plan:p1", "pay:c:n1", "pay:w:p1:n1", "pq:n1", "subs", "sub:s1", "rnw:s1", "tup:s1", "rp:n1:p1", "dc:n1", "cn:c:n1", "cn:a:n1", "cn:r:s1", "ref", "qr:s1",
 		"wallet", "wtop", "wamt:100000", "wpay:c:100000:n1", "wcustom", "wusdt", "wusa:10", "wpu:x:10:n1", "wusc", "whist", "gift", "cds", "cds:2", "trial", "store",
 		"top", "top:2", "ap", "renew", "wh", "wh:spin", "aff",
 		"faq", "faq:p:2", "faq:q:1:f1", "tut", "tut:p:2", "tut:v:1:t1", // the FAQ under Support and the tutorials (help.go)
@@ -380,6 +380,8 @@ func gatedCases() []gatedCase {
 		sceneCase(sceneGiftCode, nil, "", "a gift code", textIn("SPRING-AAAA-BBBB-CCCC")),
 		sceneCase(sceneSupplierQuantity, map[string]string{"sid": "abcdefghij"}, "", "a number of digital accounts", textIn("3")),
 		sceneCase(sceneDiscount, map[string]string{"co": "n1"}, "", "a discount code", textIn("SPRING20")),
+		sceneCase(sceneConfigName, map[string]string{"co": "n1"}, "", "a config name", textIn("sobhan1234")),
+		sceneCase(sceneConfigRename, map[string]string{"sub": "s1"}, "", "a new config name", textIn("sobhan1234")),
 		sceneCase(sceneTicket, nil, "", "a first message to support", textIn("my vpn is slow")),
 		sceneCase(sceneTicket, nil, "", "a photo for support", func(p *person) { p.photo("shot-3", "see") }),
 		sceneCase(sceneResellerApply, nil, "", "a reseller application", textIn("I run a shop and want to resell")),

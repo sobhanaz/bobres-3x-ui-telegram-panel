@@ -106,6 +106,8 @@ type Service struct {
 	supplierBal supplierBalanceCache
 	// approvals is the way to the bot and the rate limit of the approval of dashboard sign-ins (loginapproval.go).
 	approvals loginApprovalState
+	// renames remembers which servers rename their clients (config_names.go).
+	renames renameCache
 }
 
 // New builds a Service publishing to core's outbox.
@@ -195,6 +197,11 @@ type CreateOrderParams struct {
 	Label string
 	// LinkSecret is the secret of the link of a service that is not the buyer's own (see FindServiceByLink): a renewal of it needs it.
 	LinkSecret string
+	// ClientName is the config name the buyer chose for a new service, as typed ("" = the automatic name; ignored on
+	// renewals and top-ups). It must be free on every panel, which Names asks (config_names.go); a name core does not
+	// take is a *ConfigNameError.
+	ClientName string
+	Names      NameChecker
 }
 
 // CreateOrder validates the plan (and, for a renewal or top-up, the
@@ -245,6 +252,23 @@ func (s *Service) CreateOrder(ctx context.Context, p CreateOrderParams) (*store.
 			return nil, err
 		}
 	}
+	var clientName *string
+	if p.Type == OrderNew && strings.TrimSpace(p.ClientName) != "" {
+		// A retry of an order made already keeps it as it is: the name is its own by now (or its service's).
+		prev, err := s.st.OrderByIdempotencyKey(ctx, s.st.Conn(), p.IdempotencyKey)
+		switch {
+		case err == nil && prev.UserID == u.ID:
+			clientName = prev.ClientName
+		case err == nil || errors.Is(err, store.ErrNotFound):
+			full, err := s.orderClientName(ctx, p.Names, u, p.ClientName)
+			if err != nil {
+				return nil, err
+			}
+			clientName = &full
+		default:
+			return nil, err
+		}
+	}
 	amount := price - off
 	free := amount == 0
 	status := "awaiting_payment"
@@ -282,7 +306,7 @@ func (s *Service) CreateOrder(ctx context.Context, p CreateOrderParams) (*store.
 		o, inserted, err := s.st.CreateOrder(ctx, tx, &store.Order{
 			UserID: p.UserID, PlanID: p.PlanID, Type: p.Type, Status: status,
 			Amount: amount, Currency: plan.Currency, IdempotencyKey: p.IdempotencyKey,
-			SubscriptionID: subID, DiscountCode: discountCode, DiscountAmount: off, Label: label,
+			SubscriptionID: subID, DiscountCode: discountCode, DiscountAmount: off, Label: label, ClientName: clientName,
 		})
 		if err != nil {
 			return err

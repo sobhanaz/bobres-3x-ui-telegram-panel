@@ -225,8 +225,11 @@ func (s *Server) miniResellerServices(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out := make([]map[string]any, 0, len(got.Items))
+	renamable := s.miniRenamable(ctx, c.user)
 	for i := range got.Items {
-		out = append(out, s.miniResellerServiceBody(r, &got.Items[i]))
+		body := s.miniResellerServiceBody(r, &got.Items[i])
+		body["config_name"], body["renamable"] = got.Items[i].ClientEmail, renamable(&got.Items[i])
+		out = append(out, body)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"services": out, "total": got.Total, "page": page, "size": size,
 		"counts": miniServiceCounts(got.Counts)})

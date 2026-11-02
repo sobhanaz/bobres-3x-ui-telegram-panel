@@ -93,6 +93,8 @@ message Order {
   // (rate 0) for every other order.
   common.v1.Money list_price = 14;
   int64 rate = 15;
+  // The config name the buyer chose for a new service, with a reseller's prefix in front ("" = the automatic name).
+  string client_name = 16;
 }
 
 message Wallet {
@@ -138,6 +140,10 @@ message Subscription {
   // A reseller's private note about the service (one line, at most 200
   // characters; "" = none). Only the reseller's own screens show it.
   string note = 15;
+  // The owner may rename the service now (RenameService): config names are on for them (the settings
+  // config_names.customers or config_names.resellers), the service is delivered, and its server keeps the link
+  // when a client is renamed (3x-ui, Hiddify; not Marzban or S-UI). False from an older core.
+  bool renamable = 16;
 }
 
 message FindServiceByLinkRequest {
@@ -411,6 +417,11 @@ message CreateOrderRequest {
   string label = 7;
   // The secret of the link of a service that is not the buyer's own (FindServiceByLink): a renewal of it needs it.
   string link_secret = 8;
+  // A new service's config name, as the buyer typed it (CheckConfigName first): 4 to 20 of a-z and 0-9 with at least
+  // one letter and one digit; a reseller's prefix is put in front. "" = the automatic name. Refused (InvalidArgument,
+  // "config name: <reason>") when config names are off for the buyer, the name breaks the rules or is taken; ignored
+  // on renewals and top-ups.
+  string client_name = 9;
 }
 
 // QuoteOrderRequest prices an order before it is created, e.g. to show the
@@ -684,6 +695,40 @@ message DeleteResellerServiceResponse {}
 
 // SetSubscriptionNoteRequest sets the private note on one of a reseller's
 // services.
+// CheckConfigNameRequest asks whether a config name can be used for a new service of the user (or, with
+// subscription_id, as the new name of one of theirs).
+message CheckConfigNameRequest {
+  string user_id = 1;
+  string name = 2; // as typed: trimmed and lowercased by core
+  string subscription_id = 3; // a rename: the service's own name does not count as taken
+}
+
+// ConfigNameCheck is core's answer. reason, when not ok: off (config names are off for the user), length (not 4
+// to 20 characters), chars (not only a-z and 0-9), mix (no letter or no digit), automatic (shaped like the automatic
+// names: a u and digits first), taken (another config has it), unchecked (a server could not be asked: try again).
+message ConfigNameCheck {
+  bool ok = 1;
+  string reason = 2;
+  string name = 3; // the full name the config gets: the reseller's prefix, "-", the name
+}
+
+// RenameServiceRequest renames one of the user's own services (a customer's, or a reseller's). The subscription
+// link stays the same.
+message RenameServiceRequest {
+  string user_id = 1;
+  string subscription_id = 2;
+  string name = 3; // as CheckConfigNameRequest.name
+}
+
+// RenameServiceResponse: ok with the service as it is now, or the reason (ConfigNameCheck.reason, or
+// not_renamable: the service cannot be renamed now, see Subscription.renamable).
+message RenameServiceResponse {
+  bool ok = 1;
+  string reason = 2;
+  Subscription service = 3;
+  string name = 4; // the full name it has (ok) or would have had
+}
+
 message SetSubscriptionNoteRequest {
   string user_id = 1; // the reseller
   string subscription_id = 2;
@@ -1107,6 +1152,12 @@ service CoreService {
   rpc SetResellerServiceEnabled(SetResellerServiceEnabledRequest) returns (Subscription);
   rpc DeleteResellerService(DeleteResellerServiceRequest) returns (DeleteResellerServiceResponse);
   rpc SetSubscriptionNote(SetSubscriptionNoteRequest) returns (Subscription);
+  // Config names (docs/03-bot-ux.md, "Config names"): CheckConfigName says whether a name can be used, before an
+  // order (CreateOrderRequest.client_name) or a rename; RenameService renames one of the caller's own services on
+  // its panel, keeping its subscription link. What a customer can get wrong is the answer's reason, not an error;
+  // NOT_FOUND for a service that is not theirs, PERMISSION_DENIED for a banned user.
+  rpc CheckConfigName(CheckConfigNameRequest) returns (ConfigNameCheck);
+  rpc RenameService(RenameServiceRequest) returns (RenameServiceResponse);
   rpc ListInvitedCustomers(ListInvitedCustomersRequest) returns (ListInvitedCustomersResponse);
   // GetBotPhoto returns the bot photo, for the bot to set in Telegram when
   // Settings.bot_photo_version changes; NOT_FOUND when there is none.

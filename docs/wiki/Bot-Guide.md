@@ -43,6 +43,16 @@ A **bottom menu** keeps the main buttons one tap away. Buttons are colored by wh
 
 If your panel is down, the customer keeps a paid order and gets the service when it is back.
 
+### Config names
+
+By default every new config gets an automatic name (`u<telegram id>-<random>`). You can let buyers choose it: **Settings → Config names**, one switch for customers and one for resellers, both off until you turn them on.
+
+- **While buying** a new service (also a reseller's *Buy for a customer*, and the Mini App's checkout) the payment menu shows *Config name: automatic* and a **Choose a config name** button. A name is 4 to 20 English letters and digits, with at least one of each, like `sobhan1234`; it may not start with `u` and a digit. A reseller's prefix stays in front: `sob-sobhan1234`.
+- The name is checked **before payment**, in BOBRES and on every enabled server. A taken name ("this name is taken, try another") or a server that does not answer ("could not check, try again") is explained at once; the buyer types another one or keeps the automatic name.
+- If someone makes a client with that name in a panel between the check and the delivery, the paid service is still delivered, under the automatic name, and the message says so.
+- **Rename:** each service has **Change config name** in My services (and the Mini App; staff have **Rename** on the dashboard's service page). The subscription link stays the same. Services on a **Marzban** or **S-UI** server cannot be renamed (the button is hidden there): Marzban cannot change a username, and S-UI's link carries the name.
+- Renewals, traffic packages and bulk purchases never ask for a name.
+
 ### After the purchase
 
 - **Renew and add traffic** from My services, with the same link.

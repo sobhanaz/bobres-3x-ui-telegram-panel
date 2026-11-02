@@ -6,10 +6,13 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"strings"
 
 	provisionerv1 "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/provisioner/v1"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/domain"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/store"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // Client wraps the generated stub.
@@ -26,10 +29,21 @@ func (c *Client) CreateClient(ctx context.Context, subscriptionID, email string,
 		SubscriptionId: subscriptionID, Email: email, DurationDays: durationDays, TrafficBytes: trafficBytes,
 		CandidateServerIds: candidates, Inbounds: inboundSelections(inbounds), Group: group,
 	})
+	if nameRefused(err) {
+		return domain.ProvisionedClient{}, fmt.Errorf("provisioner.CreateClient: %w: %w", domain.ErrClientNameTaken, err)
+	}
 	if err != nil {
 		return domain.ProvisionedClient{}, fmt.Errorf("provisioner.CreateClient: %w", err)
 	}
 	return domain.ProvisionedClient{ServerID: cl.GetServerId(), XUISubID: cl.GetXuiSubId(), ExpiresAt: cl.GetExpiresAt()}, nil
+}
+
+// nameRefused reports the provisioner's refusal of a client name another client has (on the server, or on the panel):
+// AlreadyExists saying "already uses this email". Its other AlreadyExists (the subscription was made under another
+// name) is not a name taken by someone else.
+func nameRefused(err error) bool {
+	st, ok := status.FromError(err)
+	return ok && st.Code() == codes.AlreadyExists && strings.Contains(st.Message(), "already uses this email")
 }
 
 // SetClientGroups implements domain.Provisioner.
@@ -109,6 +123,29 @@ func (c *Client) RecreateClient(ctx context.Context, subscriptionID string, expi
 	return nil
 }
 
+// CheckClientName implements domain.NameChecker.
+func (c *Client) CheckClientName(ctx context.Context, name string) (domain.NameCheck, error) {
+	res, err := c.rpc.CheckClientName(ctx, &provisionerv1.CheckClientNameRequest{Name: name})
+	if err != nil {
+		return domain.NameCheck{}, fmt.Errorf("provisioner.CheckClientName: %w", err)
+	}
+	return domain.NameCheck{Available: res.GetAvailable(), Reason: res.GetReason()}, nil
+}
+
+// RenameClient implements domain.Provisioner.
+func (c *Client) RenameClient(ctx context.Context, subscriptionID, name string) error {
+	_, err := c.rpc.RenameClient(ctx, &provisionerv1.RenameClientRequest{SubscriptionId: subscriptionID, NewName: name})
+	switch status.Code(err) {
+	case codes.OK:
+		return nil
+	case codes.AlreadyExists:
+		return fmt.Errorf("provisioner.RenameClient: %w: %w", domain.ErrClientNameTaken, err)
+	case codes.FailedPrecondition:
+		return fmt.Errorf("provisioner.RenameClient: %w: %w", domain.ErrNotRenamable, err)
+	}
+	return fmt.Errorf("provisioner.RenameClient: %w", err)
+}
+
 // SetEnabled implements domain.Provisioner.
 func (c *Client) SetEnabled(ctx context.Context, subscriptionID string, enabled bool) error {
 	if _, err := c.rpc.SetClientEnabled(ctx, &provisionerv1.SetClientEnabledRequest{
@@ -143,7 +180,7 @@ func serverOf(p *provisionerv1.XUIServer) *domain.Server {
 		Enabled: p.GetEnabled(), AllowPrivate: p.GetAllowPrivate(), Weight: p.GetWeight(), MaxClients: p.GetMaxClients(), Managed: p.GetManaged(),
 		HasToken: p.GetHasToken(), Clients: p.GetClients(), PanelVersion: p.GetPanelVersion(),
 		VersionUntested: p.GetVersionUntested(), Healthy: p.GetHealthy(), HealthError: p.GetHealthError(),
-		CheckedAt: p.GetCheckedAt(),
+		CheckedAt: p.GetCheckedAt(), RenamesClients: p.GetRenamesClients(),
 	}
 }
 

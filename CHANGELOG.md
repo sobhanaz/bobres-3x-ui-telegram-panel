@@ -8,6 +8,22 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+### Updating
+- One database migration, additive, in core: 00056 (`orders.client_name`, the config name a buyer chose, with an index). Its Down drops the column. Config names are off until the owner switches them on; update the bot, core and the provisioner together (new gRPC calls; the update does that).
+
+### Added
+- **Config names.** A buyer may choose the name of a new service's config instead of the automatic `u<telegram id>-<random>`, and rename a service they have. Two settings in a new **Settings > Config names** card (also in the bot's `/set` list), both **off by default**: one for customers (`config_names.customers`), one for resellers (`config_names.resellers`).
+  - **When:** while buying a new service, the payment menu says *Config name: automatic* with a **Choose a config name** button, in the bot (a customer's purchase and a reseller's *Buy for a customer*) and in the Mini App's checkout. Each service that can be renamed has **Change config name**: My services in the bot and the Mini App, the reseller panel's services in the Mini App, and staff on the dashboard's service page (a reason, `services.write`, audited as `subscription.rename`). Renewals, traffic packages and bulk purchases never ask.
+  - **Rules:** 4 to 20 characters, lowercase `a`–`z` and `0`–`9` only, at least one letter and one digit (`sobhan1234`). Input is trimmed and lowercased, and Persian or Arabic digits count as 0–9. A name may not start with `u` and a digit, so it never looks like an automatic one. A reseller's prefix stays in front (`sob-sobhan1234`), and the full name is what must be free; it still fits Marzban's 32 characters. Each refusal is explained in the user's language, and they type again or keep the automatic name.
+  - **Free on every panel, checked before payment:** core's own records (services, and orders on their way: paid, or unpaid for less than a day) and, through the provisioner's new `CheckClientName`, the provisioner's client map and every enabled server, healthy or not. A server that does not answer makes the answer "could not check, try again", never "free". The order carries the name (`CreateOrderRequest.client_name`, a new `CheckConfigName` call first). If a panel still has a client of that name when the service is made (someone made it meanwhile), the paid order is delivered under the automatic name and the delivery message says so; it never fails because of the name.
+  - **Rename keeps the subscription link:** the provisioner's new `RenameClient` renames the client on 3x-ui (its link is keyed by the subscription id) and Hiddify (by the user's UUID) and updates the client map; core records the new name. A service on a **Marzban** server (a username cannot change) or an **S-UI** server (the subscription is served under the client's name) cannot be renamed: the Rename button is hidden there (`Subscription.renamable`, `XUIServer.renames_clients`), and the provisioner refuses with FailedPrecondition. New core RPCs `CheckConfigName` and `RenameService`; the Mini App's `POST /api/mini/v1/config-name/check` and `POST /api/mini/v1/services/{id}/rename`; the dashboard's `POST /api/v1/services/{id}/rename`. In all five languages.
+  - The 3x-ui integration test renames a client on the real panels (v3.8.5 to v3.10.2) and back; the S-UI and Hiddify provisioner flows check the name and the rename (Hiddify) or its refusal (S-UI) against the real panels too.
+
+### Known limits
+- A service on a Marzban or S-UI server cannot get a new config name (the button is hidden); it can still be chosen when the service is bought.
+- The name is checked a moment before the order is made, not reserved on the panels: a client made in a panel by hand between the check and the delivery makes the service fall back to the automatic name (the customer is told). An unpaid order holds its name in BOBRES for a day.
+- A Hiddify subscription link carries the config's name after a `#` (what apps show); the link the customer saved keeps the old name there and still works.
+
 ### Changed
 - CI: the Hiddify real-panel job may no longer fail quietly. It has passed every run since it learned to wait for the panel's install (0.21.1), and the ruleset file now lists every CI job as required, Mini App, Marzban, S-UI, Hiddify and 3x-ui v3.10 included.
 

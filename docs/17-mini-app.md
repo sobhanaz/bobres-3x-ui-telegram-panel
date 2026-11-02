@@ -136,11 +136,11 @@ JSON only, for the app. Errors are `{"error": "<code>", "message": "..."}` with 
 | `POST /auth` `{init_data}` | Verify, start a session. Returns `me` and `token`, `expires_in`; 403 `banned`, or `join_required` for a customer outside the store's required channel. Public, 20 a minute per client address |
 | `GET /me`, `POST /logout` | The customer, wallets (a reseller's carry their `credit_limit`), branding, maintenance flag, top-up bounds, `features` (what the sections show, for example `reseller`); end the session |
 | `GET /plans` | Plans on sale (enabled, not a trial) with the customer's price (reseller prices apply), `topup` marks traffic packages, `group` is a plan's plan group id (or null); `groups` lists the plan groups in order (`id`, `names`, `texts`): a new purchase shows the groups first, a group's text, then its plans (Other plans for those with no group); renewals and traffic packages stay flat |
-| `GET /services` | The customer's own services: label, status, expiry, traffic, link, page address, `can_renew`, `can_topup` |
+| `GET /services` | The customer's own services: label, status, expiry, traffic, link, page address, `can_renew`, `can_topup`, `config_name` and `renamable` ([Config names](#config-names)) |
 | `GET /wallet` | Balances and the last 20 ledger entries. One wallet, in Toman: its entry also carries `usdt_equivalent` (the balance in USDT at the live price, 6 decimals) and `usdt_rate` (the live Toman price of one USDT), shown beside the balance; 0 when no rate is known. While the owner's **cashback** is on, or the customer has earned any, it also has `cashback: {on, percent ("2.5", "" while off), max_per_order, min_order, renewals, earned (less what refunds took back), currency, scale}`: the Wallet tab says what a purchase earns and the total so far; absent when it is off and nothing was earned |
 | `GET /methods?currency=&amount=` | The payment methods the store offers for that amount and currency, as the bot offers them: the online ones, `stars`, and `manual_card`, `manual_crypto`, `manual_zarinpal` |
 | `POST /quote` | Price with a discount code, without making an order |
-| `POST /orders` | New order (`new`, `renew`, `traffic_topup`) with a request `key`; the same key returns the same order. A reseller may add a `label` (the name of the new service they buy for a customer, at most 64 characters, one line); core ignores it for anyone else and on a renewal or top-up |
+| `POST /orders` | New order (`new`, `renew`, `traffic_topup`) with a request `key`; the same key returns the same order. A reseller may add a `label` (the name of the new service they buy for a customer, at most 64 characters, one line); core ignores it for anyone else and on a renewal or top-up. A new service may carry `client_name`, the config name the buyer chose ([Config names](#config-names)); a name core refuses is 400 `config_name` with its `reason` |
 | `GET /orders/{id}/wallet-quote` | The price of the customer's own unpaid order **listed in USDT** in Toman at the store's rate now ([Plans priced in USDT](#plans-priced-in-usdt)): `list_amount`, `list_currency` (USDT), `list_scale`, `rate`, `amount` (Toman), `quote` (the token), `expires_in` (120 seconds from the answer) and `expires_at`, `balance`, `credit_limit`, `enough`. Changes nothing; each call is a new quote. 409 `no_rate` (no USDT rate: nothing is guessed), `not_payable`, `state` (not a USDT order) |
 | `POST /orders/{id}/pay-wallet` `{quote}` | Pay from the wallet. A Toman order sends `{}`. An order listed in USDT sends the token of the quote the customer was shown and is charged exactly that, in Toman, while it holds; without one, or after it ran out, 409 `quote_expired` and nothing moves (the app asks for a new quote and shows it). The answer is the order: `amount`/`currency` are what was charged, `list_amount`, `list_currency`, `list_scale` and `rate` the USDT price and the rate. A second call finds the order paid |
 | `POST /orders/{id}/pay` `{method}` | Start a payment by any method of `/methods`; returns a pay URL, the USDT address and exact amount, a Stars `invoice_url`, or what to pay by hand (card, addresses, link, reference, exact amount) |
@@ -356,7 +356,7 @@ resume a service **support** paused (the app says to contact support, code `paus
 | Call | What it does |
 |---|---|
 | `GET /reseller` | Tier, discount, commission, balances with credit and available, customers, commission earned, `targets` (only while the owner's monthly targets are on: `period` (`yyyy-mm`), `calendar`, `from` and `to` (the Gregorian dates the month covers in the store's zone), `ends_at`, `sold`, `tiers` (`threshold`, `bonus` in Toman, `reached`, `paid`), `remaining` to the next tier, `bonus_paid`, `currency`, `scale`), `ref_code`, `invite_link` (`""` while the bot's username is unknown: Branding's, else the one the bot told at a sign-in), `counts` per group |
-| `GET /reseller/services?status=&q=&page=&size=` | The reseller's services (`status` is `active`, `expiring_soon`, `expired`, `paused` or `pending`; `size` at most 50, 10 by default) with `total` and `counts`; each has `label`, `note`, `status`, `expires_at`, `traffic_total`, `traffic_used`, `link`, `page_url`, `can_renew`, `can_topup`, `can_pause`, `can_resume`, `can_delete` |
+| `GET /reseller/services?status=&q=&page=&size=` | The reseller's services (`status` is `active`, `expiring_soon`, `expired`, `paused` or `pending`; `size` at most 50, 10 by default) with `total` and `counts`; each has `label`, `note`, `status`, `expires_at`, `traffic_total`, `traffic_used`, `link`, `page_url`, `can_renew`, `can_topup`, `can_pause`, `can_resume`, `can_delete`, `config_name`, `renamable` |
 | `POST /reseller/services/{id}/pause`, `.../resume` `{}` | Turn the service off or on in the panel; repeating changes nothing; returns the service |
 | `POST /reseller/services/{id}/delete` `{confirm: true}` | Delete for good (no refund); repeating is fine; 400 without the confirmation |
 | `POST /reseller/services/{id}/label` `{label}`, `.../note` `{note}` | Name it (at most 64 characters) or keep a private note (at most 200); empty clears; one line each |
@@ -376,6 +376,33 @@ Security of the section, each point has a test:
 - The shared limits apply: 120 calls and 20 changes a minute per customer, 16 KiB bodies, `503 maintenance` while the
   store is in maintenance.
 - The invited-customers list holds only the users whose `referred_by` is this reseller, and only the fields above.
+
+## Config names
+
+While the owner has **config names** on for the buyer's role (the settings `config_names.customers` and
+`config_names.resellers`, both off by default; [03-bot-ux.md](03-bot-ux.md)), `/me` says `features.config_names: true`
+and the app lets the buyer name the config of a new service instead of the automatic `u<id>-<random>`:
+
+- **Checkout:** a new service (a customer's, or one a reseller buys for a customer) shows "Config name" with
+  **Automatic name** (the default) and **Choose a name**. A chosen name is checked with core when the field loses focus,
+  on Check and on Continue; the order is made only once core said the name is free, with `client_name`. The answer says
+  why not, in the buyer's language: 4 to 20 characters, only a-z and 0-9, at least one letter and one digit, not a u and
+  a digit first (the shape of the automatic names), taken ("try another"), or could not be checked ("try again": a
+  server did not answer). A free name shows the full name the config gets (a reseller's prefix in front, `sob-name1234`).
+  A name taken in the moment between the check and the order comes back as 400 `config_name`: the buyer types another or
+  picks the automatic name. Renewals and traffic packages never ask.
+- **My services** shows each service's config name, and **Change config name** where `renamable` is true; the reseller
+  panel's services (opened) have the same button. The form says the subscription link stays the same; a refusal says
+  why, as above (`not_renamable` too). `renamable` is false while config names are off for the user, for a service not
+  delivered yet, and for a service on a Marzban or S-UI server (their panel cannot rename a client and keep its link).
+
+| Call | What it does |
+|---|---|
+| `POST /config-name/check` `{name, subscription_id?}` | Whether a name can be used for a new service, or (`subscription_id`, one of the user's) as its new name: `{ok, reason, name}`. `reason` is `off`, `length`, `chars`, `mix`, `automatic`, `taken` or `unchecked`; `name` is the full name. A name the user cannot use is an answer, not an error |
+| `POST /services/{id}/rename` `{name}` | Rename one of the user's own services (a customer's, or a reseller's) on its panel: `{ok, reason, name, service}`; `reason` as above, or `not_renamable`. `service` is the service as `GET /services` (a reseller: `GET /reseller/services`) shows it. Another user's service is a 404. Audited as `subscription.rename` |
+
+The texts live in `src/sections/names/messages.ts` (all five languages), the step and the form in
+`src/sections/names/` (`NameChoice.vue`, `RenameForm.vue`); the folder has no `index.ts`, as it is not a More-tab section.
 
 ## Where it is served
 

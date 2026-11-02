@@ -167,6 +167,10 @@ func (s *Server) fail(w http.ResponseWriter, what string, err error) {
 		lr *domain.LicenseRefusal
 	)
 	switch {
+	case domain.ConfigNameReason(err) != "":
+		// A config name core does not take: the reason (domain.Name*) is for the page to say why in staff's language.
+		r := domain.ConfigNameReason(err)
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "config_name", "reason": r, "message": "config name: " + r})
 	case errors.As(err, &lr):
 		// A new action the installed license does not allow: gate names it.
 		writeJSON(w, http.StatusConflict, map[string]any{"error": "state", "license": lr.Gate, "message": lr.Msg})

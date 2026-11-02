@@ -279,6 +279,9 @@ func (s *Server) miniFail(w http.ResponseWriter, what string, err error) {
 	switch {
 	case errors.As(err, &de):
 		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "discount", "reason": de.Reason, "message": "discount code: " + de.Reason})
+	case domain.ConfigNameReason(err) != "":
+		r := domain.ConfigNameReason(err)
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "config_name", "reason": r, "message": "config name: " + r})
 	case errors.As(err, &lr):
 		writeError(w, http.StatusConflict, "unavailable_now", "the store cannot sell this right now")
 	case errors.Is(err, store.ErrNotFound):

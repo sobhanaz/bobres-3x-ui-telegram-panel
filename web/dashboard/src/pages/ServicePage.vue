@@ -13,7 +13,7 @@ import StatusTag from '../components/StatusTag.vue'
 import TrafficBar from '../components/TrafficBar.vue'
 import ReasonDialog from '../components/ReasonDialog.vue'
 import OrdersTable from '../components/OrdersTable.vue'
-import { api, newKey } from '../api'
+import { api, ApiError, newKey } from '../api'
 import { errorText } from '../errors'
 import { useAuth } from '../stores/auth'
 import { asciiNumber, date, dateTime, daysLeft, num, planName, shortId, type Lang } from '../format'
@@ -48,7 +48,7 @@ const live = computed(() => !!s.value && s.value.status !== 'deleted' && s.value
 const left = computed(() => (s.value?.expires_at ? daysLeft(s.value.expires_at) : null))
 
 // One dialog at a time; each action knows its request.
-type Action = 'extend' | 'reset' | 'disable' | 'enable' | 'delete' | 'page_regenerate' | 'recreate'
+type Action = 'extend' | 'reset' | 'disable' | 'enable' | 'delete' | 'page_regenerate' | 'recreate' | 'rename'
 const action = ref<Action | null>(null)
 const open = computed({ get: () => action.value !== null, set: (v) => !v && (action.value = null) })
 const busy = ref(false)
@@ -57,6 +57,7 @@ const actionDetail = ref('')
 const days = ref('')
 const gb = ref('')
 const extendKey = ref('')
+const newName = ref('')
 function start(a: Action) {
   action.value = a
   actionError.value = ''
@@ -64,6 +65,7 @@ function start(a: Action) {
   days.value = ''
   gb.value = ''
   extendKey.value = newKey()
+  newName.value = ''
 }
 const extendDays = computed(() => Number(asciiNumber(days.value)) || 0)
 const extendGB = computed(() => asciiNumber(gb.value))
@@ -93,6 +95,8 @@ const dialog = computed(() => {
       return { title: t('service.page_regenerate'), message: t('service.page_regenerate_intro'), confirm: t('service.page_regenerate'), danger: true }
     case 'recreate':
       return { title: t('service.recreate'), message: t('service.recreate_intro'), confirm: t('service.recreate'), danger: false }
+    case 'rename':
+      return { title: t('service.rename'), message: t('service.rename_intro'), confirm: t('service.rename'), danger: false }
   }
   return { title: '', message: '', confirm: '', danger: false }
 })
@@ -122,6 +126,9 @@ async function confirm(reason: string) {
       case 'recreate':
         res = await api('POST', `/services/${id.value}/recreate-client`, { reason })
         break
+      case 'rename':
+        res = await api('POST', `/services/${id.value}/rename`, { name: newName.value.trim(), reason })
+        break
       default:
         return
     }
@@ -131,12 +138,29 @@ async function confirm(reason: string) {
     toast.add({ severity: res.warning ? 'warn' : 'success', summary: t('service.done_' + done), detail: res.warning, life: 6000 })
     await load()
   } catch (e) {
-    const err = errorText(e, t)
+    const named = nameRefusal(e)
+    const err = named ? { text: named, detail: '' } : errorText(e, t)
     actionError.value = err.text
     actionDetail.value = err.detail
   } finally {
     busy.value = false
   }
+}
+
+// Why core did not take a config name (400 config_name, its reason), in the staff member's language; '' for any other failure.
+function nameRefusal(e: unknown): string {
+  if (!(e instanceof ApiError) || e.code !== 'config_name') return ''
+  const texts: Record<string, string> = {
+    off: t('service.rename_reason.off'),
+    length: t('service.rename_reason.length'),
+    chars: t('service.rename_reason.chars'),
+    mix: t('service.rename_reason.mix'),
+    automatic: t('service.rename_reason.automatic'),
+    taken: t('service.rename_reason.taken'),
+    unchecked: t('service.rename_reason.unchecked'),
+    not_renamable: t('service.rename_reason.not_renamable'),
+  }
+  return texts[String(e.data.reason)] ?? t('error.invalid')
 }
 
 const syncing = ref(false)
@@ -197,6 +221,7 @@ async function copyPage() {
           outlined
           @click="start(s.status === 'disabled' ? 'enable' : 'disable')"
         />
+        <Button v-if="s.renamable && auth.can('services.write')" :label="t('service.rename')" icon="pi pi-pencil" outlined class="rename" @click="start('rename')" />
         <Button v-if="auth.can('services.write')" :label="t('service.delete')" icon="pi pi-trash" severity="danger" text @click="start('delete')" />
       </template>
     </div>
@@ -292,7 +317,7 @@ async function copyPage() {
     :busy="busy"
     :error="actionError"
     :detail="actionDetail"
-    :can-confirm="action !== 'extend' || extendOK"
+    :can-confirm="action === 'extend' ? extendOK : action !== 'rename' || newName.trim() !== ''"
     @confirm="confirm"
   >
     <div v-if="action === 'extend'" class="app-form">
@@ -307,6 +332,13 @@ async function copyPage() {
         </label>
       </div>
       <small v-if="newExpiry" class="app-muted">{{ t('service.new_expiry', { date: date(newExpiry, lang) }) }}</small>
+    </div>
+    <div v-else-if="action === 'rename'" class="app-form">
+      <label>
+        <span>{{ t('service.rename_name') }}</span>
+        <InputText id="rename-name" v-model="newName" dir="ltr" autocomplete="off" maxlength="40" :placeholder="s?.client_email" />
+      </label>
+      <small class="app-muted">{{ t('service.rename_hint') }}</small>
     </div>
   </ReasonDialog>
 </template>

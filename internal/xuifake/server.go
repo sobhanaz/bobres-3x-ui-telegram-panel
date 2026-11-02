@@ -288,6 +288,7 @@ func (s *Server) Snapshot(email string) (spec struct {
 	TotalGB    int64
 	Up, Down   int64
 	Group      string
+	SubID      string
 }, ok bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -295,7 +296,7 @@ func (s *Server) Snapshot(email string) (spec struct {
 	if !found {
 		return spec, false
 	}
-	spec.Enable, spec.ExpiryTime, spec.TotalGB, spec.Up, spec.Down, spec.Group = r.Enable, r.ExpiryTime, r.TotalGB, r.up, r.down, r.Group
+	spec.Enable, spec.ExpiryTime, spec.TotalGB, spec.Up, spec.Down, spec.Group, spec.SubID = r.Enable, r.ExpiryTime, r.TotalGB, r.up, r.down, r.Group, r.SubID
 	return spec, true
 }
 
@@ -436,7 +437,19 @@ func (s *Server) update(w http.ResponseWriter, r *http.Request) {
 	if c.Group != rec.Group {
 		s.lost = append(s.lost, rec.Email+": group")
 	}
-	c.Email = rec.Email
+	// A new email renames the client (its traffic row goes with it), unless
+	// another client has that email.
+	if c.Email == "" {
+		c.Email = rec.Email
+	}
+	if c.Email != rec.Email {
+		if _, dup := s.clients[c.Email]; dup {
+			reply(w, http.StatusOK, false, "Duplicate email: "+c.Email, nil)
+			return
+		}
+		delete(s.clients, rec.Email)
+		s.clients[c.Email] = rec
+	}
 	rec.client = c
 	reply(w, http.StatusOK, true, "Inbound client has been updated.", nil)
 }

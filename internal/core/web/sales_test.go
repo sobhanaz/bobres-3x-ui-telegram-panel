@@ -80,6 +80,7 @@ type fakeProv struct {
 	limits map[string][2]int64 // subscription -> {expires, traffic}
 	usage  domain.Usage
 	down   bool
+	taken  map[string]bool // config names a panel has
 }
 
 // errPanelDown is what the provisioner client returns when the panel (or
@@ -141,6 +142,22 @@ func (p *fakeProv) RecreateClient(_ context.Context, id string, _, _ int64) erro
 	defer p.mu.Unlock()
 	p.usage.Missing = false
 	return nil
+}
+
+// CheckClientName says every name is free but those taken (on a panel).
+func (p *fakeProv) CheckClientName(_ context.Context, name string) (domain.NameCheck, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.down {
+		return domain.NameCheck{}, errPanelDown
+	}
+	if p.taken[name] {
+		return domain.NameCheck{Reason: domain.NameTaken}, nil
+	}
+	return domain.NameCheck{Available: true}, nil
+}
+func (p *fakeProv) RenameClient(_ context.Context, id, name string) error {
+	return p.record("rename:" + id + ":" + name)
 }
 func (p *fakeProv) done() string {
 	p.mu.Lock()

@@ -44,6 +44,21 @@ type Provisioner interface {
 	// on the same server, in the same inbounds and group, with these absolute limits (unix seconds,
 	// bytes; 0 = unlimited). It changes nothing when the panel has the client.
 	RecreateClient(ctx context.Context, subscriptionID string, expiresAt, trafficBytes int64) error
+	NameChecker
+	// RenameClient renames the client on its panel, keeping its subscription link. ErrClientNameTaken when another
+	// client has the name, ErrNotRenamable when the server's panel cannot keep the link.
+	RenameClient(ctx context.Context, subscriptionID, name string) error
+}
+
+// NameChecker asks the provisioner whether a config name is free on every panel (config_names.go).
+type NameChecker interface {
+	CheckClientName(ctx context.Context, name string) (NameCheck, error)
+}
+
+// NameCheck is the provisioner's answer: Available, or Reason "taken" or "unchecked" (a server could not be asked).
+type NameCheck struct {
+	Available bool
+	Reason    string
 }
 
 // ClientGroup is the group a subscription's client should be in.
@@ -157,6 +172,7 @@ type provisionJob struct {
 	attempt int    // this run's attempt number
 	blocked string // why the order cannot be applied now (no panel call)
 	group   string // the 3x-ui client group a new client goes in ("" is the default)
+	prefix  string // a reseller's config prefix: the automatic name is "<prefix>-u<id>-<random>"
 }
 
 // ProvisionNext handles at most one order. It reports whether there was one.
@@ -180,8 +196,9 @@ func (w *ProvisionWorker) ProvisionNext(ctx context.Context) (bool, error) {
 			return err
 		}
 		var (
-			sub   *store.Subscription
-			group string // the panel group a new client goes in
+			sub    *store.Subscription
+			group  string // the panel group a new client goes in
+			prefix string // the reseller's prefix of its automatic name
 		)
 		if o.SubscriptionID != nil {
 			// A renewal or top-up: its limits are computed once, from the
@@ -219,11 +236,23 @@ func (w *ProvisionWorker) ProvisionNext(ctx context.Context) (bool, error) {
 			if naming == nil {
 				naming = &store.ResellerNaming{}
 			}
-			group = PanelGroupOf(naming.PanelGroup)
+			group, prefix = PanelGroupOf(naming.PanelGroup), naming.ConfigPrefix
 			sub, err = st.SubscriptionByOrder(ctx, tx, o.ID)
 			if errors.Is(err, store.ErrNotFound) {
+				// The config name the buyer chose, unless another service took it since the order was made: then the
+				// automatic name (the customer is told when it is delivered).
+				email := clientEmailFor(prefix, u.TelegramID)
+				if o.ClientName != nil {
+					taken, err := st.ClientNameTaken(ctx, tx, *o.ClientName, o.UserID, "")
+					if err != nil {
+						return err
+					}
+					if !taken {
+						email = *o.ClientName
+					}
+				}
 				sub, err = st.CreateSubscription(ctx, tx, &store.Subscription{
-					UserID: o.UserID, OrderID: o.ID, ClientEmail: clientEmailFor(naming.ConfigPrefix, u.TelegramID), Label: o.Label,
+					UserID: o.UserID, OrderID: o.ID, ClientEmail: email, Label: o.Label,
 				})
 			}
 			if err != nil {
@@ -234,7 +263,7 @@ func (w *ProvisionWorker) ProvisionNext(ctx context.Context) (bool, error) {
 		if err != nil {
 			return err
 		}
-		job = &provisionJob{order: o, user: u, plan: plan, sub: sub, attempt: attempt, group: group}
+		job = &provisionJob{order: o, user: u, plan: plan, sub: sub, attempt: attempt, group: group, prefix: prefix}
 		return nil
 	})
 	if err != nil || job == nil {
@@ -249,6 +278,17 @@ func (w *ProvisionWorker) ProvisionNext(ctx context.Context) (bool, error) {
 	}
 	days, traffic := planLimits(job.plan)
 	client, err := w.prov.CreateClient(ctx, job.sub.ID, job.sub.ClientEmail, days, traffic, job.plan.ServerIDs, job.plan.Inbounds, job.group)
+	if errors.Is(err, ErrClientNameTaken) && job.order.ClientName != nil && job.sub.ClientEmail == *job.order.ClientName {
+		// The panel has a client of the name the buyer chose (made there since it was checked): the service gets the
+		// automatic name instead and is delivered, and the customer is told. A paid order never fails for its name.
+		auto := clientEmailFor(job.prefix, job.user.TelegramID)
+		if err := w.svc.st.SetSubscriptionClientEmail(ctx, w.svc.st.Conn(), job.sub.ID, auto); err != nil {
+			return true, w.fail(ctx, job, err)
+		}
+		w.log.Info("the config name chosen was taken on the panel; the automatic name is used", "order_id", job.order.ID)
+		job.sub.ClientEmail = auto
+		client, err = w.prov.CreateClient(ctx, job.sub.ID, auto, days, traffic, job.plan.ServerIDs, job.plan.Inbounds, job.group)
+	}
 	var links Links
 	if err == nil {
 		links, err = w.prov.GetLinks(ctx, job.sub.ID)
@@ -297,11 +337,19 @@ func (w *ProvisionWorker) succeed(ctx context.Context, job *provisionJob, c Prov
 		if err := w.svc.afterDelivery(ctx, tx, job.order, job.plan, bulkID); err != nil {
 			return err
 		}
-		return w.svc.publish(ctx, tx, events.SubscriptionProvisioned, events.SubscriptionProvisionedEvent{
+		e := events.SubscriptionProvisionedEvent{
 			SubscriptionID: job.sub.ID, OrderID: job.order.ID, UserID: job.user.ID, TelegramID: job.user.TelegramID,
 			SubscriptionLink: links.SubscriptionLink, ExpiresAt: c.ExpiresAt, TrafficBytes: traffic, Label: derefStr(job.sub.Label),
 			BulkID: bulkID,
-		})
+		}
+		if chosen := derefStr(job.order.ClientName); chosen != "" {
+			if job.sub.ClientEmail == chosen {
+				e.ClientName = chosen
+			} else {
+				e.NameTaken = chosen
+			}
+		}
+		return w.svc.publish(ctx, tx, events.SubscriptionProvisioned, e)
 	})
 }
 

@@ -577,6 +577,36 @@ func (s *Store) GetClientMap(ctx context.Context, subscriptionID string) (*Clien
 	return &cm, nil
 }
 
+// EmailInUse reports whether some client BOBRES holds (a reservation included)
+// has this email, on any server, other than the client of exceptSubscription
+// ("" for none).
+func (s *Store) EmailInUse(ctx context.Context, email, exceptSubscription string) (bool, error) {
+	var used bool
+	err := s.db.QueryRow(ctx, `
+		SELECT EXISTS (SELECT 1 FROM provisioner.client_map WHERE email = $1 AND subscription_id::text <> $2)`,
+		email, exceptSubscription).Scan(&used)
+	if err != nil {
+		return false, fmt.Errorf("email in use: %w", err)
+	}
+	return used, nil
+}
+
+// RenameClientMap records a client's new email. ErrEmailTaken when another
+// client of the same server has it, ErrNotFound when the subscription has no
+// client.
+func (s *Store) RenameClientMap(ctx context.Context, subscriptionID, email string) error {
+	tag, err := s.db.Exec(ctx, `UPDATE provisioner.client_map SET email = $2 WHERE subscription_id = $1`, subscriptionID, email)
+	switch {
+	case pgCode(err, "23505", "client_map_server_email_idx"):
+		return ErrEmailTaken
+	case err != nil:
+		return fmt.Errorf("rename client map: %w", err)
+	case tag.RowsAffected() == 0:
+		return ErrNotFound
+	}
+	return nil
+}
+
 // MappedClient is a client BOBRES holds on a server: its panel email and the
 // subscription id derived for it ("" when the row has none).
 type MappedClient struct {

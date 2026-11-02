@@ -27,6 +27,7 @@ Sync calls: gRPC (internal network only). Async: each service's transactional ou
 | refund.requested.v1 / completed.v1 | core | payments | Refund flow |
 | ticket.opened.v1 / customer_replied.v1 / replied.v1 / closed.v1 | core | notifier | Support (ids only; the bot fetches a message with GetTicketMessage and reports delivery) |
 | subscription.provisioned.v1 / extended.v1 / reminder.v1 `label` | core | notifier | The name a reseller gave the service (empty for customers), for the bot's texts |
+| subscription.provisioned.v1 `client_name`, `name_taken` | core | notifier | The config name the buyer chose, when the service got it; or the name chosen when a panel had it by delivery time, so the service got the automatic name (the bot says so). Both empty for an automatic name nobody chose (config names, additive) |
 | payment.deposit_unmatched.v1 / deposit_claimed.v1 | payments, then core | notifier(staff alerts) | Phase 6a. USDT reached the store's TRON address but matched no automatic payment (`reason`: no_payment, already_paid, closed, ambiguous), so staff credit it by hand; or a manual USDT proof carries a transaction the watcher had seen, so staff check it before approving. Core passes both on to the bot |
 | license.changed.v1 | core | all | Entitlements updated (feature gating) |
 | license.order_settled.v1 | core (the vendor workers) | notifier | A license the owner's store sells by itself is settled: bought after the buyer's top-up landed (`status: done`) or refused and refunded (`status: refunded`). `{order_id, user_id, telegram_id, kind (new\|renew), tier, months, status, license_id, ends_at}`, no key inside: the bot fetches the key with `GetVendorLicenseKey`. Only on a store with `private_features` |
@@ -170,6 +171,33 @@ bot -> core.CreateOrder -> `order.created` -> payments creates intent -> user pa
   group, with the same email and subscription id (so the customer's link works again) and the limits core holds; a panel that has the client is left alone (idempotent), and an email another client
   holds on the panel is `ALREADY_EXISTS`. Core marks the service (`subscriptions.panel_missing_since`), asks about it every 6 hours instead of 10 minutes, sends no reminder for it, and raises
   the daily notice `subscriptions.panel_missing` (below, `system.alert.v1`).
+- provisioner, **config names** (built 2026-11-02; [03-bot-ux.md](03-bot-ux.md), "Config names"): `CheckClientName {name}` answers
+  `{available, reason}`: available only when no row of `client_map` (a reservation included, any server) has the name and every
+  **enabled** server, healthy or not, answered that it has no client of that name (`ClientSubID` per adapter, 8 s each, all at once).
+  `reason` is `taken` (BOBRES or a panel has it; it wins) or `unchecked` (a server did not answer, or its token does not decrypt): a
+  name is never reported free without every server's word. A malformed name is `INVALID_ARGUMENT`. `RenameClient {subscription_id,
+  new_name}` renames a provisioned client on its panel and in `client_map`, keeping its subscription link: 3x-ui (`clients/update`
+  with the stored row and the new email; the link is keyed by the subscription id) and Hiddify (a `PATCH` of the user's name; the
+  UUID in the links stays; the name index follows). `XUIServer.renames_clients` says which servers rename (the kinds whose adapter
+  is an `adapter.ClientRenamer`, a test keeps them in line); Marzban (a username cannot change) and S-UI (the subscription is
+  served under the client's name, so the link would change) are `FAILED_PRECONDITION`. A name another client has, here or on the
+  panel, is `ALREADY_EXISTS` (also when the panel refuses it at the last moment); a client not provisioned is `NOT_FOUND`. It is
+  idempotent: the same name changes nothing, and a retry after a lost answer finds the panel renamed and records it. If the map
+  cannot be written after the panel was renamed, the panel is renamed back. `CreateClient`'s `ALREADY_EXISTS` "another
+  ... already uses this email" stays the last safety net at creation: core then gives the service its automatic name and creates
+  it again (below).
+- core, **config names**: `CheckConfigName {user_id, name, subscription_id?}` -> `{ok, reason, name}` and `RenameService {user_id,
+  subscription_id, name}` -> `{ok, reason, service, name}` (the caller's own service, a customer's or a reseller's), and
+  `CreateOrderRequest.client_name` / `Order.client_name` (stored in `orders.client_name`, migration 00056) and
+  `Subscription.renamable`. What a user can get wrong is the answer's `reason`, not an error: `off` (the setting of their role,
+  `config_names.customers` or `config_names.resellers`, is off), `length`, `chars`, `mix`, `automatic`, `taken`, `unchecked`,
+  `not_renamable`; `CreateOrder` refuses a name it does not take with `INVALID_ARGUMENT` "... config name: <reason>". Core checks
+  its own records (`subscriptions.client_email`, unique, deleted services included; orders on their way: paid, provisioning or
+  failed, or unpaid for less than a day, other than the buyer's own) and then `CheckClientName`; a provisioner that does not answer is
+  `unchecked`. The full name is the reseller's prefix, `-`, the name. The provisioning worker makes the service under the order's
+  name unless a service took it meanwhile; when the panel refuses it (`ALREADY_EXISTS` above) the service gets the automatic name and
+  is created again in the same run, and `subscription.provisioned.v1` carries `name_taken` (else `client_name` when the chosen name
+  was used). A rename audits `subscription.rename` (before and after `client_email`; staff's with a reason).
 - provisioner, servers (milestone 6a, built; core's token only): `CreateClient.candidate_server_ids` (a plan's
   servers; empty = every enabled server; the healthy, enabled candidate with the least clients/weight is picked and
   reserved, so a retry stays on it; FAILED_PRECONDITION when none fits or no server exists), `ListServers` (settings,
