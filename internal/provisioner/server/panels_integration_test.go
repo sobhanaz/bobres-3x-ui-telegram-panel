@@ -61,7 +61,8 @@ func TestIntegrationSUIServerFlow(t *testing.T) {
 		}
 	}
 	cleanup(panelFlowEmail) // a run that failed half way may have left it
-	t.Cleanup(func() { cleanup(panelFlowEmail) })
+	cleanup("flow1234")
+	t.Cleanup(func() { cleanup(panelFlowEmail); cleanup("flow1234") })
 	panelFlow(t, f, store.KindSUI, cleanup)
 }
 
@@ -92,6 +93,7 @@ func TestIntegrationHiddifyServerFlow(t *testing.T) {
 		}
 	}
 	cleanup(panelFlowEmail)
-	t.Cleanup(func() { cleanup(panelFlowEmail) })
+	cleanup("flow1234")
+	t.Cleanup(func() { cleanup(panelFlowEmail); cleanup("flow1234") })
 	panelFlow(t, f, store.KindHiddify, cleanup)
 }

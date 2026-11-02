@@ -38,7 +38,7 @@ func serverProto(in *store.ServerInfo) *provisionerv1.XUIServer {
 	p := &provisionerv1.XUIServer{
 		Id: in.ID, Name: in.Name, BaseUrl: in.BaseURL, PanelVersion: in.PanelVersion, Enabled: in.Enabled,
 		SubBaseUrl: in.SubBaseURL, AllowPrivate: in.AllowPrivate, Weight: in.Weight, Managed: in.Managed,
-		HasToken: in.HasToken, Clients: in.Clients, Kind: in.Kind, MaxClients: in.MaxClients,
+		HasToken: in.HasToken, Clients: in.Clients, Kind: in.Kind, MaxClients: in.MaxClients, RenamesClients: renamesClients(in.Kind),
 		// The tested range is 3x-ui's; the versions tested of the other kinds are in the docs.
 		VersionUntested: (in.Kind == store.KindXUI || in.Kind == "") && adapter.Untested(in.PanelVersion),
 	}

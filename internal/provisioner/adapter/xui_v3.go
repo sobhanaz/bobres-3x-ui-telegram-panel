@@ -16,9 +16,16 @@ type XUIv3 struct {
 }
 
 var (
-	_ PanelAdapter = (*XUIv3)(nil)
-	_ GroupTagger  = (*XUIv3)(nil)
+	_ PanelAdapter  = (*XUIv3)(nil)
+	_ GroupTagger   = (*XUIv3)(nil)
+	_ ClientRenamer = (*XUIv3)(nil)
 )
+
+// RenameClient: see ClientRenamer. The subscription link is keyed by the
+// subscription id, which stays.
+func (a *XUIv3) RenameClient(ctx context.Context, email, newEmail string) error {
+	return a.c.RenameClient(ctx, email, newEmail)
+}
 
 // NewXUIv3 wraps a base URL + API token.
 func NewXUIv3(baseURL, apiToken string, opts ...xui.Option) (*XUIv3, error) {

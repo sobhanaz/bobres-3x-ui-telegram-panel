@@ -77,7 +77,29 @@ type Hiddify struct {
 var (
 	_ PanelAdapter       = (*Hiddify)(nil)
 	_ SubscriptionLinker = (*Hiddify)(nil)
+	_ ClientRenamer      = (*Hiddify)(nil)
 )
+
+// RenameClient: see ClientRenamer. The user is addressed by its UUID, which
+// is in its links and stays; the name index follows the new name.
+func (a *Hiddify) RenameClient(ctx context.Context, email, newEmail string) error {
+	if newEmail == "" || len(newEmail) > 512 || strings.TrimSpace(newEmail) != newEmail {
+		return errors.New("hiddify: invalid user name")
+	}
+	if email == newEmail {
+		return nil
+	}
+	u, err := a.user(ctx, email)
+	if err != nil {
+		return err
+	}
+	if _, err := a.c.PatchUser(ctx, u.UUID, map[string]any{"name": newEmail}); err != nil {
+		return err
+	}
+	a.idx.forget(email)
+	a.idx.put(newEmail, strings.ToLower(u.UUID))
+	return nil
+}
 
 // NewHiddify wraps the panel address with the admin proxy path and an admin's
 // UUID.

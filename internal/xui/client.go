@@ -617,6 +617,35 @@ func (c *Client) SetEnabled(ctx context.Context, email string, enable bool) erro
 	return c.do(ctx, http.MethodPost, "/panel/api/clients/update/"+esc(email), body, nil)
 }
 
+// RenameClient changes a client's email (its name in the panel) and keeps the
+// rest of the row: the protocol UUID, the subscription id (so the customer's
+// subscription link stays), limits, inbounds and group. The panel moves the
+// client's traffic row to the new email and refuses an email another client
+// has. Both emails are locked, so no other change to either runs meanwhile.
+func (c *Client) RenameClient(ctx context.Context, email, newEmail string) error {
+	if err := validIdent(email); err != nil {
+		return err
+	}
+	if err := validIdent(newEmail); err != nil {
+		return err
+	}
+	if email == newEmail {
+		return nil
+	}
+	defer c.lock(email, newEmail)()
+	stored, err := c.storedClient(ctx, email)
+	if err != nil {
+		return err
+	}
+	body, err := asUpdate(stored)
+	if err != nil {
+		return err
+	}
+	b, _ := json.Marshal(newEmail)
+	body["email"] = b
+	return c.do(ctx, http.MethodPost, "/panel/api/clients/update/"+esc(email), body, nil)
+}
+
 // storedClient reads a client's stored record (clients/get) as raw fields.
 func (c *Client) storedClient(ctx context.Context, email string) (map[string]json.RawMessage, error) {
 	var d struct {

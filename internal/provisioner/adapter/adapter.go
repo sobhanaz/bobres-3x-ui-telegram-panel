@@ -90,6 +90,18 @@ type GroupedCreator interface {
 	CreateClientInGroup(ctx context.Context, group, email, subID string, expiryMs, trafficBytes int64, inboundIDs []int) error
 }
 
+// ClientRenamer is implemented by adapters whose panel can rename a client and
+// keep its subscription link: 3x-ui (the link is keyed by the subscription id)
+// and Hiddify (by the user's UUID). Marzban cannot change a username, and S-UI
+// serves the subscription under the client's name, so neither is one: a
+// customer's link must never change under them.
+type ClientRenamer interface {
+	// RenameClient gives the client named email the name newEmail; everything
+	// else about it (limits, usage, inbounds, group, links) stays. The caller
+	// has checked that no other client has newEmail.
+	RenameClient(ctx context.Context, email, newEmail string) error
+}
+
 // TagResult says what TagUngrouped found and did.
 type TagResult struct {
 	Managed   int  // clients asked about

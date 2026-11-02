@@ -81,6 +81,8 @@ const (
 	CoreService_SetResellerServiceEnabled_FullMethodName = "/core.v1.CoreService/SetResellerServiceEnabled"
 	CoreService_DeleteResellerService_FullMethodName     = "/core.v1.CoreService/DeleteResellerService"
 	CoreService_SetSubscriptionNote_FullMethodName       = "/core.v1.CoreService/SetSubscriptionNote"
+	CoreService_CheckConfigName_FullMethodName           = "/core.v1.CoreService/CheckConfigName"
+	CoreService_RenameService_FullMethodName             = "/core.v1.CoreService/RenameService"
 	CoreService_ListInvitedCustomers_FullMethodName      = "/core.v1.CoreService/ListInvitedCustomers"
 	CoreService_GetBotPhoto_FullMethodName               = "/core.v1.CoreService/GetBotPhoto"
 	CoreService_ListHelpEntries_FullMethodName           = "/core.v1.CoreService/ListHelpEntries"
@@ -211,6 +213,12 @@ type CoreServiceClient interface {
 	SetResellerServiceEnabled(ctx context.Context, in *SetResellerServiceEnabledRequest, opts ...grpc.CallOption) (*Subscription, error)
 	DeleteResellerService(ctx context.Context, in *DeleteResellerServiceRequest, opts ...grpc.CallOption) (*DeleteResellerServiceResponse, error)
 	SetSubscriptionNote(ctx context.Context, in *SetSubscriptionNoteRequest, opts ...grpc.CallOption) (*Subscription, error)
+	// Config names (docs/03-bot-ux.md, "Config names"): CheckConfigName says whether a name can be used, before an
+	// order (CreateOrderRequest.client_name) or a rename; RenameService renames one of the caller's own services on
+	// its panel, keeping its subscription link. What a customer can get wrong is the answer's reason, not an error;
+	// NOT_FOUND for a service that is not theirs, PERMISSION_DENIED for a banned user.
+	CheckConfigName(ctx context.Context, in *CheckConfigNameRequest, opts ...grpc.CallOption) (*ConfigNameCheck, error)
+	RenameService(ctx context.Context, in *RenameServiceRequest, opts ...grpc.CallOption) (*RenameServiceResponse, error)
 	ListInvitedCustomers(ctx context.Context, in *ListInvitedCustomersRequest, opts ...grpc.CallOption) (*ListInvitedCustomersResponse, error)
 	// GetBotPhoto returns the bot photo, for the bot to set in Telegram when
 	// Settings.bot_photo_version changes; NOT_FOUND when there is none.
@@ -898,6 +906,26 @@ func (c *coreServiceClient) SetSubscriptionNote(ctx context.Context, in *SetSubs
 	return out, nil
 }
 
+func (c *coreServiceClient) CheckConfigName(ctx context.Context, in *CheckConfigNameRequest, opts ...grpc.CallOption) (*ConfigNameCheck, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ConfigNameCheck)
+	err := c.cc.Invoke(ctx, CoreService_CheckConfigName_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) RenameService(ctx context.Context, in *RenameServiceRequest, opts ...grpc.CallOption) (*RenameServiceResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RenameServiceResponse)
+	err := c.cc.Invoke(ctx, CoreService_RenameService_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *coreServiceClient) ListInvitedCustomers(ctx context.Context, in *ListInvitedCustomersRequest, opts ...grpc.CallOption) (*ListInvitedCustomersResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListInvitedCustomersResponse)
@@ -1269,6 +1297,12 @@ type CoreServiceServer interface {
 	SetResellerServiceEnabled(context.Context, *SetResellerServiceEnabledRequest) (*Subscription, error)
 	DeleteResellerService(context.Context, *DeleteResellerServiceRequest) (*DeleteResellerServiceResponse, error)
 	SetSubscriptionNote(context.Context, *SetSubscriptionNoteRequest) (*Subscription, error)
+	// Config names (docs/03-bot-ux.md, "Config names"): CheckConfigName says whether a name can be used, before an
+	// order (CreateOrderRequest.client_name) or a rename; RenameService renames one of the caller's own services on
+	// its panel, keeping its subscription link. What a customer can get wrong is the answer's reason, not an error;
+	// NOT_FOUND for a service that is not theirs, PERMISSION_DENIED for a banned user.
+	CheckConfigName(context.Context, *CheckConfigNameRequest) (*ConfigNameCheck, error)
+	RenameService(context.Context, *RenameServiceRequest) (*RenameServiceResponse, error)
 	ListInvitedCustomers(context.Context, *ListInvitedCustomersRequest) (*ListInvitedCustomersResponse, error)
 	// GetBotPhoto returns the bot photo, for the bot to set in Telegram when
 	// Settings.bot_photo_version changes; NOT_FOUND when there is none.
@@ -1520,6 +1554,12 @@ func (UnimplementedCoreServiceServer) DeleteResellerService(context.Context, *De
 }
 func (UnimplementedCoreServiceServer) SetSubscriptionNote(context.Context, *SetSubscriptionNoteRequest) (*Subscription, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetSubscriptionNote not implemented")
+}
+func (UnimplementedCoreServiceServer) CheckConfigName(context.Context, *CheckConfigNameRequest) (*ConfigNameCheck, error) {
+	return nil, status.Error(codes.Unimplemented, "method CheckConfigName not implemented")
+}
+func (UnimplementedCoreServiceServer) RenameService(context.Context, *RenameServiceRequest) (*RenameServiceResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RenameService not implemented")
 }
 func (UnimplementedCoreServiceServer) ListInvitedCustomers(context.Context, *ListInvitedCustomersRequest) (*ListInvitedCustomersResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListInvitedCustomers not implemented")
@@ -2739,6 +2779,42 @@ func _CoreService_SetSubscriptionNote_Handler(srv interface{}, ctx context.Conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _CoreService_CheckConfigName_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CheckConfigNameRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).CheckConfigName(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_CheckConfigName_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).CheckConfigName(ctx, req.(*CheckConfigNameRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_RenameService_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RenameServiceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).RenameService(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_RenameService_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).RenameService(ctx, req.(*RenameServiceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _CoreService_ListInvitedCustomers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListInvitedCustomersRequest)
 	if err := dec(in); err != nil {
@@ -3479,6 +3555,14 @@ var CoreService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SetSubscriptionNote",
 			Handler:    _CoreService_SetSubscriptionNote_Handler,
+		},
+		{
+			MethodName: "CheckConfigName",
+			Handler:    _CoreService_CheckConfigName_Handler,
+		},
+		{
+			MethodName: "RenameService",
+			Handler:    _CoreService_RenameService_Handler,
 		},
 		{
 			MethodName: "ListInvitedCustomers",

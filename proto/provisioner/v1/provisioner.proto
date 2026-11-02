@@ -81,6 +81,11 @@ message XUIServer {
   // (reservations included) have reached it is skipped for new clients and
   // refuses an explicit request for one; the clients it has keep working.
   int32 max_clients = 17;
+  // RenameClient works for this server's clients: 3x-ui and Hiddify keep the
+  // subscription link when a client is renamed. Marzban cannot change a
+  // username, and S-UI serves the subscription under the client's name (a new
+  // name would be a new link), so neither renames.
+  bool renames_clients = 18;
 }
 
 message CreateClientRequest {
@@ -166,6 +171,30 @@ message SetClientEnabledRequest {
 
 message DeleteClientRequest {
   string subscription_id = 1;
+}
+
+// CheckClientNameRequest asks whether a client name is free for a new client
+// or a rename.
+message CheckClientNameRequest {
+  string name = 1;
+}
+
+// CheckClientNameResponse: available only when the provisioner's own records
+// and every enabled server (healthy or not) said the name is free. A server
+// that did not answer makes the answer "unchecked", never "available".
+message CheckClientNameResponse {
+  bool available = 1;
+  // "" when available; "taken" (a client of BOBRES or of a panel has it) or
+  // "unchecked" (a server could not be asked: try again).
+  string reason = 2;
+}
+
+// RenameClientRequest gives a provisioned client a new name on its panel. The
+// subscription link stays: it is keyed by the subscription id (3x-ui) or the
+// user's UUID (Hiddify).
+message RenameClientRequest {
+  string subscription_id = 1;
+  string new_name = 2;
 }
 
 message ResetTrafficRequest {
@@ -317,6 +346,14 @@ service ProvisionerService {
   // SetClientGroups changes the 3x-ui group clients should be in (a reseller's
   // existing clients move to the reseller's group); see SetClientGroupsRequest.
   rpc SetClientGroups(SetClientGroupsRequest) returns (SetClientGroupsResponse);
+  // CheckClientName says whether a name is free in the provisioner's records
+  // and on every enabled server (CheckClientNameResponse).
+  rpc CheckClientName(CheckClientNameRequest) returns (CheckClientNameResponse);
+  // RenameClient renames a provisioned client on its panel and in the client
+  // map; a retry after a lost answer changes nothing. FailedPrecondition for a
+  // server whose kind does not rename (XUIServer.renames_clients), AlreadyExists
+  // when another client has the name, NotFound for a client not provisioned.
+  rpc RenameClient(RenameClientRequest) returns (Client);
   rpc AddServer(AddServerRequest) returns (XUIServer);
   rpc ListServers(ListServersRequest) returns (ListServersResponse);
   rpc UpdateServer(UpdateServerRequest) returns (XUIServer);
