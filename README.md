@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/readme/hero.svg" alt="BOBRES: launch your own VPN store on Telegram, in one command. Live v0.21.1." width="100%">
+  <img src="docs/readme/hero.svg" alt="BOBRES: launch your own VPN store on Telegram, in one command. Live v0.22.0." width="100%">
 </p>
 
 <p align="center">
@@ -445,8 +445,8 @@ Run `sudo bobres` for the management menu, or use any item as a command. The hea
 <summary><b>The menu (<code>sudo bobres</code>)</b></summary>
 
 ```text
-   n____n   BOBRES manager  bobres v0.21.1
-  ( o  o )  /opt/bobres  ·  shop.example.com  ·  version 0.21.1
+   n____n   BOBRES manager  bobres v0.22.0
+  ( o  o )  /opt/bobres  ·  shop.example.com  ·  version 0.22.0
    \_||_/   Store     running (9/9 services)
             License   Standard license, 214 days left
             HTTPS     auto, certificate expires in 79 days
@@ -556,6 +556,10 @@ store can turn on in Settings > General > Customer languages.
   plans are listed as before.
 - **My services:** status, expiry and traffic used; renew, or add a traffic package, with the same link. A service that is
   not in the list is **found by its subscription link** (its state, and Renew, paid by the customer who holds the link).
+- **Config names** (off by default, one switch for customers and one for resellers): choose the name of a new config
+  (`sobhan1234`: 4 to 20 letters and digits, a reseller's prefix in front) instead of the automatic one, and rename a
+  service later with the same link (3x-ui and Hiddify). Each name is checked as unique in BOBRES and on every panel
+  before payment; a server that does not answer means "try again", never "free".
 - A **wallet** with top-ups and history, **gift codes** that add credit, **reward codes** (mark a plan, say the unlimited
   one: each paid purchase gives the buyer a discount code, a percent or a fixed amount, for any plan they buy next, for
   them only, one use, for the days you set, with your own text), **My codes** (the reward codes and gift codes a customer holds, in the bot and the Mini App), **one free trial** per Telegram account, **bulk purchase**, and invite links that reward the inviter on a
@@ -721,8 +725,9 @@ at `https://<domain>/admin`
 
 ### 🚦 Status
 
-**Latest release: v0.21.1 (2026-11-01)**, fixes on v0.21.0 (2026-10-31), which brought S-UI and Hiddify panels, Arabic, Russian and Turkish (beta), new product
-announcements, and the vendor's affiliate program and hosted stores ([CHANGELOG.md](CHANGELOG.md)).
+**Latest release: v0.22.0 (2026-11-02)**: config names. Customers and resellers may choose the name of a new config
+(`sobhan1234`) and rename one they have, checked as unique on every panel before payment; off until the owner turns it on
+([CHANGELOG.md](CHANGELOG.md)).
 
 Phases 0 to 7 of the plan are built and tested in CI ([docs/PLAN.md](docs/PLAN.md) §10). The first public release, v0.1.0,
 came out on 2026-10-14, and 28 stable releases have followed. Each one is signed, built for amd64 and arm64, and verified by the
