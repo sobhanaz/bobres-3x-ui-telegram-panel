@@ -20,7 +20,7 @@ require (
 )
 
 require (
-	github.com/jackc/pgx/v5 v5.11.0
+	github.com/jackc/pgx/v5 v5.12.0
 	github.com/mfridman/interpolate v0.0.2 // indirect
 	github.com/pressly/goose/v3 v3.29.0
 	github.com/sethvargo/go-retry v0.5.0 // indirect
