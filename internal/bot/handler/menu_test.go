@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -40,7 +41,7 @@ func (p *person) tapMenu(lang, key string) { p.text(p.w.h.cat.T(lang, key)) }
 
 // menuStyles are the colors of the bottom menu's buttons; the others have none.
 var menuStyles = map[string]string{
-	"btn.buy": tg.StyleSuccess, "btn.trial": tg.StyleSuccess,
+	"btn.buy": tg.StyleSuccess, "btn.trial": tg.StyleSuccess, "btn.bulk": tg.StyleSuccess,
 	"btn.services": tg.StylePrimary, "btn.wallet": tg.StylePrimary, "btn.support": tg.StylePrimary,
 	"btn.reseller": tg.StylePrimary, "btn.invite": tg.StylePrimary,
 	"btn.reseller_apply": tg.StylePrimary, "btn.top_users": tg.StylePrimary,
@@ -69,9 +70,25 @@ func (p *person) hasMenu(lang string, rows ...[]string) {
 	}
 }
 
-// menuRows are the bottom menu's rows: the ones everybody has, then more.
+// menuRows are the bottom menu's rows: Buy and Free trial, each on a row of
+// its own, then the buttons everybody has (Bulk purchase, My services, Wallet,
+// Support) and the keys of more, in their order, two to a row. A row with the
+// Dashboard (staff) stays a row of its own, last.
 func menuRows(more ...[]string) [][]string {
-	return append([][]string{{"btn.buy"}, {"btn.services", "btn.wallet"}, {"btn.trial", "btn.support"}}, more...)
+	rest := []string{"btn.bulk", "btn.services", "btn.wallet", "btn.support"}
+	var staff [][]string
+	for _, row := range more {
+		if slices.Contains(row, "btn.dashboard") {
+			staff = append(staff, row)
+			continue
+		}
+		rest = append(rest, row...)
+	}
+	rows := [][]string{{"btn.buy"}, {"btn.trial"}}
+	for i := 0; i < len(rest); i += 2 {
+		rows = append(rows, rest[i:min(i+2, len(rest))])
+	}
+	return append(rows, staff...)
 }
 
 // offers reports whether a message has a button whose callback data or link
@@ -317,8 +334,8 @@ func TestMenuTapsGetPopupsAsMessages(t *testing.T) {
 	nu := w.person(2301, "pop")
 	nu.text("/start")
 	nu.press("lang:en")
-	if got := w.tg.all(2301); len(got) != 3 {
-		t.Fatalf("registering: %v", texts(got)) // the picker, the welcome with the menu, the home
+	if got := w.tg.all(2301); len(got) != 2 {
+		t.Fatalf("registering: %v", texts(got)) // the picker, the welcome with the menu
 	}
 	nu.tapMenu("en", "btn.trial")
 	nu.lastHas(cat.T("en", "trial.started"))
@@ -329,7 +346,7 @@ func TestMenuTapsGetPopupsAsMessages(t *testing.T) {
 	nu.tapMenu("en", "btn.dashboard")
 	nu.lastHas(cat.T("en", "admin.forbidden"))
 	shown := len(w.tg.all(2301))
-	nu.press("trial") // the inline button
+	nu.tap("trial") // the inline button
 	nu.toast(cat.T("en", "trial.used"))
 	if n := len(w.tg.all(2301)); n != shown {
 		t.Fatalf("a button's popup also came as a message: %d messages, want %d", n, shown)
@@ -439,7 +456,7 @@ func TestBottomMenuReachesEveryone(t *testing.T) {
 	owner.sees("Saved")
 	n := len(u.menus())
 	u.press("subs")
-	if len(u.menus()) != n+1 || u.lastMenu().Keyboard[1][1].Text != "💰 My wallet" {
+	if len(u.menus()) != n+1 || u.lastMenu().Keyboard[3][0].Text != "💰 My wallet" {
 		t.Fatalf("after the edit: %d menus, %+v", len(u.menus()), u.lastMenu())
 	}
 	// /menu and a language change send one menu, even when none is known.
@@ -560,6 +577,7 @@ func TestSupportAnswersBelowAFreshMenu(t *testing.T) {
 	w := newWorld(t)
 	setupStore(t, w)
 	u := w.customer(2721, "support_keep")
+	u.text("/menu") // the welcome comes without the home screen
 	home := u.last()
 	if err := w.h.state.SaveMenu(context.Background(), u.id, state.SentMenu{}); err != nil { // as for a user from before the bottom menu
 		t.Fatal(err)
@@ -596,7 +614,7 @@ func TestNoMenuRefreshBeforeTheSettingsLoad(t *testing.T) {
 	owner.text("/set texts.en.btn.wallet 👛 Purse") // a change still reaches the user
 	owner.sees("Saved")
 	u.text("hello")
-	if len(u.menus()) != n+1 || u.lastMenu().Keyboard[1][1].Text != "👛 Purse" {
+	if len(u.menus()) != n+1 || u.lastMenu().Keyboard[3][0].Text != "👛 Purse" {
 		t.Fatalf("after the edit: %d menus, %+v", len(u.menus())-n, u.lastMenu())
 	}
 }
@@ -668,6 +686,7 @@ func TestButtonColors(t *testing.T) {
 	owner.text("/set payments.usdt_trc20 " + trc20)
 	owner.text("/set payments.usdt_rate 60000")
 	u := w.customer(2601, "colors")
+	u.text("/menu") // the welcome comes without the home screen
 	colors := func(what string, m *msg, want map[string]string) {
 		t.Helper()
 		for data, style := range want {
@@ -698,8 +717,8 @@ func TestButtonColors(t *testing.T) {
 		"adm:nr:2:": tg.StyleDanger, "adm:nx:": tg.StyleDanger, "adm:pi:": ""})
 }
 
-// With the Mini App on and a public address, the bottom menu opens with a
-// Store item: a plain text button, never a web app button, because a Mini App
+// With the Mini App on and a public address, the bottom menu has a Store
+// item after Buy and Free trial: a plain text button, never a web app button, because a Mini App
 // opened from a reply keyboard button gets no sign-in data from Telegram. The
 // rest of the menu is unchanged, and the item goes when the app does (the menu
 // is sent again by itself when it changes).
@@ -714,15 +733,15 @@ func TestBottomMenuHasTheStoreItemWhileTheMiniAppIsOn(t *testing.T) {
 	w.h.miniApp.Store(&[]string{app}[0])
 	u.text("/menu")
 	got := u.lastMenu()
-	store := got.Keyboard[0]
+	store := got.Keyboard[2] // after Buy and Free trial
 	if len(store) != 1 || store[0].Text != cat.T("en", "btn.store") || store[0].Style != tg.StylePrimary {
-		t.Fatalf("the Store item: %+v", got.Keyboard[0])
+		t.Fatalf("the Store item: %+v", got.Keyboard)
 	}
 	if raw, _ := json.Marshal(got); strings.Contains(string(raw), "web_app") {
 		t.Fatalf("a reply keyboard button opens no Mini App (it would get no sign-in data): %s", raw)
 	}
 	rest := *got
-	rest.Keyboard = got.Keyboard[1:]
+	rest.Keyboard = slices.Concat(got.Keyboard[:2], got.Keyboard[3:])
 	want := &tg.Menu{IsPersistent: true, Resize: true, Placeholder: cat.T("en", "menu.placeholder")}
 	for _, keys := range menuRows([]string{"btn.language"}, applyRow) {
 		var row []tg.MenuButton
@@ -738,8 +757,8 @@ func TestBottomMenuHasTheStoreItemWhileTheMiniAppIsOn(t *testing.T) {
 	fa := w.person(2102, "store_fa")
 	fa.text("/start")
 	fa.press("lang:fa")
-	if m := fa.lastMenu(); m.Keyboard[0][0].Text != cat.T("fa", "btn.store") || len(m.Keyboard[0]) != 1 {
-		t.Fatalf("Persian: %+v", m.Keyboard[0])
+	if m := fa.lastMenu(); m.Keyboard[2][0].Text != cat.T("fa", "btn.store") || len(m.Keyboard[2]) != 1 {
+		t.Fatalf("Persian: %+v", m.Keyboard)
 	}
 
 	// A tap on it is answered with the button that opens the app.
@@ -762,8 +781,8 @@ func TestBottomMenuHasTheStoreItemWhileTheMiniAppIsOn(t *testing.T) {
 	// old menu's Store item still leads somewhere useful (the plans).
 	w.h.miniApp.Store(&[]string{""}[0])
 	u.text("hello")
-	if m := u.lastMenu(); m.Keyboard[0][0].Text == cat.T("en", "btn.store") {
-		t.Fatalf("after the app went: %+v", m.Keyboard[0])
+	if m := u.lastMenu(); slices.Contains(menuLabels(m), cat.T("en", "btn.store")) {
+		t.Fatalf("after the app went: %+v", m.Keyboard)
 	}
 	u.tapMenu("en", "btn.store")
 	if m := u.last(); !offers(m, "plan:") || buttonsHaveWebApp(m) {
@@ -780,23 +799,23 @@ func buttonsHaveWebApp(m *msg) bool {
 	return false
 }
 
-// The home screen opens the app with its first button while the app is on (an
-// inline web app button gives the app the sign-in data), and has no such
-// button otherwise.
+// The home screen opens the app with its Store button, after Buy and Free
+// trial, while the app is on (an inline web app button gives the app the
+// sign-in data), and has no such button otherwise.
 func TestHomeOpensTheMiniAppWhileItIsOn(t *testing.T) {
 	w := newWorld(t)
 	setupStore(t, w)
 	u := w.customer(2103, "home_app")
 
-	u.text("/start")
+	u.text("/menu")
 	if buttonsHaveWebApp(u.last()) {
 		t.Fatalf("the home screen without an app: %+v", buttons(u.last()))
 	}
 	const app = "https://shop.example.com/app/"
 	w.h.miniApp.Store(&[]string{app}[0])
-	u.text("/start")
-	first := u.last().kb.InlineKeyboard[0]
-	if len(first) != 1 || first[0].WebApp == nil || first[0].WebApp.URL != app || first[0].Text != w.h.cat.T("en", "btn.store") {
-		t.Fatalf("the home screen's first row: %+v", first)
+	u.text("/menu")
+	third := u.last().kb.InlineKeyboard[2]
+	if len(third) != 1 || third[0].WebApp == nil || third[0].WebApp.URL != app || third[0].Text != w.h.cat.T("en", "btn.store") {
+		t.Fatalf("the home screen's third row: %+v", u.last().kb.InlineKeyboard)
 	}
 }

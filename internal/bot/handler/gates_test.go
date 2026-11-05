@@ -171,6 +171,7 @@ func TestForcedJoin(t *testing.T) {
 	w := newWorld(t)
 	owner := setupStore(t, w)
 	u := w.customer(811, "jack")
+	u.text("/menu") // the welcome comes without the home screen, whose Buy button is pressed below
 	sup := w.customer(812, "sue")
 	w.role(812, "support")
 
@@ -233,7 +234,7 @@ func TestForcedJoin(t *testing.T) {
 	w.tg.memberErr = nil
 	w.tg.mu.Unlock()
 	checks = w.tg.checks()
-	w.customer(814, "olga").lastHas("Main menu")
+	w.customer(814, "olga").lastHas("Welcome to <b>TestVPN</b>")
 	if w.tg.checks() != checks {
 		t.Fatal("checked a channel that is no longer required")
 	}

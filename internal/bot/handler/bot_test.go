@@ -408,17 +408,35 @@ func (p *person) document(fileID, mime, caption string) {
 	}})
 }
 
-// press taps the newest button whose callback data is exactly prefix, or
-// else the newest one that starts with it.
+// press taps the newest button whose callback data is exactly prefix, else
+// the bottom menu's item with that action, else the newest button whose data
+// starts with prefix.
 func (p *person) press(prefix string) {
 	p.w.t.Helper()
 	ms := p.w.tg.all(p.id)
-	for _, exact := range []bool{true, false} {
-		if p.pressMatching(ms, prefix, exact) {
-			return
-		}
+	if p.pressMatching(ms, prefix, true) || p.tapMenuFor(prefix) || p.pressMatching(ms, prefix, false) {
+		return
 	}
 	p.w.t.Fatalf("user %d: no button %q in chat; last message: %q", p.id, prefix, p.w.tg.last(p.id).text)
+}
+
+// tapMenuFor taps the item of the user's bottom menu whose action is data,
+// as a user does for a main action when no inline button has it: the
+// welcome comes with the bottom menu and without the home screen.
+func (p *person) tapMenuFor(data string) bool {
+	ms := p.menus()
+	if len(ms) == 0 {
+		return false
+	}
+	for _, row := range ms[len(ms)-1].menu.Keyboard {
+		for _, b := range row {
+			if got, ok := p.w.h.menuAction(b.Text); ok && got == data {
+				p.text(b.Text)
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (p *person) pressMatching(ms []*msg, prefix string, exact bool) bool {
@@ -553,7 +571,7 @@ func setupStore(t *testing.T, w *world) *person {
 	owner := w.person(ownerID, "boss")
 	owner.text("/start")
 	owner.press("lang:en")
-	owner.sees("Main menu")
+	owner.sees("Welcome to <b>TestVPN</b>")
 	owner.text("/plan_add 150000 IRT 30 50 Monthly 50GB | ماهانه ۵۰ گیگ")
 	owner.sees("Plan saved: Monthly 50GB")
 	owner.text("/set payments.card_number 6037-9911-2222-3333")
@@ -571,13 +589,20 @@ func TestRegistrationAndLanguages(t *testing.T) {
 	en.sees("Choose your language")
 	en.press("lang:en")
 	en.sees("Welcome to <b>TestVPN</b>")
-	en.sees("Main menu")
+	if en.count("Main menu") != 0 { // the welcome comes with the bottom menu, without the home screen
+		t.Fatalf("a home screen under the welcome: %q", en.last().text)
+	}
+	en.text("/start") // and again for a customer who comes back
+	en.lastHas("Welcome to <b>TestVPN</b>")
+	if en.count("Main menu") != 0 || len(en.menus()) != 2 {
+		t.Fatalf("/start again: %d menus, last %q", len(en.menus()), en.last().text)
+	}
 
 	fa := w.person(102, "")
 	fa.text("/start")
 	fa.press("lang:fa")
-	fa.sees("منوی اصلی")
-	fa.press("lang") // the picker
+	fa.sees("به <b>TestVPN</b> خوش آمدید")
+	fa.press("lang") // the picker, from the bottom menu
 	fa.press("lang:en")
 	fa.sees("Main menu")
 	fa.toast("Language set to English")
@@ -1123,7 +1148,7 @@ func TestInviteLinkRewardsTheInviter(t *testing.T) {
 	friend := w.person(722, "fred")
 	friend.text("/start r_" + m[1])
 	friend.press("lang:en")
-	friend.sees("Main menu")
+	friend.sees("Welcome to <b>TestVPN</b>")
 	w.fund(722, 150_000)
 	friend.press("buy")
 	friend.press("plan:")

@@ -23,11 +23,11 @@ func TestProductNewsQuestion(t *testing.T) {
 	owner.text("/set announce.enabled true")
 	owner.sees("Saved")
 
-	// A newcomer: the language, the welcome and the home screen, then the question.
+	// A newcomer: the language, the welcome with the bottom menu, then the question.
 	fresh := w.person(7302, "fresh")
 	fresh.text("/start")
 	fresh.press("lang:en")
-	fresh.sees("Main menu")
+	fresh.sees("Welcome to <b>TestVPN</b>")
 	fresh.lastHas("News of new products")
 	fresh.press("an:y")
 	fresh.sees("we will message you when a new product arrives")
@@ -87,7 +87,7 @@ func TestAnnouncementBuyButton(t *testing.T) {
 	newcomer.text("/start p_" + hexID)
 	newcomer.sees("Choose your language")
 	newcomer.press("lang:en")
-	newcomer.sees("Main menu")
+	newcomer.sees("Welcome to <b>TestVPN</b>")
 	newcomer.sees("Monthly 50GB")
 
 	// Switched off since: said so, nothing else changes.
