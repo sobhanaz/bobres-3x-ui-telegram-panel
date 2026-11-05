@@ -307,7 +307,7 @@ func TestStoreOwnerAndCustomer(t *testing.T) {
 	t.Cleanup(owner.dump)
 	owner.text("/start")
 	owner.press("lang:en")
-	owner.sees("Main menu")
+	owner.sees("Welcome to") // with the bottom menu, and no home screen under it
 	owner.text("/plan_add 150000 IRT 30 50 Monthly 50GB | ماهانه ۵۰ گیگ")
 	owner.sees("Plan saved: Monthly 50GB")
 	owner.text("/trial 1 1")
@@ -319,11 +319,13 @@ func TestStoreOwnerAndCustomer(t *testing.T) {
 	t.Cleanup(carol.dump)
 	carol.text("/start")
 	carol.press("lang:en")
+	carol.sees("Welcome to")
+	carol.text("/menu") // the home screen, with its Free trial button
 	carol.press("trial")
 	carol.sees("Your service is ready")
 
 	// The owner credits the customer's wallet; the customer buys with it.
-	owner.press("adm")
+	owner.text("/admin")
 	owner.press("adm:find")
 	owner.text(strconv.FormatInt(customerID, 10))
 	owner.sees("@carol")
@@ -444,7 +446,7 @@ func TestStoreOwnerAndCustomer(t *testing.T) {
 	// Renewal (Phase 3): carol renews her newest service with the wallet. The
 	// real panel takes the new absolute limits (50 GB more: 100 GB), and every
 	// client keeps its identity: the same subscription serves the same links.
-	owner.press("adm")
+	owner.text("/admin")
 	owner.press("adm:find")
 	owner.text(strconv.FormatInt(customerID, 10))
 	owner.sees("@carol")

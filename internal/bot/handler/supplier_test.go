@@ -291,15 +291,15 @@ func TestBottomMenuHasTheOwnersStoreButtons(t *testing.T) {
 	if !strings.Contains(got, cat.T("en", "btn.supplier")) || !strings.Contains(got, cat.T("en", "btn.licenses")) {
 		t.Fatalf("the bottom menu lacks the owner's buttons: %s", got)
 	}
-	// They sit right under Buy, side by side.
-	var buyRow int
+	// They sit right under Buy and Free trial, side by side.
+	var trialRow int
 	for i, row := range u.lastMenu().Keyboard {
-		if len(row) == 1 && row[0].Text == cat.T("en", "btn.buy") {
-			buyRow = i
+		if len(row) == 1 && row[0].Text == cat.T("en", "btn.trial") {
+			trialRow = i
 		}
 	}
-	if next := u.lastMenu().Keyboard[buyRow+1]; len(next) != 2 || next[0].Text != cat.T("en", "btn.supplier") || next[1].Text != cat.T("en", "btn.licenses") {
-		t.Fatalf("the row under Buy: %+v", next)
+	if next := u.lastMenu().Keyboard[trialRow+1]; trialRow != 1 || len(next) != 2 || next[0].Text != cat.T("en", "btn.supplier") || next[1].Text != cat.T("en", "btn.licenses") {
+		t.Fatalf("the row under Free trial: %+v", u.lastMenu().Keyboard)
 	}
 	// A tap opens the screen.
 	u.tapMenu("en", "btn.supplier")
@@ -309,7 +309,7 @@ func TestBottomMenuHasTheOwnersStoreButtons(t *testing.T) {
 	// One at a time, alone in its row.
 	owner.text("/set vendor.enabled false")
 	u.text("/menu")
-	if next := u.lastMenu().Keyboard[buyRow+1]; len(next) != 1 || next[0].Text != cat.T("en", "btn.supplier") {
+	if next := u.lastMenu().Keyboard[trialRow+1]; len(next) != 1 || next[0].Text != cat.T("en", "btn.supplier") {
 		t.Fatalf("the row with only digital accounts: %+v", next)
 	}
 }

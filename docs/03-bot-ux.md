@@ -6,14 +6,20 @@ avoid mixing raw English inside RTL lines; use consistent numerals; test long-li
 ## Principles
 - One primary action per screen; max 2 taps to the common goals.
 - Inline keyboards edit the same message (no chat spam). Always a Back and a Home button.
-- A bottom menu (a persistent reply keyboard) holds the main actions: Buy, My services, Wallet, Free trial,
-  Support, then Invite friends (only when referrals are on; resellers get the Reseller panel instead) beside
-  Language, then a row with Become a reseller (customers only, while the license includes resellers) and Top users
-  (while the referral program and the Top users board are on); owners and admins also get Admin panel and Dashboard,
-  support staff only Dashboard. A tap does what the same inline button does. It comes with the welcome, after a
-  language change and with `/menu`, and again ahead of the next answer whenever it changed (role, language, an edited
-  label, a switch that adds or takes away one of those buttons). A tap is never taken as the answer to an open
-  question (a bank reference, a service name), and the gates treat it as any message.
+- A bottom menu (a persistent reply keyboard) holds the main actions: **Buy** and **Free trial** first, each on a
+  row of its own, then Store (while the Mini App is on), the owner's own Digital accounts and BOBRES licenses side
+  by side (each while it is on), then, two to a row in this order and each while it is on: Bulk purchase, My
+  services, Wallet, Support, Tutorials, Invite friends (only when referrals are on; resellers get the Reseller panel
+  instead), Language, Become a reseller (customers only, while the license includes resellers), Top users (while the
+  referral program and the Top users board are on) and the Daily wheel; owners and admins also get Admin panel and
+  Dashboard, support staff only Dashboard, on a last row. A tap does what the same inline button does. It comes with
+  the welcome, after a language change and with `/menu`, and again ahead of the next answer whenever it changed
+  (role, language, an edited label, a switch that adds or takes away one of those buttons). A tap is never taken as
+  the answer to an open question (a bank reference, a service name), and the gates treat it as any message.
+- `/start` (and a newcomer's language choice) answers with the welcome and the bottom menu only: no home screen
+  comes under it, so a long welcome stays in view (the bottom menu has the same buttons). The home screen comes with
+  `/menu`, the Home buttons and the answers that lead back to it (and after /start only when the bottom menu could not
+  be sent).
 - On the vendor's own store, `/affiliate` (and **Affiliate program** on the licenses screen, while the program is on) shows the customer's
   affiliate link `t.me/<bot>?start=aff_<code>` and what it earned; a start link `aff_<code>` records who brought a new customer
   ([18-hosted-and-affiliate-plans.md](18-hosted-and-affiliate-plans.md)).
@@ -29,17 +35,19 @@ avoid mixing raw English inside RTL lines; use consistent numerals; test long-li
 - Rate limit per user; ignore duplicate taps (callback idempotency).
 
 ## Main menu (user)
+Buy service and Free trial come first, each on a row of its own (the home screen and the bottom menu alike); the
+rest follow in their order.
 1. Buy service
-2. My services
-3. Wallet (the account lines, balance, top up, history, apply a gift code, My codes)
-4. Free trial (once per user, abuse-checked)
+2. Free trial (once per user, abuse-checked)
+3. My services
+4. Wallet (the account lines, balance, top up, history, apply a gift code, My codes)
 5. Invite friends (referral link, earnings, a card to forward)
 6. Support (tickets, FAQ)
 7. Settings (language, notifications)
 8. Top users (only while the referral program is on and the owner has not switched the board off)
 9. Become a reseller (customers who are not resellers or staff, only while the license includes resellers)
-10. Bulk purchase (a second green button right under Buy, for everyone, while the owner has not switched it off:
-    setting `bulk.enabled`; it has no item in the bottom menu)
+10. Bulk purchase (a green button after Buy, Free trial and Store, for everyone, while the owner has not switched it
+    off: setting `bulk.enabled`; the bottom menu has it too, since the welcome comes without the home screen)
 (+ Reseller panel button when role = reseller; + Admin button when role = admin)
 
 ## Key flows
@@ -219,7 +227,7 @@ everywhere; resellers may redeem. The message is the request's idempotency key, 
 **Manual payment:** show card / Zarinpal link / address + amount + unique reference -> user sends a screenshot of the payment (photo or image file; card transfers also need the bank reference number, crypto may send the TXID instead) -> every owner gets an alert whose Review button opens that payment (a staff member's card: the receipt and approve/reject) -> result to user.
 **Trial:** one tap -> service created (small quota/time) -> delivery message.
 **Service detail:** status, expiry, used/total (progress bar), online?, subscription link, QR, reset link, renew. An "Open page" button (a URL button, `?l=<language>`) opens the branded page `/sub/<token>` while core has a public URL and the page is on ([15-subscription-page.md](15-subscription-page.md)).
-**Mini App store:** the same purchase, renewal, top-up and services list in a web app inside Telegram, on by default (setting `miniapp.enabled`) and opened from a Store button on the home screen, a Store item at the top of the bottom menu (it answers with the button that opens the app) and Telegram's menu button; they appear only when the store has a public HTTPS address. It pays by the wallet, Zarinpal, IDPay, NextPay, Telegram Stars or automatic USDT, takes card-to-card, manual USDT and Zarinpal-link payments with a receipt image (sent to the customer's chat with the bot, then reviewed as in the bot), and has the free trial, invites and support ([17-mini-app.md](17-mini-app.md)).
+**Mini App store:** the same purchase, renewal, top-up and services list in a web app inside Telegram, on by default (setting `miniapp.enabled`) and opened from a Store button on the home screen, a Store item in the bottom menu (after Buy and Free trial) (it answers with the button that opens the app) and Telegram's menu button; they appear only when the store has a public HTTPS address. It pays by the wallet, Zarinpal, IDPay, NextPay, Telegram Stars or automatic USDT, takes card-to-card, manual USDT and Zarinpal-link payments with a receipt image (sent to the customer's chat with the bot, then reviewed as in the bot), and has the free trial, invites and support ([17-mini-app.md](17-mini-app.md)).
 **Support:** new ticket (category, text, optional photo) -> status list -> reply thread -> close.
 Built (2026-10-10): one open conversation per customer, numbered; text, photos and PDFs; staff replies arrive in the
 chat with [Reply] and [Close]; a Telegram reply to them continues the ticket; past tickets can be read.
@@ -471,7 +479,7 @@ included, a one-time dashboard login link.
   services. Buy or renew a license to sell more." (`alert.license_limit`).
 - **Product news** (`announce.enabled`, **off by default**; `internal/bot/handler/announce.go`). While it is on, the bot asks
   every customer **once** "Do you want news of new products?" with *✅ Yes, tell me* and *No, thanks* (`an:y`, `an:n`): a
-  newcomer right after their first /start (the language, the welcome and the home screen, then the question), a customer
+  newcomer right after their first /start (the language, the welcome with the bottom menu, then the question), a customer
   who was there before at their next interaction, after that update is served. Never as a message to everyone, never
   while a gate holds them (maintenance, a required chat) or while they are in the middle of something (a payment's proof,
   a ticket, a number they are typing: they are asked at a later update). Core records the question
