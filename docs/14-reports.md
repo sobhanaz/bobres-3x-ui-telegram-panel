@@ -43,7 +43,7 @@ no zone core can load is logged and skipped. The page shows the zone it used. A 
 `date_trunc(group, created_at AT TIME ZONE tz)`: a payment at 23:59 and one at 00:01 local time fall on different
 days, and the same instants fall on other days in another zone. Daylight saving is handled by PostgreSQL (a day can be
 23 or 25 hours long). A range is its local dates, tested as `(created_at AT TIME ZONE tz)::date BETWEEN from AND to`,
-so even a day whose clocks show 00:xx twice (America/Havana on 1 November 2026) belongs whole to one bucket; the
+so even a day whose clocks show 00:xx twice (Atlantic/Azores on 25 October 2026) belongs whole to one bucket; the
 instant bounds next to that test are a day wider on each side and only serve the index.
 
 - `group=day|week|month` and `calendar=gregorian|jalali` (default `gregorian`; anything else is a 400 "calendar must

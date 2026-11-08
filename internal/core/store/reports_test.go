@@ -702,24 +702,27 @@ func TestReportTransactionIsReadOnlyAndTimed(t *testing.T) {
 	}
 }
 
-// America/Havana ends daylight saving on 1 Nov 2026 at 01:00, so the clocks
-// show 00:xx twice that morning. A range is its local dates: the first 00:30
-// and the second are both 1 Nov, and neither belongs to a range ending 31 Oct.
+// Atlantic/Azores ends summer time on 25 Oct 2026 at 01:00 UTC (01:00 local,
+// back to 00:00), so the clocks show 00:xx twice that morning. A range is its
+// local dates: the first 00:30 and the second are both 25 Oct, and neither
+// belongs to a range ending 24 Oct. (The zone follows the EU rule, unchanged for
+// decades: America/Havana, used before, lost its 2026 change in the tz data, and
+// the test failed wherever Go and PostgreSQL read different tz data.)
 func TestSalesSummaryOnAnAmbiguousMidnight(t *testing.T) {
 	x := newSeed(t)
 	pl := x.plan("پایه", "Basic", "IRT", false)
 	for i, at := range []string{
-		"2026-11-01T03:30:00Z", // 31 Oct 23:30 (CDT)
-		"2026-11-01T04:30:00Z", // 1 Nov 00:30, the first time
-		"2026-11-01T05:30:00Z", // 1 Nov 00:30, the second time (CST)
-		"2026-11-02T04:59:00Z", // 1 Nov 23:59 (CST)
-		"2026-11-02T05:00:00Z", // 2 Nov 00:00
+		"2026-10-24T23:30:00Z", // 24 Oct 23:30 (UTC+0)
+		"2026-10-25T00:30:00Z", // 25 Oct 00:30, the first time
+		"2026-10-25T01:30:00Z", // 25 Oct 00:30, the second time (UTC-1)
+		"2026-10-26T00:59:00Z", // 25 Oct 23:59 (UTC-1)
+		"2026-10-26T01:00:00Z", // 26 Oct 00:00
 	} {
 		x.paid(10+i, pl, "new", 1000*int64(i+1), utc(at), "wallet")
 	}
 	sum := func(from, to, group string) map[string]int64 {
 		t.Helper()
-		got, err := x.s.SalesSummary(x.ctx, ReportQuery{From: from, To: to, TZ: "America/Havana", Group: group})
+		got, err := x.s.SalesSummary(x.ctx, ReportQuery{From: from, To: to, TZ: "Atlantic/Azores", Group: group})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -735,37 +738,39 @@ func TestSalesSummaryOnAnAmbiguousMidnight(t *testing.T) {
 		from, to string
 		want     map[string]int64
 	}{
-		{"2026-10-31", "2026-10-31", map[string]int64{"2026-10-31": 1000}}, // not the 00:30s: they are 1 Nov
-		{"2026-11-01", "2026-11-01", map[string]int64{"2026-11-01": 2000 + 3000 + 4000}},
-		{"2026-11-02", "2026-11-02", map[string]int64{"2026-11-02": 5000}},
-		{"2026-10-31", "2026-11-02", map[string]int64{"2026-10-31": 1000, "2026-11-01": 9000, "2026-11-02": 5000}},
+		{"2026-10-24", "2026-10-24", map[string]int64{"2026-10-24": 1000}}, // not the 00:30s: they are 25 Oct
+		{"2026-10-25", "2026-10-25", map[string]int64{"2026-10-25": 2000 + 3000 + 4000}},
+		{"2026-10-26", "2026-10-26", map[string]int64{"2026-10-26": 5000}},
+		{"2026-10-24", "2026-10-26", map[string]int64{"2026-10-24": 1000, "2026-10-25": 9000, "2026-10-26": 5000}},
 	} {
 		if got := sum(c.from, c.to, "day"); !reflect.DeepEqual(got, c.want) {
 			t.Errorf("%s to %s: %v, want %v", c.from, c.to, got, c.want)
 		}
 	}
-	// A week or a month holds those hours too, whichever end of the range cuts it.
-	if got := sum("2026-11-01", "2026-11-01", "month"); !reflect.DeepEqual(got, map[string]int64{"2026-11-01": 9000}) {
-		t.Errorf("month: %v", got)
+	// A week or a month holds those hours too when the range is that one day.
+	for group, key := range map[string]string{"week": "2026-10-19", "month": "2026-10-01"} {
+		if got := sum("2026-10-25", "2026-10-25", group); !reflect.DeepEqual(got, map[string]int64{key: 9000}) {
+			t.Errorf("%s: %v", group, got)
+		}
 	}
 	// And the model agrees on every range and grouping.
-	for _, rg := range [][2]string{{"2026-10-31", "2026-10-31"}, {"2026-11-01", "2026-11-01"}, {"2026-11-01", "2026-11-02"}, {"2026-10-25", "2026-11-05"}} {
+	for _, rg := range [][2]string{{"2026-10-24", "2026-10-24"}, {"2026-10-25", "2026-10-25"}, {"2026-10-25", "2026-10-26"}, {"2026-10-18", "2026-10-29"}} {
 		for _, group := range []string{"day", "week", "month"} {
-			got, err := x.s.SalesSummary(x.ctx, ReportQuery{From: rg[0], To: rg[1], TZ: "America/Havana", Group: group})
+			got, err := x.s.SalesSummary(x.ctx, ReportQuery{From: rg[0], To: rg[1], TZ: "Atlantic/Azores", Group: group})
 			if err != nil {
 				t.Fatal(err)
 			}
-			if want := x.expect("America/Havana", rg[0], rg[1], group); !reflect.DeepEqual(got.flat(), want) {
+			if want := x.expect("Atlantic/Azores", rg[0], rg[1], group); !reflect.DeepEqual(got.flat(), want) {
 				t.Errorf("%v by %s\n got: %+v\nwant: %+v", rg, group, got.flat(), want)
 			}
 		}
 	}
 	// The export and the top plans read the same dates.
 	var orders int
-	if _, err := x.s.EachPaidOrder(x.ctx, ReportQuery{From: "2026-11-01", To: "2026-11-01", TZ: "America/Havana"}, 100, func(PaidOrderRow) error { orders++; return nil }); err != nil || orders != 3 {
+	if _, err := x.s.EachPaidOrder(x.ctx, ReportQuery{From: "2026-10-25", To: "2026-10-25", TZ: "Atlantic/Azores"}, 100, func(PaidOrderRow) error { orders++; return nil }); err != nil || orders != 3 {
 		t.Errorf("export: %d orders %v", orders, err)
 	}
-	if rows, err := x.s.TopPlans(x.ctx, ReportQuery{From: "2026-10-31", To: "2026-10-31", TZ: "America/Havana"}, 5); err != nil || len(rows) != 1 || rows[0].Orders != 1 {
+	if rows, err := x.s.TopPlans(x.ctx, ReportQuery{From: "2026-10-24", To: "2026-10-24", TZ: "Atlantic/Azores"}, 5); err != nil || len(rows) != 1 || rows[0].Orders != 1 {
 		t.Errorf("plans: %+v %v", rows, err)
 	}
 	// New York's 25-hour day (1 Nov 2026) is still one day.
