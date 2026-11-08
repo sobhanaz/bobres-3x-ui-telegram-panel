@@ -77,6 +77,8 @@ func (c Context) maxLen() int {
 // contexts lists every text that is not an HTML message; btn.* are buttons.
 var contexts = map[string]Context{
 	"plan.button":    CtxButton,
+	"pay.late_topup": CtxButton, // a payment waiting for a receipt, offered for a picture sent after its step closed
+	"pay.late_order": CtxButton,
 	"subs.item":      CtxButton,
 	"admin.plan_on":  CtxButton,
 	"admin.plan_off": CtxButton,
@@ -261,6 +263,7 @@ var buttonStyles = map[string]string{
 	"btn.check_payment":  "primary",
 	"btn.try_again":      "primary",
 	"btn.rs_buy":         "primary",
+	"btn.rs_topup":       "primary", // the reseller panel's way to the wallet top-up
 	"btn.adm_pending":    "primary",
 	"btn.store":          "primary",
 	"btn.review_now":     "primary",

@@ -664,6 +664,8 @@ func (h *Handler) dispatch(r *req, data string) {
 		h.onLoginApproval(r, rest)
 	case "rs":
 		h.routeReseller(r, rest)
+	case "rcp": // a picture sent with no payment step is the receipt of this payment (latereceipt.go)
+		h.onReceiptPick(r, rest)
 	case "an": // product news: the answer to the question, the switch, and the Buy button under an announcement (announce.go)
 		h.onAnnounce(r, rest)
 	default:
@@ -712,6 +714,10 @@ func (h *Handler) routeMessage(r *req) {
 	}
 	if st.Scene != "" {
 		h.onScene(r, st)
+		return
+	}
+	if file := r.msg.ImageFile(); file != "" { // a receipt, perhaps, after its step closed (latereceipt.go)
+		h.onLateReceipt(r, file, strings.TrimSpace(r.msg.Caption))
 		return
 	}
 	if replyToBot(r.msg) { // perhaps an answer to a staff reply
@@ -778,6 +784,8 @@ func (h *Handler) onScene(r *req, st state.State) {
 	switch st.Scene {
 	case sceneReceipt, sceneReference, sceneTXID:
 		h.onProof(r, st)
+	case sceneReceiptPick:
+		h.onReceiptPickScene(r, st)
 	case sceneTopupAmount:
 		h.onTopupAmount(r)
 	case sceneTopupUsdt:

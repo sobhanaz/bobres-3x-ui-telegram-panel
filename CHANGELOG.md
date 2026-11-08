@@ -8,6 +8,12 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+### Fixed
+- **A receipt sent after its step closed was lost.** The bot waits for a card receipt for 30 minutes after showing the card number; a receipt sent later (a bank transfer often takes longer), or without starting a payment, was answered with the home screen and never reached the owners. Now the bot offers the customer's payments still waiting for a receipt, one button each with the reference their payment screen showed, and a tap sends the receipt for review as usual (the bank reference is asked for when the caption had none). With no payment waiting, the bot says how to pay by card instead of staying silent. Resellers topping up their wallet were hit most.
+
+### Added
+- **💳 Top up wallet** in the reseller panel: the wallet's top-up (card to card with a receipt the owner approves, or a gateway). A top-up raises the balance, which lowers the debt.
+
 ## [0.22.1] — 2026-11-02
 
 **The Config names card on the Settings page, and a faster name lookup.** One additive migration (provisioner 00009, an index).

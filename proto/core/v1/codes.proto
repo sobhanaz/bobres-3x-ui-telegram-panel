@@ -34,6 +34,24 @@ message MyCode {
   map<string, string> only_plan_names = 12;
 }
 
+message ListMyPendingPaymentsRequest {
+  string user_id = 1; // uuid: the customer whose payments these are
+  int32 limit = 2; // 1 to 10; 0 is 5
+}
+
+// MyPendingPayment is a manual payment of the customer that waits for its proof.
+message MyPendingPayment {
+  string intent_id = 1;
+  string provider = 2; // manual_card | manual_zarinpal | manual_crypto
+  common.v1.Money amount = 3;
+  string order_id = 4; // "" for a wallet top-up
+  int64 created_at = 5; // unix seconds
+}
+
+message ListMyPendingPaymentsResponse {
+  repeated MyPendingPayment payments = 1; // newest first
+}
+
 message ListMyCodesRequest {
   string user_id = 1; // uuid: the customer whose codes these are; a banned one is refused as everywhere else
   common.v1.Pagination pagination = 2; // page_size 1 to 50, 10 by default

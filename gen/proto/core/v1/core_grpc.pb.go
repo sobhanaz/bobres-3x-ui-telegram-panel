@@ -99,6 +99,7 @@ const (
 	CoreService_AdminResolvePanelMissing_FullMethodName  = "/core.v1.CoreService/AdminResolvePanelMissing"
 	CoreService_RedeemGiftCode_FullMethodName            = "/core.v1.CoreService/RedeemGiftCode"
 	CoreService_ListMyCodes_FullMethodName               = "/core.v1.CoreService/ListMyCodes"
+	CoreService_ListMyPendingPayments_FullMethodName     = "/core.v1.CoreService/ListMyPendingPayments"
 	CoreService_ListVendorOffers_FullMethodName          = "/core.v1.CoreService/ListVendorOffers"
 	CoreService_BuyVendorLicense_FullMethodName          = "/core.v1.CoreService/BuyVendorLicense"
 	CoreService_ListMyVendorLicenses_FullMethodName      = "/core.v1.CoreService/ListMyVendorLicenses"
@@ -253,6 +254,11 @@ type CoreServiceClient interface {
 	// ListMyCodes is a page of the customer's own codes, newest first (codes.proto): the reward codes issued to them and the gift
 	// codes they applied, never anyone else's. PERMISSION_DENIED for a banned customer, NOT_FOUND for an unknown one.
 	ListMyCodes(ctx context.Context, in *ListMyCodesRequest, opts ...grpc.CallOption) (*ListMyCodesResponse, error)
+	// ListMyPendingPayments lists the customer's own manual payments (card to card, a Zarinpal link, crypto by hand)
+	// that still wait for their proof, newest first: those the store still takes, whose order (if any) still waits
+	// for payment. The bot offers them when a receipt photo comes after the step that asked for it has closed.
+	// PERMISSION_DENIED for a banned customer, NOT_FOUND for an unknown one.
+	ListMyPendingPayments(ctx context.Context, in *ListMyPendingPaymentsRequest, opts ...grpc.CallOption) (*ListMyPendingPaymentsResponse, error)
 	// License sales (docs/13-license-server.md): the owner's own bot sells BOBRES licenses, paid from the wallet in
 	// USDT. Off on every other store: ListVendorOffers says so and the others are refused. BuyVendorLicense is
 	// once-only per idempotency key; a refusal for being short of money is FAILED_PRECONDITION "insufficient funds".
@@ -1086,6 +1092,16 @@ func (c *coreServiceClient) ListMyCodes(ctx context.Context, in *ListMyCodesRequ
 	return out, nil
 }
 
+func (c *coreServiceClient) ListMyPendingPayments(ctx context.Context, in *ListMyPendingPaymentsRequest, opts ...grpc.CallOption) (*ListMyPendingPaymentsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListMyPendingPaymentsResponse)
+	err := c.cc.Invoke(ctx, CoreService_ListMyPendingPayments_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *coreServiceClient) ListVendorOffers(ctx context.Context, in *ListVendorOffersRequest, opts ...grpc.CallOption) (*ListVendorOffersResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListVendorOffersResponse)
@@ -1337,6 +1353,11 @@ type CoreServiceServer interface {
 	// ListMyCodes is a page of the customer's own codes, newest first (codes.proto): the reward codes issued to them and the gift
 	// codes they applied, never anyone else's. PERMISSION_DENIED for a banned customer, NOT_FOUND for an unknown one.
 	ListMyCodes(context.Context, *ListMyCodesRequest) (*ListMyCodesResponse, error)
+	// ListMyPendingPayments lists the customer's own manual payments (card to card, a Zarinpal link, crypto by hand)
+	// that still wait for their proof, newest first: those the store still takes, whose order (if any) still waits
+	// for payment. The bot offers them when a receipt photo comes after the step that asked for it has closed.
+	// PERMISSION_DENIED for a banned customer, NOT_FOUND for an unknown one.
+	ListMyPendingPayments(context.Context, *ListMyPendingPaymentsRequest) (*ListMyPendingPaymentsResponse, error)
 	// License sales (docs/13-license-server.md): the owner's own bot sells BOBRES licenses, paid from the wallet in
 	// USDT. Off on every other store: ListVendorOffers says so and the others are refused. BuyVendorLicense is
 	// once-only per idempotency key; a refusal for being short of money is FAILED_PRECONDITION "insufficient funds".
@@ -1608,6 +1629,9 @@ func (UnimplementedCoreServiceServer) RedeemGiftCode(context.Context, *RedeemGif
 }
 func (UnimplementedCoreServiceServer) ListMyCodes(context.Context, *ListMyCodesRequest) (*ListMyCodesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListMyCodes not implemented")
+}
+func (UnimplementedCoreServiceServer) ListMyPendingPayments(context.Context, *ListMyPendingPaymentsRequest) (*ListMyPendingPaymentsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListMyPendingPayments not implemented")
 }
 func (UnimplementedCoreServiceServer) ListVendorOffers(context.Context, *ListVendorOffersRequest) (*ListVendorOffersResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListVendorOffers not implemented")
@@ -3103,6 +3127,24 @@ func _CoreService_ListMyCodes_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _CoreService_ListMyPendingPayments_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListMyPendingPaymentsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).ListMyPendingPayments(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_ListMyPendingPayments_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).ListMyPendingPayments(ctx, req.(*ListMyPendingPaymentsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _CoreService_ListVendorOffers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListVendorOffersRequest)
 	if err := dec(in); err != nil {
@@ -3627,6 +3669,10 @@ var CoreService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListMyCodes",
 			Handler:    _CoreService_ListMyCodes_Handler,
+		},
+		{
+			MethodName: "ListMyPendingPayments",
+			Handler:    _CoreService_ListMyPendingPayments_Handler,
 		},
 		{
 			MethodName: "ListVendorOffers",
