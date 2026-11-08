@@ -77,7 +77,7 @@ type ReportQuery struct {
 // the edges. col is the column the range applies to. The exact test is the
 // local date: it is what a bucket is made of (date_trunc of the local time), so
 // a row is in the range exactly when it is in one of the range's buckets, even
-// on a day a zone's clocks go back past midnight (America/Havana on 1 Nov 2026
+// on a day a zone's clocks go back past midnight (Atlantic/Azores on 25 Oct 2026
 // has two hours 00:xx, and local midnight as an instant is only the second). The
 // instant bounds before it only let the index narrow the scan: they are a day
 // wider on each side than the dates, so they can never cut a row the date test
