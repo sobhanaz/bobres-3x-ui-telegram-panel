@@ -162,6 +162,179 @@ func (x *MyCode) GetOnlyPlanNames() map[string]string {
 	return nil
 }
 
+type ListMyPendingPaymentsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"` // uuid: the customer whose payments these are
+	Limit         int32                  `protobuf:"varint,2,opt,name=limit,proto3" json:"limit,omitempty"`                // 1 to 10; 0 is 5
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListMyPendingPaymentsRequest) Reset() {
+	*x = ListMyPendingPaymentsRequest{}
+	mi := &file_core_v1_codes_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListMyPendingPaymentsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListMyPendingPaymentsRequest) ProtoMessage() {}
+
+func (x *ListMyPendingPaymentsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_core_v1_codes_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListMyPendingPaymentsRequest.ProtoReflect.Descriptor instead.
+func (*ListMyPendingPaymentsRequest) Descriptor() ([]byte, []int) {
+	return file_core_v1_codes_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *ListMyPendingPaymentsRequest) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+func (x *ListMyPendingPaymentsRequest) GetLimit() int32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+// MyPendingPayment is a manual payment of the customer that waits for its proof.
+type MyPendingPayment struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	IntentId      string                 `protobuf:"bytes,1,opt,name=intent_id,json=intentId,proto3" json:"intent_id,omitempty"`
+	Provider      string                 `protobuf:"bytes,2,opt,name=provider,proto3" json:"provider,omitempty"` // manual_card | manual_zarinpal | manual_crypto
+	Amount        *v1.Money              `protobuf:"bytes,3,opt,name=amount,proto3" json:"amount,omitempty"`
+	OrderId       string                 `protobuf:"bytes,4,opt,name=order_id,json=orderId,proto3" json:"order_id,omitempty"`        // "" for a wallet top-up
+	CreatedAt     int64                  `protobuf:"varint,5,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"` // unix seconds
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MyPendingPayment) Reset() {
+	*x = MyPendingPayment{}
+	mi := &file_core_v1_codes_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MyPendingPayment) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MyPendingPayment) ProtoMessage() {}
+
+func (x *MyPendingPayment) ProtoReflect() protoreflect.Message {
+	mi := &file_core_v1_codes_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MyPendingPayment.ProtoReflect.Descriptor instead.
+func (*MyPendingPayment) Descriptor() ([]byte, []int) {
+	return file_core_v1_codes_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *MyPendingPayment) GetIntentId() string {
+	if x != nil {
+		return x.IntentId
+	}
+	return ""
+}
+
+func (x *MyPendingPayment) GetProvider() string {
+	if x != nil {
+		return x.Provider
+	}
+	return ""
+}
+
+func (x *MyPendingPayment) GetAmount() *v1.Money {
+	if x != nil {
+		return x.Amount
+	}
+	return nil
+}
+
+func (x *MyPendingPayment) GetOrderId() string {
+	if x != nil {
+		return x.OrderId
+	}
+	return ""
+}
+
+func (x *MyPendingPayment) GetCreatedAt() int64 {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return 0
+}
+
+type ListMyPendingPaymentsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Payments      []*MyPendingPayment    `protobuf:"bytes,1,rep,name=payments,proto3" json:"payments,omitempty"` // newest first
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListMyPendingPaymentsResponse) Reset() {
+	*x = ListMyPendingPaymentsResponse{}
+	mi := &file_core_v1_codes_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListMyPendingPaymentsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListMyPendingPaymentsResponse) ProtoMessage() {}
+
+func (x *ListMyPendingPaymentsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_core_v1_codes_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListMyPendingPaymentsResponse.ProtoReflect.Descriptor instead.
+func (*ListMyPendingPaymentsResponse) Descriptor() ([]byte, []int) {
+	return file_core_v1_codes_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *ListMyPendingPaymentsResponse) GetPayments() []*MyPendingPayment {
+	if x != nil {
+		return x.Payments
+	}
+	return nil
+}
+
 type ListMyCodesRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"` // uuid: the customer whose codes these are; a banned one is refused as everywhere else
@@ -172,7 +345,7 @@ type ListMyCodesRequest struct {
 
 func (x *ListMyCodesRequest) Reset() {
 	*x = ListMyCodesRequest{}
-	mi := &file_core_v1_codes_proto_msgTypes[1]
+	mi := &file_core_v1_codes_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -184,7 +357,7 @@ func (x *ListMyCodesRequest) String() string {
 func (*ListMyCodesRequest) ProtoMessage() {}
 
 func (x *ListMyCodesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_codes_proto_msgTypes[1]
+	mi := &file_core_v1_codes_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -197,7 +370,7 @@ func (x *ListMyCodesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListMyCodesRequest.ProtoReflect.Descriptor instead.
 func (*ListMyCodesRequest) Descriptor() ([]byte, []int) {
-	return file_core_v1_codes_proto_rawDescGZIP(), []int{1}
+	return file_core_v1_codes_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *ListMyCodesRequest) GetUserId() string {
@@ -224,7 +397,7 @@ type ListMyCodesResponse struct {
 
 func (x *ListMyCodesResponse) Reset() {
 	*x = ListMyCodesResponse{}
-	mi := &file_core_v1_codes_proto_msgTypes[2]
+	mi := &file_core_v1_codes_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -236,7 +409,7 @@ func (x *ListMyCodesResponse) String() string {
 func (*ListMyCodesResponse) ProtoMessage() {}
 
 func (x *ListMyCodesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_core_v1_codes_proto_msgTypes[2]
+	mi := &file_core_v1_codes_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -249,7 +422,7 @@ func (x *ListMyCodesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListMyCodesResponse.ProtoReflect.Descriptor instead.
 func (*ListMyCodesResponse) Descriptor() ([]byte, []int) {
-	return file_core_v1_codes_proto_rawDescGZIP(), []int{2}
+	return file_core_v1_codes_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *ListMyCodesResponse) GetCodes() []*MyCode {
@@ -293,7 +466,19 @@ const file_core_v1_codes_proto_rawDesc = "" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a@\n" +
 	"\x12OnlyPlanNamesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"d\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"M\n" +
+	"\x1cListMyPendingPaymentsRequest\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x14\n" +
+	"\x05limit\x18\x02 \x01(\x05R\x05limit\"\xaf\x01\n" +
+	"\x10MyPendingPayment\x12\x1b\n" +
+	"\tintent_id\x18\x01 \x01(\tR\bintentId\x12\x1a\n" +
+	"\bprovider\x18\x02 \x01(\tR\bprovider\x12(\n" +
+	"\x06amount\x18\x03 \x01(\v2\x10.common.v1.MoneyR\x06amount\x12\x19\n" +
+	"\border_id\x18\x04 \x01(\tR\aorderId\x12\x1d\n" +
+	"\n" +
+	"created_at\x18\x05 \x01(\x03R\tcreatedAt\"V\n" +
+	"\x1dListMyPendingPaymentsResponse\x125\n" +
+	"\bpayments\x18\x01 \x03(\v2\x19.core.v1.MyPendingPaymentR\bpayments\"d\n" +
 	"\x12ListMyCodesRequest\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\x125\n" +
 	"\n" +
@@ -315,29 +500,34 @@ func file_core_v1_codes_proto_rawDescGZIP() []byte {
 	return file_core_v1_codes_proto_rawDescData
 }
 
-var file_core_v1_codes_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_core_v1_codes_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_core_v1_codes_proto_goTypes = []any{
-	(*MyCode)(nil),              // 0: core.v1.MyCode
-	(*ListMyCodesRequest)(nil),  // 1: core.v1.ListMyCodesRequest
-	(*ListMyCodesResponse)(nil), // 2: core.v1.ListMyCodesResponse
-	nil,                         // 3: core.v1.MyCode.PlanNamesEntry
-	nil,                         // 4: core.v1.MyCode.OnlyPlanNamesEntry
-	(*v1.Money)(nil),            // 5: common.v1.Money
-	(*v1.Pagination)(nil),       // 6: common.v1.Pagination
-	(*v1.PageInfo)(nil),         // 7: common.v1.PageInfo
+	(*MyCode)(nil),                        // 0: core.v1.MyCode
+	(*ListMyPendingPaymentsRequest)(nil),  // 1: core.v1.ListMyPendingPaymentsRequest
+	(*MyPendingPayment)(nil),              // 2: core.v1.MyPendingPayment
+	(*ListMyPendingPaymentsResponse)(nil), // 3: core.v1.ListMyPendingPaymentsResponse
+	(*ListMyCodesRequest)(nil),            // 4: core.v1.ListMyCodesRequest
+	(*ListMyCodesResponse)(nil),           // 5: core.v1.ListMyCodesResponse
+	nil,                                   // 6: core.v1.MyCode.PlanNamesEntry
+	nil,                                   // 7: core.v1.MyCode.OnlyPlanNamesEntry
+	(*v1.Money)(nil),                      // 8: common.v1.Money
+	(*v1.Pagination)(nil),                 // 9: common.v1.Pagination
+	(*v1.PageInfo)(nil),                   // 10: common.v1.PageInfo
 }
 var file_core_v1_codes_proto_depIdxs = []int32{
-	5, // 0: core.v1.MyCode.amount:type_name -> common.v1.Money
-	3, // 1: core.v1.MyCode.plan_names:type_name -> core.v1.MyCode.PlanNamesEntry
-	4, // 2: core.v1.MyCode.only_plan_names:type_name -> core.v1.MyCode.OnlyPlanNamesEntry
-	6, // 3: core.v1.ListMyCodesRequest.pagination:type_name -> common.v1.Pagination
-	0, // 4: core.v1.ListMyCodesResponse.codes:type_name -> core.v1.MyCode
-	7, // 5: core.v1.ListMyCodesResponse.page_info:type_name -> common.v1.PageInfo
-	6, // [6:6] is the sub-list for method output_type
-	6, // [6:6] is the sub-list for method input_type
-	6, // [6:6] is the sub-list for extension type_name
-	6, // [6:6] is the sub-list for extension extendee
-	0, // [0:6] is the sub-list for field type_name
+	8,  // 0: core.v1.MyCode.amount:type_name -> common.v1.Money
+	6,  // 1: core.v1.MyCode.plan_names:type_name -> core.v1.MyCode.PlanNamesEntry
+	7,  // 2: core.v1.MyCode.only_plan_names:type_name -> core.v1.MyCode.OnlyPlanNamesEntry
+	8,  // 3: core.v1.MyPendingPayment.amount:type_name -> common.v1.Money
+	2,  // 4: core.v1.ListMyPendingPaymentsResponse.payments:type_name -> core.v1.MyPendingPayment
+	9,  // 5: core.v1.ListMyCodesRequest.pagination:type_name -> common.v1.Pagination
+	0,  // 6: core.v1.ListMyCodesResponse.codes:type_name -> core.v1.MyCode
+	10, // 7: core.v1.ListMyCodesResponse.page_info:type_name -> common.v1.PageInfo
+	8,  // [8:8] is the sub-list for method output_type
+	8,  // [8:8] is the sub-list for method input_type
+	8,  // [8:8] is the sub-list for extension type_name
+	8,  // [8:8] is the sub-list for extension extendee
+	0,  // [0:8] is the sub-list for field type_name
 }
 
 func init() { file_core_v1_codes_proto_init() }
@@ -351,7 +541,7 @@ func file_core_v1_codes_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_core_v1_codes_proto_rawDesc), len(file_core_v1_codes_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   5,
+			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

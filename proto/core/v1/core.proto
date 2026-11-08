@@ -1199,6 +1199,11 @@ service CoreService {
   // ListMyCodes is a page of the customer's own codes, newest first (codes.proto): the reward codes issued to them and the gift
   // codes they applied, never anyone else's. PERMISSION_DENIED for a banned customer, NOT_FOUND for an unknown one.
   rpc ListMyCodes(ListMyCodesRequest) returns (ListMyCodesResponse);
+  // ListMyPendingPayments lists the customer's own manual payments (card to card, a Zarinpal link, crypto by hand)
+  // that still wait for their proof, newest first: those the store still takes, whose order (if any) still waits
+  // for payment. The bot offers them when a receipt photo comes after the step that asked for it has closed.
+  // PERMISSION_DENIED for a banned customer, NOT_FOUND for an unknown one.
+  rpc ListMyPendingPayments(ListMyPendingPaymentsRequest) returns (ListMyPendingPaymentsResponse);
 
   // License sales (docs/13-license-server.md): the owner's own bot sells BOBRES licenses, paid from the wallet in
   // USDT. Off on every other store: ListVendorOffers says so and the others are refused. BuyVendorLicense is

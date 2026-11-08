@@ -19,11 +19,15 @@ What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 - The bot's alerts about paid orders not delivered (the watchdog's "not delivered in the past hour" and the one per order after its third failed try) carry an **📦 Undelivered orders** button that opens the list (owners and admins).
 - When a delivery the customer was told is delayed finally works (after a retry, a move, or the server coming back), the "service ready" message says sorry for the wait.
 - Every order in the dashboard API carries its `seller` and the chosen `server_id`; new audit actions `order.move`, `order.retry_all` and `order.commission_reversal`.
+- **💳 Top up wallet** in the reseller panel: the wallet's top-up (card to card with a receipt the owner approves, or a gateway). A top-up raises the balance, which lowers the debt.
 
 ### Changed
 - **`/start` answers with the welcome and the bottom menu only.** The home screen no longer comes under the welcome, so a long welcome stays in view instead of scrolling up behind the same buttons. A newcomer's language choice does the same. `/menu`, the Home buttons and the answers that lead home still show the home screen (and /start does when the bottom menu could not be sent).
 - **Buy and Free trial come first**, each on a row of its own, on the home screen and in the bottom menu; the other buttons follow in their order. In the bottom menu: Store (while the Mini App is on), Digital accounts and BOBRES licenses side by side, then the rest two to a row.
 - **The bottom menu has Bulk purchase** (while it is on), so it stays one tap away now that the welcome comes without the home screen.
+
+### Fixed
+- **A receipt sent after its step closed was lost.** The bot waits for a card receipt for 30 minutes after showing the card number; a receipt sent later (a bank transfer often takes longer), or without starting a payment, was answered with the home screen and never reached the owners. Now the bot offers the customer's payments still waiting for a receipt, one button each with the reference their payment screen showed, and a tap sends the receipt for review as usual (the bank reference is asked for when the caption had none). With no payment waiting, the bot says how to pay by card instead of staying silent. Resellers topping up their wallet were hit most.
 
 ## [0.22.1] — 2026-11-02
 

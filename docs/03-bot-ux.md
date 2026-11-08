@@ -225,6 +225,7 @@ hour ("try again in N minutes"). A code used up, or one the customer already use
 every rule and counts; the bot keeps no copy of a code and never logs it. The join-channel, maintenance and ban gates apply as
 everywhere; resellers may redeem. The message is the request's idempotency key, so a repeated update credits once.
 **Manual payment:** show card / Zarinpal link / address + amount + unique reference -> user sends a screenshot of the payment (photo or image file; card transfers also need the bank reference number, crypto may send the TXID instead) -> every owner gets an alert whose Review button opens that payment (a staff member's card: the receipt and approve/reject) -> result to user.
+**A receipt sent late** (`internal/bot/handler/latereceipt.go`): the step that waits for the receipt lasts 30 minutes (a pending step's life), and a bank transfer often takes longer, or the customer taps something else meanwhile. A picture that comes when no step waits for it is not dropped: the bot lists the customer's own manual payments that still wait for their proof (core `ListMyPendingPayments`, the Mini App's list: newest first, at most 5, only methods the store still takes and orders still unpaid), one button each, "👛 Top-up · 100,000 Toman · 1A2B3C4D" or "🛒 Purchase · ..." with the reference the payment screen showed (`rcp:<payment id>`). A tap sends the picture as that payment's receipt, exactly as the step would have (the caption is the bank reference; without one it is asked for; a crypto screenshot needs none). Another picture, or a typed reference, before the tap replaces the kept one. With no payment waiting, the answer says how to pay by card, with ➕ Top up and Support buttons. A button for a payment that no longer waits says so and sends nothing. Maintenance and the required channel let it through as the proof of a payment under way; with nothing waiting they answer as they do for anything else.
 **Trial:** one tap -> service created (small quota/time) -> delivery message.
 **Service detail:** status, expiry, used/total (progress bar), online?, subscription link, QR, reset link, renew. An "Open page" button (a URL button, `?l=<language>`) opens the branded page `/sub/<token>` while core has a public URL and the page is on ([15-subscription-page.md](15-subscription-page.md)).
 **Mini App store:** the same purchase, renewal, top-up and services list in a web app inside Telegram, on by default (setting `miniapp.enabled`) and opened from a Store button on the home screen, a Store item in the bottom menu (after Buy and Free trial) (it answers with the button that opens the app) and Telegram's menu button; they appear only when the store has a public HTTPS address. It pays by the wallet, Zarinpal, IDPay, NextPay, Telegram Stars or automatic USDT, takes card-to-card, manual USDT and Zarinpal-link payments with a receipt image (sent to the customer's chat with the bot, then reviewed as in the bot), and has the free trial, invites and support ([17-mini-app.md](17-mini-app.md)).
@@ -432,7 +433,8 @@ included, a one-time dashboard login link.
     Telegram reports for someone with no account.
   - **What still works is this list and nothing else:** staff (owner, admin, support) and the owners the server names,
     also before they have an account; `/paysupport`, which Telegram requires of a bot that sells with Stars; a payment
-    already under way, that is its receipt, bank reference or TXID while the bot waits for one (a tap on the bottom
+    already under way, that is its receipt, bank reference or TXID while the bot waits for one, or a picture sent after
+    that step closed and the button that names its payment (a tap on the bottom
     menu, a command or a button in the middle of it is held), its Check button, and a Stars invoice already sent (its
     pre-checkout and its payment are always answered); and a newcomer's `/start` and language choice, which make
     the account and keep an invite code (they are then shown the welcome and the maintenance text, without the bottom
@@ -542,7 +544,9 @@ payments in the dashboard. Customers see none of this.
 - **Home:** a "Reseller panel" button instead of "Invite friends" (their link is in the panel).
 - **Panel:** tier, discount and commission %; per currency the balance (a negative balance is shown as "debt X",
   never with a minus), credit limit and what they can spend (balance + limit); customers who joined through their
-  link and commission earned. Buttons: Buy for a customer, Customer services, Customers, Statement, My link, Home.
+  link and commission earned. Buttons: Buy for a customer, Customer services, Customers, Statement, My link,
+  **💳 Top up wallet** (the wallet's top-up: card to card with a receipt the owner approves, or a gateway; a top-up
+  raises the balance, which lowers the debt), Home.
 - **Buy for a customer:** the plans at their prices, then "type a name for this service, like Ali's phone, or tap
   Skip" (one line, at most 64 characters), then the regular checkout. Their regular Buy, renewals and traffic
   packages show their prices too.

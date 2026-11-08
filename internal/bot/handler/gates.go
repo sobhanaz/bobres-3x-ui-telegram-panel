@@ -24,8 +24,9 @@ import (
 //     not have an account yet;
 //   - /paysupport, which Telegram requires of a bot that sells with Stars;
 //   - a payment already under way: its proof (the receipt, the bank reference or
-//     the TXID, as a message sent while the bot waits for it) and its check
-//     (the chk button);
+//     the TXID, as a message sent while the bot waits for it, or a picture sent
+//     after that step closed and the button that names its payment) and its
+//     check (the chk button);
 //   - a newcomer's /start and language choice, which make the account and keep
 //     an invite code; they are then told about the maintenance like anyone.
 //
@@ -90,7 +91,7 @@ func (h *Handler) maintenancePasses(r *req) bool {
 	if r.cb != nil {
 		verb, _, _ := strings.Cut(r.cb.Data, ":")
 		switch verb {
-		case "chk": // the check of a payment under way
+		case "chk", "rcp": // the check of a payment under way; a late receipt's payment
 			return r.user != nil
 		case "lang": // a newcomer picks a language: the account is made
 			return r.user == nil
@@ -168,7 +169,7 @@ func (h *Handler) continuesTicket(r *req) bool {
 func (h *Handler) exempt(r *req) bool {
 	if r.cb != nil {
 		verb, _, _ := strings.Cut(r.cb.Data, ":")
-		return verb == "chk" || verb == "lang"
+		return verb == "chk" || verb == "lang" || verb == "rcp"
 	}
 	switch cmd, _, _ := command(r.msg.Text); cmd {
 	case "/paysupport":
@@ -184,9 +185,11 @@ func (h *Handler) isOwnerID(r *req) bool {
 }
 
 // payingNow: a message carrying the proof of a payment already under way (a
-// receipt, its bank reference or a TXID), which may still finish. A tap on
-// the bottom menu is never one. The state is read only when a gate would
-// otherwise block.
+// receipt, its bank reference or a TXID), which may still finish; a picture
+// sent after the step that asked for it closed counts too (onLateReceipt
+// answers with the gate when no payment waits for it). A tap on the bottom
+// menu is never one. The state is read only when a gate would otherwise
+// block.
 func (h *Handler) payingNow(r *req) bool {
 	if r.cb != nil || r.user == nil {
 		return false
@@ -202,8 +205,10 @@ func (h *Handler) payingNow(r *req) bool {
 		return false
 	}
 	switch st.Scene {
-	case sceneReceipt, sceneReference, sceneTXID:
+	case sceneReceipt, sceneReference, sceneTXID, sceneReceiptPick:
 		return true
+	case "":
+		return r.msg.ImageFile() != ""
 	}
 	return false
 }
