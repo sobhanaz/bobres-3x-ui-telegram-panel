@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/readme/hero.svg" alt="BOBRES: launch your own VPN store on Telegram, in one command. Live v0.22.1." width="100%">
+  <img src="docs/readme/hero.svg" alt="BOBRES: launch your own VPN store on Telegram, in one command. Live v0.23.0." width="100%">
 </p>
 
 <p align="center">
@@ -445,8 +445,8 @@ Run `sudo bobres` for the management menu, or use any item as a command. The hea
 <summary><b>The menu (<code>sudo bobres</code>)</b></summary>
 
 ```text
-   n____n   BOBRES manager  bobres v0.22.1
-  ( o  o )  /opt/bobres  ·  shop.example.com  ·  version 0.22.1
+   n____n   BOBRES manager  bobres v0.23.0
+  ( o  o )  /opt/bobres  ·  shop.example.com  ·  version 0.23.0
    \_||_/   Store     running (9/9 services)
             License   Standard license, 214 days left
             HTTPS     auto, certificate expires in 79 days
@@ -725,8 +725,9 @@ at `https://<domain>/admin`
 
 ### 🚦 Status
 
-**Latest release: v0.22.1 (2026-11-02)**, the Settings card of v0.22.0's config names. Customers and resellers may choose the name of a new config
-(`sobhan1234`) and rename one they have, checked as unique on every panel before payment; off until the owner turns it on
+**Latest release: v0.23.0 (2026-11-08)**: paid orders a server could not deliver are listed in the dashboard and the bot,
+to retry, move to another server or refund with a note to the buyer; a card receipt sent after its step closed still
+reaches the owner, and the reseller panel has a top-up button; `/start` shows the welcome with the bottom menu only
 ([CHANGELOG.md](CHANGELOG.md)).
 
 Phases 0 to 7 of the plan are built and tested in CI ([docs/PLAN.md](docs/PLAN.md) §10). The first public release, v0.1.0,

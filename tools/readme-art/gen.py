@@ -24,7 +24,7 @@ FA = "Vazirmatn, Tahoma, 'Geeza Pro', 'Noto Naskh Arabic', 'Segoe UI', sans-seri
 REDUCED = "@media (prefers-reduced-motion: reduce) { * { animation: none !important; } }"
 BASE_CSS = f".sans {{ font-family: {SANS}; }} .mono {{ font-family: {MONO}; }} .fa {{ font-family: {FA}; }}"
 
-VERSION = "0.22.1"
+VERSION = "0.23.0"
 
 # Counted from the code on 2026-11-01 (v0.21.0).
 NUMBERS = {

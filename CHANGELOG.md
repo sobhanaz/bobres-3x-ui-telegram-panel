@@ -8,6 +8,10 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+## [0.23.0] — 2026-11-08
+
+**Undelivered orders get a place of their own, a receipt sent late reaches the owner, and `/start` leaves the welcome in view.** One additive migration (core 00057); the bot, core and the provisioner update together (the update does that).
+
 ### Updating
 - One database migration, additive, in core: 00057 (`orders.server_id`, the server staff chose for an undelivered order, and the ledger kind `commission_reversal`). Its Down drops the column and refuses new `commission_reversal` entries (the ledger keeps the ones it has). Update the bot, core and the provisioner together (new gRPC calls; the update does that).
 
