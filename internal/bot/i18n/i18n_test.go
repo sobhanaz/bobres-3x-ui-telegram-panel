@@ -202,7 +202,7 @@ func TestBetaFormatting(t *testing.T) {
 func TestLedgerKindsHaveNames(t *testing.T) {
 	c := MustLoad()
 	for _, kind := range []string{"topup", "purchase", "refund", "adjust", "trial_grant", "referral", "commission", "settlement", "gift_code",
-		"cashback", "cashback_reversal", "target_bonus", "wheel_prize"} {
+		"cashback", "cashback_reversal", "target_bonus", "wheel_prize", "commission_reversal"} {
 		for _, lang := range Languages {
 			if k := "ledger." + kind; c.T(lang, k) == k {
 				t.Errorf("%s: no text for %s", lang, k)

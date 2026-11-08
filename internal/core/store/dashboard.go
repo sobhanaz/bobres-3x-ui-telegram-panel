@@ -249,13 +249,22 @@ func idPart(q string) string {
 const orderColsO = `o.id, o.user_id, o.plan_id, o.type, o.status, o.amount, o.currency, o.idempotency_key, o.created_at, o.updated_at,
 	o.subscription_id, o.discount_code, o.discount_amount, o.targets_set, o.target_expires_at, o.target_traffic_bytes,
 	o.extend_days, o.extend_bytes, o.created_by, o.refunded_at, o.refund_amount, o.label, o.bulk_id, o.bulk_index,
-	o.list_amount, o.list_currency, o.rate, o.client_name`
+	o.list_amount, o.list_currency, o.rate, o.client_name, o.server_id`
 
 // OrderFilter narrows the orders list. Query matches a Telegram id, part of a
-// username or part of an order id.
+// username or part of an order id. Oldest lists the oldest first (the
+// undelivered orders: the longest waiting first), else the newest.
 type OrderFilter struct {
 	Query, Status, Type, UserID, SubscriptionID, ID string
+	Oldest                                          bool
 }
+
+// Who sold an order (OrderRow.SellerKind): the buyer is a reseller, buying for a customer of theirs; or a
+// reseller brought the buyer (users.referred_by) and is paid a commission on the order. "" is neither: the store.
+const (
+	SellerReseller = "reseller"
+	SellerReferrer = "referrer"
+)
 
 // OrderRow is one line of the orders list.
 type OrderRow struct {
@@ -267,6 +276,12 @@ type OrderRow struct {
 	LastError     string
 	NextAttemptAt *time.Time
 	CreatedByName string // the staff member's @username or Telegram id
+	// SellerKind is SellerReseller, SellerReferrer or "" (Seller* constants); SellerID, SellerTelegramID and
+	// SellerUsername are that reseller ("" and 0 when none).
+	SellerKind       string
+	SellerID         string
+	SellerTelegramID int64
+	SellerUsername   string
 }
 
 // ListOrders returns a page of orders and the number of matches.
@@ -277,11 +292,17 @@ func (s *Store) ListOrders(ctx context.Context, q querier, f OrderFilter, p Page
 	rows, err := q.Query(ctx, `
 		SELECT `+orderColsO+`, u.telegram_id, COALESCE(u.username, ''), p.name_i18n,
 			o.provision_attempts, COALESCE(o.last_error, ''), o.next_attempt_at,
-			COALESCE('@' || c.username, c.telegram_id::text, ''), count(*) OVER ()
+			COALESCE('@' || c.username, c.telegram_id::text, ''),
+			CASE WHEN u.role = 'reseller' THEN 'reseller' WHEN r.id IS NOT NULL THEN 'referrer' ELSE '' END,
+			CASE WHEN u.role = 'reseller' THEN u.id::text ELSE COALESCE(r.id::text, '') END,
+			CASE WHEN u.role = 'reseller' THEN u.telegram_id ELSE COALESCE(r.telegram_id, 0) END,
+			CASE WHEN u.role = 'reseller' THEN COALESCE(u.username, '') ELSE COALESCE(r.username, '') END,
+			count(*) OVER ()
 		FROM core.orders o
 		JOIN core.users u ON u.id = o.user_id
 		JOIN core.plans p ON p.id = o.plan_id
 		LEFT JOIN core.users c ON c.id = o.created_by
+		LEFT JOIN core.users r ON r.id = u.referred_by AND r.role = 'reseller'
 		WHERE ($1 = '' OR (CASE WHEN $2 THEN u.telegram_id = $3 ELSE false END)
 		           OR lower(u.username) LIKE $4 ESCAPE '\' OR ($5 <> '' AND replace(o.id::text, '-', '') LIKE '%' || $5 || '%'))
 		  AND ($6 = '' OR o.status = $6)
@@ -289,9 +310,10 @@ func (s *Store) ListOrders(ctx context.Context, q querier, f OrderFilter, p Page
 		  AND ($8 = '' OR o.user_id::text = $8)
 		  AND ($9 = '' OR o.subscription_id::text = $9 OR o.id = (SELECT order_id FROM core.subscriptions WHERE id::text = $9))
 		  AND ($10 = '' OR o.id::text = $10)
-		ORDER BY o.created_at DESC, o.id DESC
+		ORDER BY CASE WHEN $13 THEN o.created_at END ASC, CASE WHEN $13 THEN o.id END ASC,
+			o.created_at DESC, o.id DESC
 		LIMIT $11 OFFSET $12`,
-		strings.TrimSpace(f.Query), isNum, num, like, idPart, f.Status, f.Type, f.UserID, f.SubscriptionID, f.ID, p.Limit, p.Offset)
+		strings.TrimSpace(f.Query), isNum, num, like, idPart, f.Status, f.Type, f.UserID, f.SubscriptionID, f.ID, p.Limit, p.Offset, f.Oldest)
 	if err != nil {
 		return nil, 0, fmt.Errorf("list orders: %w", err)
 	}
@@ -306,7 +328,8 @@ func (s *Store) ListOrders(ctx context.Context, q querier, f OrderFilter, p Page
 			name []byte
 		)
 		dest := append(orderDest(&r.Order), &r.TelegramID, &r.Username, &name,
-			&r.Attempts, &r.LastError, &r.NextAttemptAt, &r.CreatedByName, &total)
+			&r.Attempts, &r.LastError, &r.NextAttemptAt, &r.CreatedByName,
+			&r.SellerKind, &r.SellerID, &r.SellerTelegramID, &r.SellerUsername, &total)
 		if err := rows.Scan(dest...); err != nil {
 			return nil, 0, err
 		}

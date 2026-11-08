@@ -9,9 +9,9 @@ The Telegram bot is where customers buy and get help. It speaks Persian and Engl
 | Button | What it does |
 |---|---|
 | Buy service | Plans, then payment, then the service |
+| Free trial | One free service per Telegram account, if you made a trial plan |
 | My services | Status, expiry and traffic of each service. Renew or add traffic |
 | Wallet | Balance, top-up, history, apply a gift code, **My codes** |
-| Free trial | One free service per Telegram account, if you made a trial plan |
 | Invite friends | The customer's invite link and a card to forward |
 | Support | Tickets and the FAQ |
 | Settings | Language and notifications |
@@ -19,13 +19,14 @@ The Telegram bot is where customers buy and get help. It speaks Persian and Engl
 | Become a reseller | Shown only while your license includes resellers |
 | Bulk purchase | Buy several services of one plan at once, from the wallet |
 
-A **bottom menu** keeps the main buttons one tap away. Buttons are colored by what they do: green pays or confirms, blue opens a main action, red cancels.
+A **bottom menu** keeps the main buttons one tap away: **Buy service** and **Free trial** first, each on a row of its own, then the rest. After `/start` the customer gets the welcome with the bottom menu only, so the welcome stays in view; `/menu` shows the main menu in the chat too. Buttons are colored by what they do: green pays or confirms, blue opens a main action, red cancels.
 
 ### Commands
 
 | Command | Does |
 |---|---|
-| `/start`, `/menu` | Open the main menu |
+| `/start` | The welcome, with the bottom menu |
+| `/menu` | Open the main menu |
 | `/new` | Buy a new service |
 | `/renew` | Renew a service |
 | `/status` | My services |

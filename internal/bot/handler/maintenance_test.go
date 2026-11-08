@@ -275,6 +275,13 @@ func receiptAsked(m *maintWorld, p *person)   { m.startPayment(p, "pay:c:") }
 func referenceAsked(m *maintWorld, p *person) { receiptAsked(m, p); p.photo("receipt-held", "") }
 func txidAsked(m *maintWorld, p *person)      { m.startPayment(p, "pay:x:") }
 
+// pickAsked: the receipt step closed, and a picture sent after it asks which payment it is for (latereceipt.go).
+func pickAsked(m *maintWorld, p *person) {
+	receiptAsked(m, p)
+	m.setScene(p, "", nil)
+	p.photo("receipt-late", "REF-9")
+}
+
 func gatedCases() []gatedCase {
 	var cases []gatedCase
 	add := func(more ...gatedCase) { cases = append(cases, more...) }
@@ -311,6 +318,9 @@ func gatedCases() []gatedCase {
 		// The services not on the panel (the button under the staff alert, and the list's own).
 		"adm:pm", "adm:pm:1", "adm:pmd:0:00000000-0000-4000-8000-000000000001", "adm:pmy:d:0:00000000-0000-4000-8000-000000000001",
 		"adm:pma:r", "adm:pmz:d:3",
+		// The undelivered orders (the admin menu's list and its buttons).
+		"adm:ud", "adm:ud:1", "adm:udr:0:00000000-0000-4000-8000-000000000001", "adm:uda:0",
+		"adm:udf:0:00000000-0000-4000-8000-000000000001", "adm:udy:0:00000000-0000-4000-8000-000000000001",
 	} {
 		add(buttonCase(data))
 	}
@@ -408,7 +418,7 @@ func gatedCases() []gatedCase {
 	for _, ask := range []struct {
 		scene string
 		prep  func(m *maintWorld, p *person)
-	}{{sceneReceipt, receiptAsked}, {sceneReference, referenceAsked}, {sceneTXID, txidAsked}} {
+	}{{sceneReceipt, receiptAsked}, {sceneReference, referenceAsked}, {sceneTXID, txidAsked}, {sceneReceiptPick, pickAsked}} {
 		for _, other := range []gatedCase{
 			{name: "a tap on the bottom menu", send: func(_ *maintWorld, p *person) { p.tapMenu("en", "btn.buy") }},
 			{name: "the trial in the bottom menu", send: func(_ *maintWorld, p *person) { p.tapMenu("en", "btn.trial") }},
@@ -627,7 +637,10 @@ func TestMaintenanceDoesNotHoldStaff(t *testing.T) {
 	late.lastHas("Choose your language")
 	late.text("/start")
 	late.press("lang:en")
-	late.lastHas("Main menu")
+	late.lastHas("Welcome to")
+	if len(late.menus()) != 1 {
+		t.Errorf("the configured owner got %d bottom menus with the welcome", len(late.menus()))
+	}
 	late.press("buy")
 	late.lastHas("Choose a plan")
 	if late.count(maintenance) != 0 {
@@ -659,10 +672,18 @@ func TestMaintenanceAllowlist(t *testing.T) {
 	top.press("wamt:100000")
 	top.press("wpay:c:")
 	idle := m.customer(6507, "idle")
+	late := pay(6509, "late", "pay:c:") // its receipt step closes before the receipt comes
+	m.setScene(late, "", nil)
 	inv := m.tg.lastInvoice(stars.id)
 	menus := len(card.menus())
 
 	m.maintenance(true)
+
+	// A receipt sent after its step closed: its payment is offered, and the tap sends it (latereceipt.go).
+	late.photo("receipt-late", "REF-7")
+	late.lastHas("Which payment is this receipt for")
+	late.press("rcp:")
+	late.lastHas("Received")
 
 	// The receipt of a card payment, with its reference as the caption.
 	card.photo("receipt-allowed", "REF-1")
@@ -711,7 +732,7 @@ func TestMaintenanceAllowlist(t *testing.T) {
 	}
 	zarinpal.press("home")
 	zarinpal.toast(maintenance)
-	idle.press("buy")
+	idle.tap("buy") // a home screen's button
 	idle.toast(maintenance)
 
 	// The staff review goes on, and its result reaches the customer:
@@ -1083,7 +1104,7 @@ func TestMaintenanceTablesCoverEveryEntryPoint(t *testing.T) {
 		}
 	}
 	// What goes on in maintenance, and is tested as such.
-	allowedVerbs, allowedCommands := []string{"chk"}, []string{"/paysupport"}
+	allowedVerbs, allowedCommands := []string{"chk", "rcp"}, []string{"/paysupport"}
 	for _, verb := range caseStrings(t, "handler.go", "dispatch") {
 		if !verbs[verb] && !slices.Contains(allowedVerbs, verb) {
 			t.Errorf("no case presses a button with the verb %q"+addACase, verb)

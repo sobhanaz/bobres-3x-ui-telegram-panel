@@ -8,6 +8,31 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+## [0.23.0] — 2026-11-08
+
+**Undelivered orders get a place of their own, a receipt sent late reaches the owner, and `/start` leaves the welcome in view.** One additive migration (core 00057); the bot, core and the provisioner update together (the update does that).
+
+### Updating
+- One database migration, additive, in core: 00057 (`orders.server_id`, the server staff chose for an undelivered order, and the ledger kind `commission_reversal`). Its Down drops the column and refuses new `commission_reversal` entries (the ledger keeps the ones it has). Update the bot, core and the provisioner together (new gRPC calls; the update does that).
+
+### Added
+- **Undelivered orders.** Paid orders whose service could not be made because a server did not answer now have a place of their own: the dashboard's **Payments > Undelivered** tab (also linked from the Overview's "Failed deliveries" card) and **Undelivered orders** in the bot's admin panel. Each order shows the buyer, the **seller** (the reseller who bought it for a customer, or the reseller whose link brought the buyer), the plan, the price, how long it has waited, the tries and the last error. Staff can:
+  - **retry** one order, or **all of them**, now (the worker still retries each on its own, at most every 30 minutes);
+  - **deliver a new service on another server** they pick (dashboard): the plan and the price stay the same, the order is tried at once on that server only, and a half-made reservation on the old server is released (when the old panel does not answer, the answer says a half-made account may be left there, to delete by hand);
+  - **refund** it to the buyer's wallet with an optional **note to the buyer**. The commission a reseller was paid on an order that was never delivered is **taken back** with the refund (as far as their wallet holds it; a shortfall is written to the audit log), and the reseller is told.
+- The bot's alerts about paid orders not delivered (the watchdog's "not delivered in the past hour" and the one per order after its third failed try) carry an **📦 Undelivered orders** button that opens the list (owners and admins).
+- When a delivery the customer was told is delayed finally works (after a retry, a move, or the server coming back), the "service ready" message says sorry for the wait.
+- Every order in the dashboard API carries its `seller` and the chosen `server_id`; new audit actions `order.move`, `order.retry_all` and `order.commission_reversal`.
+- **💳 Top up wallet** in the reseller panel: the wallet's top-up (card to card with a receipt the owner approves, or a gateway). A top-up raises the balance, which lowers the debt.
+
+### Changed
+- **`/start` answers with the welcome and the bottom menu only.** The home screen no longer comes under the welcome, so a long welcome stays in view instead of scrolling up behind the same buttons. A newcomer's language choice does the same. `/menu`, the Home buttons and the answers that lead home still show the home screen (and /start does when the bottom menu could not be sent).
+- **Buy and Free trial come first**, each on a row of its own, on the home screen and in the bottom menu; the other buttons follow in their order. In the bottom menu: Store (while the Mini App is on), Digital accounts and BOBRES licenses side by side, then the rest two to a row.
+- **The bottom menu has Bulk purchase** (while it is on), so it stays one tap away now that the welcome comes without the home screen.
+
+### Fixed
+- **A receipt sent after its step closed was lost.** The bot waits for a card receipt for 30 minutes after showing the card number; a receipt sent later (a bank transfer often takes longer), or without starting a payment, was answered with the home screen and never reached the owners. Now the bot offers the customer's payments still waiting for a receipt, one button each with the reference their payment screen showed, and a tap sends the receipt for review as usual (the bank reference is asked for when the caption had none). With no payment waiting, the bot says how to pay by card instead of staying silent. Resellers topping up their wallet were hit most.
+
 ## [0.22.1] — 2026-11-02
 
 **The Config names card on the Settings page, and a faster name lookup.** One additive migration (provisioner 00009, an index).

@@ -77,6 +77,8 @@ func (c Context) maxLen() int {
 // contexts lists every text that is not an HTML message; btn.* are buttons.
 var contexts = map[string]Context{
 	"plan.button":    CtxButton,
+	"pay.late_topup": CtxButton, // a payment waiting for a receipt, offered for a picture sent after its step closed
+	"pay.late_order": CtxButton,
 	"subs.item":      CtxButton,
 	"admin.plan_on":  CtxButton,
 	"admin.plan_off": CtxButton,
@@ -178,6 +180,18 @@ var contexts = map[string]Context{
 	"admin.pm_toast_done":      CtxToast,
 	"admin.pm_why_unavailable": CtxButtonHTML,
 	"admin.pm_why_internal":    CtxButtonHTML,
+	// The undelivered orders: the popups, the reason the audit log keeps for a refund, and the words used inside
+	// the lines of the list (what was bought, who bought it).
+	"admin.ud_toast_retried":     CtxToast,
+	"admin.ud_toast_retried_all": CtxToast,
+	"admin.ud_toast_gone":        CtxToast,
+	"admin.ud_toast_refunded":    CtxToast,
+	"admin.ud_reason_refund":     CtxInternal,
+	"admin.ud_kind_renew":        CtxButtonHTML,
+	"admin.ud_kind_topup":        CtxButtonHTML,
+	"admin.ud_who":               CtxButtonHTML,
+	"admin.ud_who_reseller":      CtxButtonHTML,
+	"admin.ud_who_referred":      CtxButtonHTML,
 	// A backup file's caption is sent without a parse mode.
 	"backup.caption": CtxPlain,
 
@@ -250,6 +264,7 @@ var buttonStyles = map[string]string{
 	"btn.rs_settle":         "success",
 	"btn.login_approve":     "success",
 	"btn.pm_yes":            "success",
+	"btn.ud_refund_yes":     "success", // the Refund of an undelivered order's question
 
 	"btn.services":       "primary",
 	"btn.wallet":         "primary",
@@ -261,6 +276,7 @@ var buttonStyles = map[string]string{
 	"btn.check_payment":  "primary",
 	"btn.try_again":      "primary",
 	"btn.rs_buy":         "primary",
+	"btn.rs_topup":       "primary", // the reseller panel's way to the wallet top-up
 	"btn.adm_pending":    "primary",
 	"btn.store":          "primary",
 	"btn.review_now":     "primary",
@@ -278,6 +294,7 @@ var buttonStyles = map[string]string{
 	"btn.tutorials":      "primary",
 	"btn.faq_support":    "primary", // the way on to support from the FAQ, like Support itself
 	"btn.pm_manage":      "primary", // under the alert about services not on the panel
+	"btn.ud_manage":      "primary", // under the alerts about paid orders not delivered
 
 	"btn.cancel":          "danger",
 	"btn.reject":          "danger",
@@ -351,6 +368,10 @@ var markupArgs = map[string][]string{
 	"admin.pm_fail_line":       {"reason"},
 	"admin.pm_failed_recreate": {"reason"},
 	"admin.pm_failed_delete":   {"reason"},
+
+	// The undelivered orders: the rendered lines of the list, and why core could not refund one.
+	"admin.ud_list":          {"items"},
+	"admin.ud_refund_failed": {"reason"},
 }
 
 // onlyLangs are texts read in some languages only.

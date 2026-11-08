@@ -41,8 +41,17 @@ func (h *Handler) onStart(r *req, param string) {
 			r.user = u
 		}
 	}
-	h.sendMenu(r, r.t("welcome", "brand", esc(h.brand())))
-	h.showHome(r)
+	h.sendWelcome(r)
+}
+
+// sendWelcome sends the welcome with the bottom menu, which holds the main
+// buttons. No home screen comes under it: a long welcome would scroll out of
+// view behind the same buttons. The home screen comes only when the menu
+// could not be sent.
+func (h *Handler) sendWelcome(r *req) {
+	if !h.sendMenu(r, r.t("welcome", "brand", esc(h.brand()))) {
+		h.showHome(r)
+	}
 }
 
 // languageNames are the picker's buttons: each language in its own words.
@@ -101,8 +110,7 @@ func (h *Handler) onLanguage(r *req, lang string) {
 		// bottom menu, which only a new message can carry.
 		r.show(r.t("lang.changed"), nil)
 		r.cb = nil // the rest comes as new messages
-		h.sendMenu(r, r.t("welcome", "brand", esc(h.brand())))
-		h.showHome(r)
+		h.sendWelcome(r)
 		if open != "" { // the product of the Buy link they came from
 			h.dispatch(r, open)
 		}
@@ -118,12 +126,12 @@ func (h *Handler) showHome(r *req) {
 		h.askLanguage(r)
 		return
 	}
-	kb := &tg.Keyboard{}
+	// Buy and Free trial come first, each on a row of its own, as in the bottom menu.
+	kb := (&tg.Keyboard{}).Row(r.button("btn.buy", "buy")).Row(r.button("btn.trial", "trial"))
 	if url := h.miniAppURL(); url != "" {
 		kb.Row(r.webAppButton("btn.store", url)) // opens the app at once: an inline button gives it the sign-in data
 	}
-	kb.Row(r.button("btn.buy", "buy"), r.button("btn.services", "subs"))
-	if h.bulkOn() { // a second green button under Buy
+	if h.bulkOn() {
 		kb.Row(r.button("btn.bulk", "bk"))
 	}
 	if h.suppliersOn() { // the owner's own bot resells a supplier's digital accounts
@@ -132,7 +140,7 @@ func (h *Handler) showHome(r *req) {
 	if h.licensesOn() { // the owner's own bot sells BOBRES licenses
 		kb.Row(r.button("btn.licenses", "lic"))
 	}
-	kb.Row(r.button("btn.wallet", "wallet"), r.button("btn.trial", "trial")).
+	kb.Row(r.button("btn.services", "subs"), r.button("btn.wallet", "wallet")).
 		Row(r.button("btn.support", "support"), r.button("btn.language", "lang"))
 	if h.helpTutorials.Load() { // only while the owner has an enabled tutorial (help.go)
 		kb.Row(r.button("btn.tutorials", "tut"))
@@ -159,7 +167,7 @@ func (h *Handler) showHome(r *req) {
 // menuItems are the bottom menu's buttons: each text key and the action a
 // tap runs, the callback data of the same inline button (dispatch).
 var menuItems = []struct{ key, data string }{
-	{"btn.store", "store"}, {"btn.buy", "buy"}, {"btn.services", "subs"}, {"btn.wallet", "wallet"}, {"btn.trial", "trial"},
+	{"btn.store", "store"}, {"btn.buy", "buy"}, {"btn.bulk", "bk"}, {"btn.services", "subs"}, {"btn.wallet", "wallet"}, {"btn.trial", "trial"},
 	{"btn.support", "support"}, {"btn.reseller", "rs"}, {"btn.invite", "ref"}, {"btn.language", "lang"},
 	{"btn.reseller_apply", "ap"}, {"btn.top_users", "top"}, {"btn.tutorials", "tut"}, {"btn.wheel", "wh"},
 	{"btn.admin", "adm"}, {"btn.dashboard", "dash"},
@@ -205,13 +213,14 @@ func (h *Handler) mainMenu(r *req) (m *tg.Menu, labels map[string]string) {
 		return tg.MenuButton{Text: text, Style: i18n.ButtonStyle(key)}
 	}
 	m = &tg.Menu{IsPersistent: true, Resize: true, Placeholder: r.t("menu.placeholder")}
+	// Buy and Free trial first, each on a row of its own, then the Store item.
+	m.Row(item("btn.buy")).Row(item("btn.trial"))
 	if h.miniAppURL() != "" {
 		// A tap sends the label as text and onStore answers with the button that
 		// opens the app: a reply keyboard button could not give the app its sign-in data.
 		m.Row(item("btn.store"))
 	}
-	m.Row(item("btn.buy"))
-	var own []tg.MenuButton // the owner's own store, as on the home screen: digital accounts and BOBRES licenses, each while it is on
+	var own []tg.MenuButton // the owner's own store, side by side: digital accounts and BOBRES licenses, each while it is on
 	if h.suppliersOn() {
 		own = append(own, item("btn.supplier"))
 	}
@@ -219,29 +228,34 @@ func (h *Handler) mainMenu(r *req) (m *tg.Menu, labels map[string]string) {
 		own = append(own, item("btn.licenses"))
 	}
 	m.Row(own...)
-	m.Row(item("btn.services"), item("btn.wallet")).
-		Row(item("btn.trial"), item("btn.support"))
-	if h.helpTutorials.Load() { // as on the home screen
-		m.Row(item("btn.tutorials"))
+	// The rest in the home screen's order, two to a row, each while it is on.
+	var rest []tg.MenuButton
+	if h.bulkOn() { // the home screen's Bulk purchase: the welcome comes without the home screen
+		rest = append(rest, item("btn.bulk"))
 	}
-	var more []tg.MenuButton
+	rest = append(rest, item("btn.services"), item("btn.wallet"), item("btn.support"))
+	if h.helpTutorials.Load() {
+		rest = append(rest, item("btn.tutorials"))
+	}
 	switch {
 	case r.isReseller():
-		more = append(more, item("btn.reseller"))
+		rest = append(rest, item("btn.reseller"))
 	case h.referralsOn():
-		more = append(more, item("btn.invite"))
+		rest = append(rest, item("btn.invite"))
 	}
-	m.Row(append(more, item("btn.language"))...)
-	var growth []tg.MenuButton // the home screen's row: Become a reseller and Top users, each while it is on
-	if h.resellerApplyOn(r) {
-		growth = append(growth, item("btn.reseller_apply"))
+	rest = append(rest, item("btn.language"))
+	if h.resellerApplyOn(r) { // Become a reseller and Top users, as on the home screen
+		rest = append(rest, item("btn.reseller_apply"))
 	}
 	if h.topUsersOn() {
-		growth = append(growth, item("btn.top_users"))
+		rest = append(rest, item("btn.top_users"))
 	}
-	m.Row(growth...)
 	if h.wheelFor(r) {
-		m.Row(item("btn.wheel")) // as on the home screen
+		rest = append(rest, item("btn.wheel"))
+	}
+	for i := 0; i < len(rest); i += 2 {
+		j := min(i+2, len(rest))
+		m.Row(rest[i:j:j]...)
 	}
 	switch {
 	case r.isStaff():

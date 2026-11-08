@@ -40,7 +40,7 @@ Every change is written to an append-only audit log. Sensitive actions, such as 
 | | Support | Ticket inbox with canned replies. A customer's reseller application arrives here too |
 | | Broadcasts | Send a message to all or some customers, now or later |
 | Sales | Plans | Plans, plan groups, traffic packages, the free trial, reward codes. See [Plans and Pricing](Plans-and-Pricing) |
-| | Orders & payments | Orders, the receipt **review queue**, retry delivery, refunds. An order's page shows the cashback it earned |
+| | Orders & payments | Orders, the receipt **review queue**, retry delivery, refunds. The **Undelivered** tab lists paid orders a server could not deliver yet: retry them, deliver on another server, or refund with a note to the buyer (see [Payments](Payments#undelivered-orders)). An order's page shows the cashback it earned and the reseller behind the sale |
 | | Wallet & ledger | Every wallet movement, with CSV export |
 | | Reports | Sales per currency. See [Reports](Reports) |
 | | Discounts & referrals | Discount codes, the referral reward, top inviters |

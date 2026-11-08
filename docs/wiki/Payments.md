@@ -74,9 +74,23 @@ The bot reads Tetherland and Wallex about every two minutes. Core has no interne
 
 If you used to set your own rate and want to keep using only that, turn `payments.usdt_rate_auto` off.
 
+## Undelivered orders
+
+Sometimes a customer pays but the service cannot be made, because the server (panel) did not answer. The order then waits as **Delivery failed**, and BOBRES tries it again on its own, at least every 30 minutes, until it works.
+
+To see these orders, open **Orders & payments** and the **Undelivered** tab (the **Failed deliveries** card on the Overview opens it too). The number on the tab is how many are waiting. The longest waiting come first. Each row shows the buyer, the reseller behind the sale (a reseller buying for a customer, or a reseller who brought the buyer), the plan, what was paid, how long it has waited, the tries, the last error (click it to read it whole) and the server, if you chose one.
+
+What you can do (owner and admin; support can only look):
+
+- **Retry** one order now, or **Retry all now** for every waiting order. An order whose server still does not answer waits for its next try.
+- **Deliver on another server**, for a new service: pick a server that works. The list shows each server's state (working, not answering, not checked yet, or full). The plan and the price stay the same, the customer pays nothing more, and the order is tried on that server at once. If the old panel did not answer, a warning says a half-made account may be left there: delete it on that panel by hand. A renewal or extra traffic stays on its service's server, so it can only be retried or refunded.
+- **Refund to wallet**: see below.
+
+The same actions are on the order's own page. In the bot, owners and admins find them under `/admin` → **📦 Undelivered orders**.
+
 ## Refunds
 
-Open the order and choose **Refund to wallet**. The order's amount goes to the customer's wallet and the customer is told. For an order that could not be delivered, the order is cancelled and a half-made client is removed from the panel.
+Open the order and choose **Refund to wallet**. The order's amount goes to the customer's wallet and the customer is told. You can add a **note to the buyer** (up to 500 characters); it goes with the bot's message about the refund. Your reason stays in the audit log. For an order that could not be delivered, the order is cancelled and a half-made client is removed from the panel. If a reseller earned a commission on it, the commission is taken back from the reseller's wallet (as much as the wallet holds), and the dashboard says how much.
 
 ## When a payment is stuck
 

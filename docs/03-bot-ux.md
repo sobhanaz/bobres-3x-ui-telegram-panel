@@ -6,14 +6,20 @@ avoid mixing raw English inside RTL lines; use consistent numerals; test long-li
 ## Principles
 - One primary action per screen; max 2 taps to the common goals.
 - Inline keyboards edit the same message (no chat spam). Always a Back and a Home button.
-- A bottom menu (a persistent reply keyboard) holds the main actions: Buy, My services, Wallet, Free trial,
-  Support, then Invite friends (only when referrals are on; resellers get the Reseller panel instead) beside
-  Language, then a row with Become a reseller (customers only, while the license includes resellers) and Top users
-  (while the referral program and the Top users board are on); owners and admins also get Admin panel and Dashboard,
-  support staff only Dashboard. A tap does what the same inline button does. It comes with the welcome, after a
-  language change and with `/menu`, and again ahead of the next answer whenever it changed (role, language, an edited
-  label, a switch that adds or takes away one of those buttons). A tap is never taken as the answer to an open
-  question (a bank reference, a service name), and the gates treat it as any message.
+- A bottom menu (a persistent reply keyboard) holds the main actions: **Buy** and **Free trial** first, each on a
+  row of its own, then Store (while the Mini App is on), the owner's own Digital accounts and BOBRES licenses side
+  by side (each while it is on), then, two to a row in this order and each while it is on: Bulk purchase, My
+  services, Wallet, Support, Tutorials, Invite friends (only when referrals are on; resellers get the Reseller panel
+  instead), Language, Become a reseller (customers only, while the license includes resellers), Top users (while the
+  referral program and the Top users board are on) and the Daily wheel; owners and admins also get Admin panel and
+  Dashboard, support staff only Dashboard, on a last row. A tap does what the same inline button does. It comes with
+  the welcome, after a language change and with `/menu`, and again ahead of the next answer whenever it changed
+  (role, language, an edited label, a switch that adds or takes away one of those buttons). A tap is never taken as
+  the answer to an open question (a bank reference, a service name), and the gates treat it as any message.
+- `/start` (and a newcomer's language choice) answers with the welcome and the bottom menu only: no home screen
+  comes under it, so a long welcome stays in view (the bottom menu has the same buttons). The home screen comes with
+  `/menu`, the Home buttons and the answers that lead back to it (and after /start only when the bottom menu could not
+  be sent).
 - On the vendor's own store, `/affiliate` (and **Affiliate program** on the licenses screen, while the program is on) shows the customer's
   affiliate link `t.me/<bot>?start=aff_<code>` and what it earned; a start link `aff_<code>` records who brought a new customer
   ([18-hosted-and-affiliate-plans.md](18-hosted-and-affiliate-plans.md)).
@@ -29,17 +35,19 @@ avoid mixing raw English inside RTL lines; use consistent numerals; test long-li
 - Rate limit per user; ignore duplicate taps (callback idempotency).
 
 ## Main menu (user)
+Buy service and Free trial come first, each on a row of its own (the home screen and the bottom menu alike); the
+rest follow in their order.
 1. Buy service
-2. My services
-3. Wallet (the account lines, balance, top up, history, apply a gift code, My codes)
-4. Free trial (once per user, abuse-checked)
+2. Free trial (once per user, abuse-checked)
+3. My services
+4. Wallet (the account lines, balance, top up, history, apply a gift code, My codes)
 5. Invite friends (referral link, earnings, a card to forward)
 6. Support (tickets, FAQ)
 7. Settings (language, notifications)
 8. Top users (only while the referral program is on and the owner has not switched the board off)
 9. Become a reseller (customers who are not resellers or staff, only while the license includes resellers)
-10. Bulk purchase (a second green button right under Buy, for everyone, while the owner has not switched it off:
-    setting `bulk.enabled`; it has no item in the bottom menu)
+10. Bulk purchase (a green button after Buy, Free trial and Store, for everyone, while the owner has not switched it
+    off: setting `bulk.enabled`; the bottom menu has it too, since the welcome comes without the home screen)
 (+ Reseller panel button when role = reseller; + Admin button when role = admin)
 
 ## Key flows
@@ -184,7 +192,7 @@ services. They are being prepared: you will get all the links in one message." w
   "Provisioning failed" alert for each failed service (the order id names it) and the customer no "taking longer" note per
   service; if none is ready the message says so ("Your N services are not ready yet"). Nothing paid for is lost: a
   service the panel cannot make stays a paid order the worker retries with growing waits, and staff can retry or refund it
-  from the dashboard as any order.
+  from the dashboard as any order, or from the bot's **Undelivered orders**.
 - **Staff and records.** The staff alert for a sale (`notify.sales`) is one message per bulk, for the whole quantity ("New
   bulk sale: @name bought 3 × Plan for 450,000 Toman"). The audit log has one `order.bulk` entry per bulk (the buyer as the
   actor, source bot, with the plan, the quantity, the price of each and the total); the orders, the ledger and every report
@@ -217,9 +225,10 @@ hour ("try again in N minutes"). A code used up, or one the customer already use
 every rule and counts; the bot keeps no copy of a code and never logs it. The join-channel, maintenance and ban gates apply as
 everywhere; resellers may redeem. The message is the request's idempotency key, so a repeated update credits once.
 **Manual payment:** show card / Zarinpal link / address + amount + unique reference -> user sends a screenshot of the payment (photo or image file; card transfers also need the bank reference number, crypto may send the TXID instead) -> every owner gets an alert whose Review button opens that payment (a staff member's card: the receipt and approve/reject) -> result to user.
+**A receipt sent late** (`internal/bot/handler/latereceipt.go`): the step that waits for the receipt lasts 30 minutes (a pending step's life), and a bank transfer often takes longer, or the customer taps something else meanwhile. A picture that comes when no step waits for it is not dropped: the bot lists the customer's own manual payments that still wait for their proof (core `ListMyPendingPayments`, the Mini App's list: newest first, at most 5, only methods the store still takes and orders still unpaid), one button each, "👛 Top-up · 100,000 Toman · 1A2B3C4D" or "🛒 Purchase · ..." with the reference the payment screen showed (`rcp:<payment id>`). A tap sends the picture as that payment's receipt, exactly as the step would have (the caption is the bank reference; without one it is asked for; a crypto screenshot needs none). Another picture, or a typed reference, before the tap replaces the kept one. With no payment waiting, the answer says how to pay by card, with ➕ Top up and Support buttons. A button for a payment that no longer waits says so and sends nothing. Maintenance and the required channel let it through as the proof of a payment under way; with nothing waiting they answer as they do for anything else.
 **Trial:** one tap -> service created (small quota/time) -> delivery message.
 **Service detail:** status, expiry, used/total (progress bar), online?, subscription link, QR, reset link, renew. An "Open page" button (a URL button, `?l=<language>`) opens the branded page `/sub/<token>` while core has a public URL and the page is on ([15-subscription-page.md](15-subscription-page.md)).
-**Mini App store:** the same purchase, renewal, top-up and services list in a web app inside Telegram, on by default (setting `miniapp.enabled`) and opened from a Store button on the home screen, a Store item at the top of the bottom menu (it answers with the button that opens the app) and Telegram's menu button; they appear only when the store has a public HTTPS address. It pays by the wallet, Zarinpal, IDPay, NextPay, Telegram Stars or automatic USDT, takes card-to-card, manual USDT and Zarinpal-link payments with a receipt image (sent to the customer's chat with the bot, then reviewed as in the bot), and has the free trial, invites and support ([17-mini-app.md](17-mini-app.md)).
+**Mini App store:** the same purchase, renewal, top-up and services list in a web app inside Telegram, on by default (setting `miniapp.enabled`) and opened from a Store button on the home screen, a Store item in the bottom menu (after Buy and Free trial) (it answers with the button that opens the app) and Telegram's menu button; they appear only when the store has a public HTTPS address. It pays by the wallet, Zarinpal, IDPay, NextPay, Telegram Stars or automatic USDT, takes card-to-card, manual USDT and Zarinpal-link payments with a receipt image (sent to the customer's chat with the bot, then reviewed as in the bot), and has the free trial, invites and support ([17-mini-app.md](17-mini-app.md)).
 **Support:** new ticket (category, text, optional photo) -> status list -> reply thread -> close.
 Built (2026-10-10): one open conversation per customer, numbered; text, photos and PDFs; staff replies arrive in the
 chat with [Reply] and [Close]; a Telegram reply to them continues the ticket; past tickets can be read.
@@ -313,8 +322,8 @@ With the setting off nothing shows: no line, no button, and an old menu's button
 command: the old ones still work, and each usage text ends with "open /admin and use the buttons".
 
 **Menu:** payments to review (count) | today and find a user | plans and discounts | notifications and broadcast |
-settings and servers | not on the panel (N), while there are any | owner only: payment methods and staff | dashboard
-link | home.
+settings and servers | undelivered orders (N) and not on the panel (N), each while there are any | owner only: payment
+methods and staff | dashboard link | home.
 - **Payments to review:** a list, oldest first, eight to a page: each payment is a button (who paid, how much, when; a
   warning sign when the bank reference was seen before) that opens its card with the receipt or TXID and Approve / Reject.
   Every owner and admin sees the same list and the same alerts; a payment one of them decides leaves everyone's list, and
@@ -358,6 +367,38 @@ link | home.
   or forged one does nothing but show the list ("That button is out of date", or "no longer on the list"); a customer,
   a reseller or support tapping one gets "This is for admins only" and nothing changes. The maintenance tables include
   these verbs (a customer's tap during maintenance gets the maintenance popup).
+- **Undelivered orders** (owner and admin, `payments.review` on the dashboard; built 2026-11-05): paid orders whose
+  service could not be made or applied yet because a server did not answer (status `provision_failed`). Core tries each
+  again on its own with growing waits, at least every 30 minutes; the admin menu shows **📦 Undelivered orders (N)** while
+  N > 0 (`AdminStats.provision_failed_orders`, the count on the admin screen's "Failed provisioning" line). The list is
+  five to a page, the longest waiting first: the plan in the staff member's language (and "renewal" or "extra traffic"
+  when it is not a new service), the amount, the buyer (@username, else the Telegram id), the reseller behind it ("👤
+  reseller @x" when a reseller bought it for a customer, with the name they gave the service; "@buyer · via reseller @x"
+  when a reseller brought the buyer and is paid a commission), how long it has waited, the attempts, and core's last
+  error cut to 120 characters. Each order has 🔁 **Retry** and 💸 **Refund**; under the list **Retry all**, paging and
+  Back. Retry makes the order due now and the worker tries it at once: the popup says "Tried again now", or "This order is
+  not waiting any more" (delivered, refunded or being tried right now), and the list is shown again in place. Retry all
+  says how many it tried. Refund asks first with the order's summary and what it does (the money goes back to the buyer's
+  wallet, the order is cancelled, a reseller's commission on it is taken back, the buyer is told); ✅ **Refund** (green)
+  or Back. The outcome is written above the list: the amount refunded and the commission taken back, or "not waiting any
+  more: nothing was done". The audit log keeps `order.retry`, `order.retry_all` and `order.refund` as the dashboard's,
+  with the fixed reason "Refunded from the bot (undelivered order)" in the staff member's language and no note to the
+  buyer. gRPC `AdminListUndelivered`, `AdminRetryUndelivered` (one order, or `""` for all; the count) and
+  `AdminRefundUndelivered` (the outcome `done` or `gone`, the amount and the commission taken), each checking the role
+  again. Callbacks (within 64 bytes, every order id checked as a UUID before core is asked): `adm:ud:<page>` (a page in
+  place; `adm:ud` is the first), `adm:udr:<page>:<id>` (retry one), `adm:uda:<page>` (retry all),
+  `adm:udf:<page>:<id>` (ask to refund), `adm:udy:<page>:<id>` (Refund). A stale or forged one does nothing but show the
+  list ("That button is out of date"); a customer, a reseller or support gets "This is for admins only". The maintenance
+  tables include these verbs.
+  What the others are told: the buyer gets the usual refund message ("An order was refunded: X was added to your wallet")
+  and, when staff wrote one on the dashboard, a line "📝 Note from the store: …" under it. A customer who had been told
+  "Preparing your service is taking longer than usual" (`sub.delayed`, sent at the third failed attempt) gets the usual
+  delivery, renewal or traffic message when it finally works, with "🙏 Sorry this took longer than usual: one of our
+  servers was not answering." at the end (core's `Late`; never for a service of a bulk purchase, whose one message says
+  how its services are). The reseller whose commission on a refunded undelivered order was taken back is told the amount
+  and the balance after (`wallet.commission_reversed`, never naming the customer), and the statement names the entry
+  "Commission taken back (refund)" (ledger kind `commission_reversal`). Nothing is taken below zero: what the wallet
+  could not cover stays in the audit log.
 
 **Input steps** (plan, top-up, trial, discount, setting, server weight, staff, broadcast) share one engine: each step
 says "Step n of m", what is wanted, the allowed range and an example; a refused answer is explained above the same
@@ -392,7 +433,8 @@ included, a one-time dashboard login link.
     Telegram reports for someone with no account.
   - **What still works is this list and nothing else:** staff (owner, admin, support) and the owners the server names,
     also before they have an account; `/paysupport`, which Telegram requires of a bot that sells with Stars; a payment
-    already under way, that is its receipt, bank reference or TXID while the bot waits for one (a tap on the bottom
+    already under way, that is its receipt, bank reference or TXID while the bot waits for one, or a picture sent after
+    that step closed and the button that names its payment (a tap on the bottom
     menu, a command or a button in the middle of it is held), its Check button, and a Stars invoice already sent (its
     pre-checkout and its payment are always answered); and a newcomer's `/start` and language choice, which make
     the account and keep an invite code (they are then shown the welcome and the maintenance text, without the bottom
@@ -471,7 +513,7 @@ included, a one-time dashboard login link.
   services. Buy or renew a license to sell more." (`alert.license_limit`).
 - **Product news** (`announce.enabled`, **off by default**; `internal/bot/handler/announce.go`). While it is on, the bot asks
   every customer **once** "Do you want news of new products?" with *✅ Yes, tell me* and *No, thanks* (`an:y`, `an:n`): a
-  newcomer right after their first /start (the language, the welcome and the home screen, then the question), a customer
+  newcomer right after their first /start (the language, the welcome with the bottom menu, then the question), a customer
   who was there before at their next interaction, after that update is served. Never as a message to everyone, never
   while a gate holds them (maintenance, a required chat) or while they are in the middle of something (a payment's proof,
   a ticket, a number they are typing: they are asked at a later update). Core records the question
@@ -502,7 +544,9 @@ payments in the dashboard. Customers see none of this.
 - **Home:** a "Reseller panel" button instead of "Invite friends" (their link is in the panel).
 - **Panel:** tier, discount and commission %; per currency the balance (a negative balance is shown as "debt X",
   never with a minus), credit limit and what they can spend (balance + limit); customers who joined through their
-  link and commission earned. Buttons: Buy for a customer, Customer services, Customers, Statement, My link, Home.
+  link and commission earned. Buttons: Buy for a customer, Customer services, Customers, Statement, My link,
+  **💳 Top up wallet** (the wallet's top-up: card to card with a receipt the owner approves, or a gateway; a top-up
+  raises the balance, which lowers the debt), Home.
 - **Buy for a customer:** the plans at their prices, then "type a name for this service, like Ali's phone, or tap
   Skip" (one line, at most 64 characters), then the regular checkout. Their regular Buy, renewals and traffic
   packages show their prices too.
@@ -594,8 +638,9 @@ Customer languages; not in the bot's admin settings), codes with the store's def
   `internal/bot/i18n/locales/<lang>.json` (the tests check every key, placeholder, tag and plural form).
 
 ## Notifications
-Expiry (3d/1d/expired), traffic (80%/100%), payment result, ticket reply, wallet change (resellers: commission and
-recorded payments), panel/server alerts (admin only).
+Expiry (3d/1d/expired), traffic (80%/100%), payment result, ticket reply, wallet change (resellers: commission, a
+commission taken back with the refund of an undelivered order, and recorded payments), a late delivery's apology,
+panel/server alerts (admin only).
 All user-configurable except billing-critical ones.
 
 ## Copy and states to write (see 08-brand)

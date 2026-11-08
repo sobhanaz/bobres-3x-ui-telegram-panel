@@ -270,7 +270,8 @@ func TestCommandsLeaveAConversationInProgress(t *testing.T) {
 	code.lastHas("Main menu")
 
 	// A receipt: the command closes the payment's question, and a picture after
-	// it is not a receipt.
+	// it is not taken for a receipt by itself: the payment waiting for one is
+	// offered (latereceipt.go), and nothing goes for review until it is tapped.
 	pay := w.customer(7300000053, "receipting")
 	pay.press("buy")
 	pay.press("plan:")
@@ -278,7 +279,7 @@ func TestCommandsLeaveAConversationInProgress(t *testing.T) {
 	pay.text("/renew")
 	pay.lastHas(cat.T("en", "renew.none"))
 	pay.photo("receipt-after-command", "REF-1")
-	pay.lastHas("Main menu")
+	pay.lastHas("Which payment is this receipt for")
 	if owner.count("New payment to review") != 0 {
 		t.Fatal("a picture sent after a command was taken for a receipt")
 	}

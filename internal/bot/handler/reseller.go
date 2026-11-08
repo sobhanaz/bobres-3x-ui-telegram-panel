@@ -182,6 +182,7 @@ func (h *Handler) showResellerPanel(r *req) {
 		Row(r.button("btn.rs_buy", "rs:buy"), r.button("btn.rs_services", "rs:subs:1")).
 		Row(r.button("btn.rs_customers", "rs:cu:1"), r.button("btn.rs_statement", "rs:st:1")).
 		Row(r.button("btn.rs_link", "rs:link"), r.button("btn.rs_prefix", "rs:pfx")).
+		Row(r.button("btn.rs_topup", "wtop")). // pay what they owe, or add to their balance, by card or a gateway
 		Row(r.button("btn.home", "home"))
 	text := r.t("rs.panel", "tier", esc(info.GetTierName()),
 		"discount", i18n.Number(r.lang, int64(info.GetDiscountPercent())),

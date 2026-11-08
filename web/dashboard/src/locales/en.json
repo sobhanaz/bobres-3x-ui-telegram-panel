@@ -331,7 +331,35 @@
     "cashback": "Cashback",
     "cashback_line": "{amount} · {percent} of {base}",
     "cashback_capped": "cut to the most one order earns",
-    "cashback_reversed": "{amount} was taken back with the refund"
+    "cashback_reversed": "{amount} was taken back with the refund",
+    "seller": "Seller",
+    "seller_store": "The store",
+    "seller_kind": {
+      "reseller": "Reseller buying for a customer",
+      "referrer": "Reseller who brought the buyer"
+    },
+    "server": "Server",
+    "server_plan": "The plan's servers",
+    "server_chosen": "chosen by staff",
+    "move": "Deliver on another server",
+    "move_intro": "The service is made on the server you pick instead of the plan's servers, and the order is tried again at once. The plan and the price stay the same: the buyer pays nothing more.",
+    "move_server": "Server",
+    "move_none": "No server takes new services right now: switch one on in Servers.",
+    "move_servers_error": "The servers could not be listed right now. Try again in a minute.",
+    "move_state_full": "Full",
+    "move_warn": {
+      "down": "This server did not answer its last check: the delivery may fail again.",
+      "unknown": "This server has not been checked yet.",
+      "full": "This server is at its client limit: the service cannot be made there until you raise the limit or a place is freed."
+    },
+    "move_confirm": "Deliver there",
+    "move_done": "The order is being delivered on {server}",
+    "move_leftover": "The old server's panel did not answer, so a half-made account may be left there. Delete it there by hand.",
+    "refund_note": "Note to the buyer (optional)",
+    "refund_note_hint": "Sent to the buyer in the bot with the message about the refund.",
+    "refund_commission": "The order was never delivered: a commission a reseller earned on it is taken back from their wallet.",
+    "refund_commission_named": "The order was never delivered: the commission {who} earned on it is taken back from their wallet.",
+    "refund_commission_taken": "Taken back from the reseller: {amount}."
   },
   "account": {
     "title": "My account",
@@ -685,6 +713,23 @@
       "expired": "Expired"
     }
   },
+  "undelivered": {
+    "tab": "Undelivered",
+    "intro": "Paid orders whose service could not be made yet, because a server did not answer. The longest waiting come first. Each one is tried again on its own at least every 30 minutes.",
+    "empty": "Every paid order is delivered.",
+    "buyer": "Buyer",
+    "paid": "Paid",
+    "waiting": "Waiting since",
+    "tries": "Tries",
+    "last_error": "Last error",
+    "next_now": "next try now",
+    "actions": "Actions",
+    "refresh": "Refresh",
+    "retry_all": "Retry all now",
+    "retry_all_confirm": "The {n} undelivered order is tried again now. If its server still does not answer, it waits for its next try. | All {n} undelivered orders are tried again now. Those whose server still does not answer wait for their next try.",
+    "retry_all_done": "{n} order is being tried again | {n} orders are being tried again",
+    "retry_all_none": "No order was waiting: there was nothing to try again."
+  },
   "review": {
     "status": {
       "approved": "Approved",
@@ -704,6 +749,7 @@
       "referral": "Invitation reward",
       "trial_grant": "Free trial",
       "commission": "Reseller commission",
+      "commission_reversal": "Reseller commission taken back",
       "settlement": "Reseller payment",
       "gift_code": "Gift code",
       "license_purchase": "BOBRES license",
@@ -2358,7 +2404,10 @@
         "retry": "Order retried",
         "refund": "Order refunded",
         "bulk": "Bulk purchase made",
-        "cashback_reversal": "Cashback taken back"
+        "cashback_reversal": "Cashback taken back",
+        "move": "Order moved to another server",
+        "retry_all": "Undelivered orders retried",
+        "commission_reversal": "Reseller commission taken back"
       },
       "dashboard": {
         "login": "Logged in",

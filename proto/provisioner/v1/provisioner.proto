@@ -173,6 +173,21 @@ message DeleteClientRequest {
   string subscription_id = 1;
 }
 
+// ReleaseClientRequest names the subscription whose reservation is forgotten.
+message ReleaseClientRequest {
+  string subscription_id = 1;
+}
+
+message ReleaseClientResponse {
+  // released: a reservation was forgotten; false when there was none (nothing to do).
+  bool released = 1;
+  // leftover: the reservation's panel could not be asked (it does not answer, or the server was removed), and a
+  // create that timed out may have made the client there; it is not removed, and nothing points to it any more.
+  bool leftover = 2;
+  // server_id is the server the reservation was on ("" when there was none).
+  string server_id = 3;
+}
+
 // CheckClientNameRequest asks whether a client name is free for a new client
 // or a rename.
 message CheckClientNameRequest {
@@ -337,6 +352,12 @@ service ProvisionerService {
   rpc SetClientLimits(SetClientLimitsRequest) returns (Client);
   rpc SetClientEnabled(SetClientEnabledRequest) returns (Client);
   rpc DeleteClient(DeleteClientRequest) returns (google.protobuf.Empty);
+  // ReleaseClient forgets the reservation of a client that was never made on its panel, so that the next
+  // CreateClient picks its server again: staff move an undelivered order whose server does not answer to another
+  // one (core's MoveOrder). The client is deleted from the old panel when that panel answers (a create that timed
+  // out may have made it there); when it cannot be, the answer says so (leftover). A client that was made is never
+  // released: FAILED_PRECONDITION.
+  rpc ReleaseClient(ReleaseClientRequest) returns (ReleaseClientResponse);
   rpc RecreateClient(RecreateClientRequest) returns (Client);
   rpc ResetTraffic(ResetTrafficRequest) returns (Client);
   rpc GetUsage(GetUsageRequest) returns (Usage);

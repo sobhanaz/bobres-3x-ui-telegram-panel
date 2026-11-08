@@ -18,8 +18,8 @@ answers 404.
    that is `localhost`, private, link-local or a `.local` name, Telegram could not open the page, so the bot adds no
    button (the app itself is still served).
 2. Core tells the bot that address with its settings, and the bot (which reloads them every minute and at once on a
-   change in the dashboard) sets the menu button, titled "Store" / "فروشگاه", puts a Store button first on its home
-   screen and a Store item first in its bottom menu. The menu button is set for all chats, once (and again when the
+   change in the dashboard) sets the menu button, titled "Store" / "فروشگاه", puts a Store button on its home
+   screen and a Store item in its bottom menu, each right after Buy and Free trial. The menu button is set for all chats, once (and again when the
    address or the title changes), replacing a button set by hand in @BotFather before; Telegram's default button is
    given back when the app is switched off or the address is lost, but only if the bot had set the button. While it
    opens the app, Telegram's default button (the list of the bot's commands) is not shown there; the commands still

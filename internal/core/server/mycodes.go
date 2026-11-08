@@ -51,3 +51,32 @@ func (s *Server) ListMyCodes(ctx context.Context, req *corev1.ListMyCodesRequest
 	}
 	return out, nil
 }
+
+const (
+	defaultPendingPayments = 5
+	maxPendingPayments     = 10
+)
+
+// ListMyPendingPayments lists the customer's own manual payments that still wait for their proof, newest first
+// (domain.PendingManualPayments, as the Mini App's list of them).
+func (s *Server) ListMyPendingPayments(ctx context.Context, req *corev1.ListMyPendingPaymentsRequest) (*corev1.ListMyPendingPaymentsResponse, error) {
+	if err := s.needPayments(); err != nil {
+		return nil, err
+	}
+	limit := int(req.GetLimit())
+	if limit <= 0 || limit > maxPendingPayments {
+		limit = defaultPendingPayments
+	}
+	got, err := s.dom.PendingManualPayments(ctx, s.pay, req.GetUserId(), limit)
+	if err != nil {
+		return nil, fail(err)
+	}
+	out := &corev1.ListMyPendingPaymentsResponse{Payments: make([]*corev1.MyPendingPayment, 0, len(got))}
+	for _, p := range got {
+		out.Payments = append(out.Payments, &corev1.MyPendingPayment{
+			IntentId: p.IntentID, Provider: p.Provider, Amount: &commonv1.Money{Amount: p.Amount, Currency: p.Currency},
+			OrderId: p.OrderID, CreatedAt: p.CreatedAt.Unix(),
+		})
+	}
+	return out, nil
+}

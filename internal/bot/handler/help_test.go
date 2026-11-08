@@ -173,8 +173,8 @@ func TestHelpButtonsShowOnlyWithContent(t *testing.T) {
 		t.Fatalf("a FAQ button with no question: %v", callbacks(u.shown()))
 	}
 
-	// A tutorial: the home screen and the bottom menu get the button, as one row
-	// of its own after Support.
+	// A tutorial: the home screen and the bottom menu get the button; on the
+	// bottom menu it comes right after Support.
 	tut := w.addHelp(helpT("Install the app", "Steps"))
 	if !hasCallback(home(), "tut") {
 		t.Fatalf("no Tutorials button on the home screen: %v", callbacks(u.shown()))
@@ -184,19 +184,15 @@ func TestHelpButtonsShowOnlyWithContent(t *testing.T) {
 	if !slices.Contains(menuLabels(menu), label) {
 		t.Fatalf("no Tutorials item on the bottom menu: %v", menuLabels(menu))
 	}
-	var rows [][]string
+	var items []tg.MenuButton
 	for _, row := range menu.Keyboard {
-		var r []string
-		for _, b := range row {
-			r = append(r, b.Text)
-		}
-		rows = append(rows, r)
+		items = append(items, row...)
 	}
-	at := slices.IndexFunc(rows, func(r []string) bool { return slices.Contains(r, label) })
-	if len(rows[at]) != 1 || !slices.Contains(rows[at-1], w.h.cat.T("en", "btn.support")) {
-		t.Fatalf("the Tutorials item is a row of its own after Support: %v", rows)
+	at := slices.IndexFunc(items, func(b tg.MenuButton) bool { return b.Text == label })
+	if at < 1 || items[at-1].Text != w.h.cat.T("en", "btn.support") {
+		t.Fatalf("the Tutorials item comes right after Support: %v", menu.Keyboard)
 	}
-	if style := menu.Keyboard[at][0].Style; style != tg.StylePrimary {
+	if style := items[at].Style; style != tg.StylePrimary {
 		t.Fatalf("the Tutorials item is %q, want blue", style)
 	}
 	if style := styleOf(t, u.shown(), "tut"); style != tg.StylePrimary {
@@ -280,8 +276,7 @@ func TestHelpHomeAndBottomMenuAgree(t *testing.T) {
 		t.Helper()
 		for _, c := range people {
 			c.p.text("/menu")
-			// Bulk purchase is the one home button that has no bottom-menu item on purpose (docs/03-bot-ux.md).
-			home := slices.DeleteFunc(actionsOf(c.p.shown()), func(a string) bool { return a == "bk" })
+			home := actionsOf(c.p.shown())
 			menu := c.p.menuActionsOf(c.p.lastMenu())
 			if !slices.Equal(home, menu) {
 				t.Errorf("%s, %s:\n home %v\n menu %v", c.name, state, home, menu)

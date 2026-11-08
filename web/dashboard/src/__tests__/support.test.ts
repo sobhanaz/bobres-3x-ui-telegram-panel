@@ -702,7 +702,8 @@ describe('support pages', () => {
     }
     await boot('/admin/', supportPerms, (url) => (url === '/api/v1/overview' ? json(200, overview) : undefined))
     const card = await vi.waitFor(() => {
-      const a = document.querySelector('a.card-link') as HTMLAnchorElement | null
+      // the tickets card (the Failed deliveries card is a link too, for staff who may read the payments)
+      const a = document.querySelector('a.tickets-card') as HTMLAnchorElement | null
       expect(a).not.toBeNull()
       return a!
     })

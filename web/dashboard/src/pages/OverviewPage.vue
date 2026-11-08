@@ -182,7 +182,7 @@ const statusSeverity = (s: string) =>
         <Skeleton v-else height="3rem" />
       </template>
     </Card>
-    <RouterLink v-if="tickets" :to="{ name: 'support', query: { status: 'open' } }" class="card-link">
+    <RouterLink v-if="tickets" :to="{ name: 'support', query: { status: 'open' } }" class="card-link tickets-card">
       <Card class="stat">
         <template #subtitle>{{ t('overview.tickets') }}</template>
         <template #content>
@@ -200,16 +200,18 @@ const statusSeverity = (s: string) =>
         </template>
       </Card>
     </RouterLink>
-    <Card class="stat">
-      <template #subtitle>{{ t('overview.failed') }}</template>
-      <template #content>
-        <template v-if="data">
-          <div class="big" :class="{ bad: data.orders.provision_failed > 0 }">{{ num(data.orders.provision_failed, lang) }}</div>
-          <div class="app-muted">{{ t('overview.failed_hint') }}</div>
+    <component :is="linkTo('payments.read', 'payments', { tab: 'undelivered' }).is" v-bind="linkTo('payments.read', 'payments', { tab: 'undelivered' }).attrs" class="card-wrap failed-card">
+      <Card class="stat">
+        <template #subtitle>{{ t('overview.failed') }}</template>
+        <template #content>
+          <template v-if="data">
+            <div class="big" :class="{ bad: data.orders.provision_failed > 0 }">{{ num(data.orders.provision_failed, lang) }}</div>
+            <div class="app-muted">{{ t('overview.failed_hint') }}</div>
+          </template>
+          <Skeleton v-else height="3rem" />
         </template>
-        <Skeleton v-else height="3rem" />
-      </template>
-    </Card>
+      </Card>
+    </component>
     <component :is="linkTo('servers.write', 'servers').is" v-if="servers" v-bind="linkTo('servers.write', 'servers').attrs" class="card-wrap servers-card">
       <Card class="stat">
         <template #subtitle>{{ t('overview.servers') }}</template>
@@ -343,6 +345,12 @@ const statusSeverity = (s: string) =>
 }
 .card-link:hover .stat {
   box-shadow: 0 0 0 1px var(--p-primary-color);
+}
+.card-link:focus-visible {
+  outline: none;
+}
+.card-link:focus-visible .stat {
+  box-shadow: 0 0 0 2px var(--p-primary-color);
 }
 .card-link .stat,
 .card-wrap .stat {
