@@ -98,24 +98,27 @@ func findButton(m *msg, label string) tg.Button {
 // The Pay button of a total of three services of the store's plan.
 const payThree = "👛 Pay 450,000 Toman from the wallet"
 
-// The home menu has a Bulk purchase button under Buy (green, its own row), for a
-// customer, a reseller and the staff alike, until the owner switches bulk
-// purchase off; the bottom menu is the one it was.
+// The home menu has a Bulk purchase button after Buy and Free trial (green, its
+// own row), for a customer, a reseller and the staff alike, until the owner
+// switches bulk purchase off; the bottom menu has it too, first after them.
 func TestHomeHasABulkButtonUnderBuy(t *testing.T) {
 	w := newWorld(t)
 	owner := setupStore(t, w)
 	u := w.customer(2001, "home")
+	u.text("/menu") // the welcome comes without the home screen
 	rows := rowsOf(u.shown())
-	if len(rows) < 3 || len(rows[0]) != 2 || rows[0][0].CallbackData != "buy" || rows[0][0].Style != "success" {
+	if len(rows) < 4 || len(rows[0]) != 1 || rows[0][0].CallbackData != "buy" || rows[0][0].Style != "success" ||
+		len(rows[1]) != 1 || rows[1][0].CallbackData != "trial" {
 		t.Fatalf("the home menu: %v", u.shown().labels())
 	}
-	if len(rows[1]) != 1 || rows[1][0].Text != "🧺 Bulk purchase" || rows[1][0].CallbackData != "bk" || rows[1][0].Style != tg.StyleSuccess {
-		t.Fatalf("the second row: %+v", rows[1])
+	if len(rows[2]) != 1 || rows[2][0].Text != "🧺 Bulk purchase" || rows[2][0].CallbackData != "bk" || rows[2][0].Style != tg.StyleSuccess {
+		t.Fatalf("the third row: %+v", rows[2])
 	}
 	fa := w.person(2002, "")
 	fa.text("/start")
 	fa.press("lang:fa")
-	if row := rowsOf(fa.shown())[1]; len(row) != 1 || row[0].Text != "🧺 خرید عمده" || row[0].CallbackData != "bk" {
+	fa.text("/menu")
+	if row := rowsOf(fa.shown())[2]; len(row) != 1 || row[0].Text != "🧺 خرید عمده" || row[0].CallbackData != "bk" {
 		t.Fatalf("the Persian home menu: %+v", row)
 	}
 	// A reseller and an owner see it too.
@@ -128,19 +131,12 @@ func TestHomeHasABulkButtonUnderBuy(t *testing.T) {
 			t.Errorf("%s has no Bulk purchase button: %v", name, p.shown().labels())
 		}
 	}
-	// The bottom menu did not change: no item of its own for it.
-	for _, m := range w.tg.all(2001) {
-		if m.menu == nil {
-			continue
-		}
-		for _, row := range m.menu.Keyboard {
-			for _, b := range row {
-				if strings.Contains(b.Text, "Bulk") {
-					t.Errorf("the bottom menu has %q", b.Text)
-				}
-			}
-		}
+	// The bottom menu has it right after Buy and Free trial, and a tap opens it.
+	if row := u.lastMenu().Keyboard[2]; row[0].Text != "🧺 Bulk purchase" || row[0].Style != tg.StyleSuccess {
+		t.Fatalf("the bottom menu's third row: %+v", row)
 	}
+	u.tapMenu("en", "btn.bulk")
+	u.lastHas("Bulk purchase")
 
 	// Switched off, it is gone from every home menu, and a tap on an old one is told so.
 	owner.text("/set bulk.enabled false")
@@ -148,6 +144,9 @@ func TestHomeHasABulkButtonUnderBuy(t *testing.T) {
 	u.text("/menu")
 	if hasCallback(u.shown(), "bk") {
 		t.Fatalf("a switched off store shows the button: %v", u.shown().labels())
+	}
+	if menu := u.lastMenu(); strings.Contains(fmt.Sprint(menu.Keyboard), "Bulk") {
+		t.Fatalf("a switched off store has it in the bottom menu: %+v", menu.Keyboard)
 	}
 	u.tap("bk")
 	u.toast("Bulk purchase is not available right now.")

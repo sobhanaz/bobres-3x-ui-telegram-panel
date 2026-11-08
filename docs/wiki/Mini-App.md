@@ -31,8 +31,8 @@ On the vendor's own store only (see [Digital Accounts](Digital-Accounts)), a **D
 
 You do not set anything up in @BotFather. When the store has a public HTTPS address, the bot adds:
 
-- a **Store** button first on its home screen,
-- a **Store** item first in its bottom menu,
+- a **Store** button on its home screen, right after Buy and Free trial,
+- a **Store** item in its bottom menu, right after Buy and Free trial,
 - Telegram's own **menu button** next to the message box.
 
 The app lives at `https://shop.example.com/app/`. With plain http, or an address such as `localhost`, a private address or a `.local` name, Telegram cannot open it, so the bot adds no button.

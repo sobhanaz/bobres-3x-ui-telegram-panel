@@ -8,6 +8,11 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+### Changed
+- **`/start` answers with the welcome and the bottom menu only.** The home screen no longer comes under the welcome, so a long welcome stays in view instead of scrolling up behind the same buttons. A newcomer's language choice does the same. `/menu`, the Home buttons and the answers that lead home still show the home screen (and /start does when the bottom menu could not be sent).
+- **Buy and Free trial come first**, each on a row of its own, on the home screen and in the bottom menu; the other buttons follow in their order. In the bottom menu: Store (while the Mini App is on), Digital accounts and BOBRES licenses side by side, then the rest two to a row.
+- **The bottom menu has Bulk purchase** (while it is on), so it stays one tap away now that the welcome comes without the home screen.
+
 ## [0.22.1] — 2026-11-02
 
 **The Config names card on the Settings page, and a faster name lookup.** One additive migration (provisioner 00009, an index).

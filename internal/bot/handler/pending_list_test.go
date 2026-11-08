@@ -60,7 +60,7 @@ func TestEveryOwnerSeesThePaymentsAndTheFirstDecisionCounts(t *testing.T) {
 	partner := w.person(partnerID, "partner")
 	partner.text("/start")
 	partner.press("lang:en")
-	partner.sees("Main menu")
+	partner.sees("Welcome to <b>TestVPN</b>")
 
 	cardPayment(t, w, 301, "first")
 	cardPayment(t, w, 302, "second")

@@ -627,7 +627,10 @@ func TestMaintenanceDoesNotHoldStaff(t *testing.T) {
 	late.lastHas("Choose your language")
 	late.text("/start")
 	late.press("lang:en")
-	late.lastHas("Main menu")
+	late.lastHas("Welcome to")
+	if len(late.menus()) != 1 {
+		t.Errorf("the configured owner got %d bottom menus with the welcome", len(late.menus()))
+	}
 	late.press("buy")
 	late.lastHas("Choose a plan")
 	if late.count(maintenance) != 0 {
@@ -711,7 +714,7 @@ func TestMaintenanceAllowlist(t *testing.T) {
 	}
 	zarinpal.press("home")
 	zarinpal.toast(maintenance)
-	idle.press("buy")
+	idle.tap("buy") // a home screen's button
 	idle.toast(maintenance)
 
 	// The staff review goes on, and its result reaches the customer:
