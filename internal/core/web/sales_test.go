@@ -134,6 +134,9 @@ func (p *fakeProv) SetEnabled(_ context.Context, id string, on bool) error {
 }
 func (p *fakeProv) ResetTraffic(_ context.Context, id string) error { return p.record("reset:" + id) }
 func (p *fakeProv) Delete(_ context.Context, id string) error       { return p.record("delete:" + id) }
+func (p *fakeProv) ReleaseClient(_ context.Context, id string) (domain.Release, error) {
+	return domain.Release{Released: true}, p.record("release:" + id)
+}
 func (p *fakeProv) RecreateClient(_ context.Context, id string, _, _ int64) error {
 	if err := p.record("recreate:" + id); err != nil {
 		return err
@@ -411,7 +414,7 @@ func TestOrdersRetryAndRefund(t *testing.T) {
 		Status: "succeeded", Amount: 300000, Currency: "IRT", CreatedAt: time.Now()}}
 
 	code, out := b.do(http.MethodGet, "/api/v1/orders/"+failed.ID, nil)
-	if code != 200 || asJSON(out["can"]) != `{"refund":true,"retry":true}` || len(out["payments"].([]any)) != 1 {
+	if code != 200 || asJSON(out["can"]) != `{"move":true,"refund":true,"retry":true}` || len(out["payments"].([]any)) != 1 {
 		t.Fatalf("detail: %d %v", code, out)
 	}
 	if code, _ := b.do(http.MethodPost, "/api/v1/orders/"+failed.ID+"/retry", nil); code != 200 {

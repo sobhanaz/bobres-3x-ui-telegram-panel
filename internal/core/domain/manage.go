@@ -284,20 +284,37 @@ func (s *Service) RetryOrder(ctx context.Context, actor *store.User, orderID str
 
 // RefundResult is a refund's outcome. PanelCleanup holds why a half-made
 // panel client of a cancelled order could not be removed (the refund stands).
+// CommissionTaken is the reseller's commission on an undelivered order that
+// was taken back with it (0: none).
 type RefundResult struct {
-	Order        *store.Order
-	Wallet       *store.Wallet
-	PanelCleanup string
+	Order           *store.Order
+	Wallet          *store.Wallet
+	PanelCleanup    string
+	CommissionTaken int64
 }
 
-// RefundOrder credits what the customer paid for an order to their wallet,
-// once (ledger key refund:<order id>). A paid order not delivered yet is
-// cancelled too: its deliveries stop and a half-made panel client is
-// removed. A delivered order keeps its service (delete it separately).
+// maxRefundNote is the most characters of a note staff send the buyer with a refund.
+const maxRefundNote = 500
+
+// RefundOrder is RefundOrderNote without a note for the buyer.
 func (s *Service) RefundOrder(ctx context.Context, actor *store.User, prov Provisioner, orderID, reason string) (*RefundResult, error) {
+	return s.RefundOrderNote(ctx, actor, prov, orderID, reason, "")
+}
+
+// RefundOrderNote credits what the customer paid for an order to their
+// wallet, once (ledger key refund:<order id>). A paid order not delivered yet
+// is cancelled too: its deliveries stop, a half-made panel client is removed,
+// and the commission a reseller was paid on it is taken back (the sale did not
+// happen). A delivered order keeps its service (delete it separately). note,
+// when not empty, goes to the buyer with the message about the refund.
+func (s *Service) RefundOrderNote(ctx context.Context, actor *store.User, prov Provisioner, orderID, reason, note string) (*RefundResult, error) {
 	reason, err := needReason(reason)
 	if err != nil {
 		return nil, err
+	}
+	note = strings.TrimSpace(note)
+	if len([]rune(note)) > maxRefundNote {
+		return nil, invalid("the note is too long (at most %d characters)", maxRefundNote)
 	}
 	res := &RefundResult{}
 	var cleanup string
@@ -332,7 +349,8 @@ func (s *Service) RefundOrder(ctx context.Context, actor *store.User, prov Provi
 		if err := s.st.MarkOrderRefunded(ctx, tx, o.ID, o.Amount); err != nil {
 			return err
 		}
-		if o.Status == "paid" || o.Status == "provision_failed" {
+		undelivered := o.Status == "paid" || o.Status == "provision_failed"
+		if undelivered {
 			if ok, err := s.st.TransitionOrder(ctx, tx, o.ID, []string{"paid", "provision_failed"}, "cancelled"); err != nil || !ok {
 				return errors.Join(err, stateErr("the order changed meanwhile"))
 			}
@@ -351,9 +369,17 @@ func (s *Service) RefundOrder(ctx context.Context, actor *store.User, prov Provi
 				}
 			}
 		}
-		if err := s.audit(ctx, tx, actor, "order.refund", "order", o.ID,
-			map[string]any{"amount": o.Amount, "currency": o.Currency, "status": o.Status}, reason); err != nil {
+		detail := map[string]any{"amount": o.Amount, "currency": o.Currency, "status": o.Status}
+		if note != "" {
+			detail["note"] = note
+		}
+		if err := s.audit(ctx, tx, actor, "order.refund", "order", o.ID, detail, reason); err != nil {
 			return err
+		}
+		if undelivered { // the reseller's commission on a sale that never happened goes back too
+			if res.CommissionTaken, err = s.reverseCommission(ctx, tx, actor, o); err != nil {
+				return err
+			}
 		}
 		// The cashback the order earned goes back with it, from the wallet the refund has just filled.
 		cashbackTaken, after, err := s.reverseCashback(ctx, tx, actor, o)
@@ -369,6 +395,7 @@ func (s *Service) RefundOrder(ctx context.Context, actor *store.User, prov Provi
 		return s.publish(ctx, tx, events.WalletCredited, events.WalletCreditedEvent{
 			UserID: o.UserID, TelegramID: user.TelegramID, OrderID: o.ID,
 			Amount: o.Amount, Currency: o.Currency, Balance: w.Balance, Reason: events.CreditRefund, CashbackTaken: cashbackTaken,
+			Note: note,
 		})
 	})
 	if err != nil {

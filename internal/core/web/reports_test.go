@@ -743,24 +743,24 @@ func TestAtMostTwoExportsRunAtOnce(t *testing.T) {
 	}
 }
 
-// The days of America/Havana's 1 Nov 2026 (00:xx twice) cannot make a report
+// The days of Atlantic/Azores's 25 Oct 2026 (00:xx twice) cannot make a report
 // answer 500: every number lands in a bucket the range holds.
 func TestReportsAnswerOnAnAmbiguousMidnight(t *testing.T) {
 	f, b, _ := reportFixture(t)
 	r := newReportSeed(t, f)
-	u := r.user(8190, "havana")
+	u := r.user(8190, "azores")
 	plan := r.plan("پایه", "Basic", "IRT")
-	r.paid(u, plan, "IRT", 1000, "2026-11-01T04:30:00Z", "wallet") // 1 Nov 00:30, the first time
-	r.paid(u, plan, "IRT", 2000, "2026-11-01T05:30:00Z", "wallet") // 1 Nov 00:30, the second time
-	for _, q := range []string{"?from=2026-10-31&to=2026-10-31", "?from=2026-11-01&to=2026-11-01", "?from=2026-10-30&to=2026-11-02&group=week"} {
-		code, out := b.do(http.MethodGet, "/api/v1/reports/summary"+q+"&tz=America/Havana", nil)
+	r.paid(u, plan, "IRT", 1000, "2026-10-25T00:30:00Z", "wallet") // 25 Oct 00:30, the first time
+	r.paid(u, plan, "IRT", 2000, "2026-10-25T01:30:00Z", "wallet") // 25 Oct 00:30, the second time
+	for _, q := range []string{"?from=2026-10-24&to=2026-10-24", "?from=2026-10-25&to=2026-10-25", "?from=2026-10-23&to=2026-10-26&group=week"} {
+		code, out := b.do(http.MethodGet, "/api/v1/reports/summary"+q+"&tz=Atlantic/Azores", nil)
 		if code != 200 {
 			t.Fatalf("%s: %d %v", q, code, out)
 		}
-		if q == "?from=2026-11-01&to=2026-11-01" {
+		if q == "?from=2026-10-25&to=2026-10-25" {
 			irt := out["totals"].(map[string]any)["currencies"].(map[string]any)["IRT"].(map[string]any)
 			if num(irt["revenue"]) != 3000 || num(irt["orders"]) != 2 {
-				t.Errorf("1 Nov in Havana: %v", irt)
+				t.Errorf("25 Oct in the Azores: %v", irt)
 			}
 		}
 	}

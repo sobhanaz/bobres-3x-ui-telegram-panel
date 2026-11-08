@@ -54,6 +54,9 @@ const (
 	// had seen reach the store's address (DepositClaimedEvent); staff check
 	// the proof's customer really sent it before approving.
 	DepositClaimed = "payment.deposit_claimed.v1"
+	// CommissionReversed: an order of a reseller's customer was refunded before it was delivered, and the commission
+	// the reseller was paid on it was taken back (CommissionReversedEvent): the bot tells the reseller.
+	CommissionReversed = "wallet.commission_reversed.v1"
 )
 
 // Topics core consumes from the payments feed.
@@ -241,10 +244,25 @@ type WalletCreditedEvent struct {
 	Rate         int64  `json:"rate,omitempty"`
 	// CashbackTaken is, on a refund, the cashback the order had earned that was taken back with it (Balance is the balance after both).
 	CashbackTaken int64 `json:"cashback_taken,omitempty"`
+	// Note is, on a refund, what staff wrote to the buyer with it ("" when nothing).
+	Note string `json:"note,omitempty"`
 	// On a target bonus: how many services the reseller had sold that month, the month (yyyy-mm) and the tier that paid (its threshold).
 	TargetSales     int    `json:"target_sales,omitempty"`
 	TargetMonth     string `json:"target_month,omitempty"`
 	TargetThreshold int    `json:"target_threshold,omitempty"`
+}
+
+// CommissionReversedEvent: the commission a reseller was paid on an order (Credited) was taken back because the order
+// was refunded before it was delivered: Amount is what was taken, as far as the wallet held it (Balance is the
+// balance after). The order belongs to one of the reseller's customers.
+type CommissionReversedEvent struct {
+	UserID     string `json:"user_id"`
+	TelegramID int64  `json:"telegram_id"`
+	OrderID    string `json:"order_id"`
+	Credited   int64  `json:"credited"`
+	Amount     int64  `json:"amount"`
+	Currency   string `json:"currency"`
+	Balance    int64  `json:"balance"`
 }
 
 // PaymentRejectedEvent: a payment did not go through: a reviewer rejected a
@@ -283,6 +301,9 @@ type SubscriptionProvisionedEvent struct {
 	// customer is told. Both are empty for a service with the automatic name nobody chose.
 	ClientName string `json:"client_name,omitempty"`
 	NameTaken  string `json:"name_taken,omitempty"`
+	// Late is true when the customer was told the service is delayed (ProvisionFailed): its message says sorry for
+	// the wait.
+	Late bool `json:"late,omitempty"`
 }
 
 // RewardCodeIssuedEvent: the buyer of a plan that gives a reward got a discount code, bound to them, one use, for any plan. It is a percent
@@ -365,6 +386,9 @@ type SubscriptionExtendedEvent struct {
 	TrafficTotalBytes int64  `json:"traffic_total_bytes,omitempty"` // 0 = unlimited
 	TrafficUsedBytes  int64  `json:"traffic_used_bytes,omitempty"`
 	Label             string `json:"label,omitempty"` // the name a reseller gave the service
+	// Late is true when the customer was told the order is delayed (ProvisionFailed): its message says sorry for the
+	// wait.
+	Late bool `json:"late,omitempty"`
 }
 
 // Kinds of subscription.reminder.v1.

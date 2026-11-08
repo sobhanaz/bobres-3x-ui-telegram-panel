@@ -130,6 +130,8 @@ export function auditLink(e: Pick<AuditItem, 'entity' | 'entity_id' | 'after' | 
     case 'subscription':
       return uuidRe.test(id) ? { name: 'service', params: { id } } : null
     case 'order':
+      // an entry about every undelivered order at once (order.retry_all) has no id: their list
+      if (!id) return { name: 'payments', query: { tab: 'undelivered' } }
       return uuidRe.test(id) ? { name: 'order', params: { id } } : null
     case 'payment_intent': {
       const order = orderOf(e.after)

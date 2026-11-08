@@ -1185,6 +1185,13 @@ service CoreService {
   // subscription.delete) with the reason the bot gives.
   rpc AdminListPanelMissing(AdminListPanelMissingRequest) returns (AdminListPanelMissingResponse);
   rpc AdminResolvePanelMissing(AdminResolvePanelMissingRequest) returns (AdminResolvePanelMissingResponse);
+  // Undelivered orders (docs/03-bot-ux.md, "Undelivered orders"): paid orders whose service could not be made or
+  // applied yet (status provision_failed), the longest waiting first; trying one, or every one, again now; refunding
+  // one to the buyer's wallet (the reseller's commission on it is taken back). Owner and admin (payments.review on
+  // the dashboard); each change is audited as the dashboard's (order.retry, order.retry_all, order.refund).
+  rpc AdminListUndelivered(AdminListUndeliveredRequest) returns (AdminListUndeliveredResponse);
+  rpc AdminRetryUndelivered(AdminRetryUndeliveredRequest) returns (AdminRetryUndeliveredResponse);
+  rpc AdminRefundUndelivered(AdminRefundUndeliveredRequest) returns (AdminRefundUndeliveredResponse);
   // RedeemGiftCode applies a gift code to the customer's wallet (docs/03-bot-ux.md):
   // an active account only (a banned one is PERMISSION_DENIED "user is banned").
   // What a customer can get wrong is an outcome of the answer, not an error.
@@ -1315,6 +1322,66 @@ message AdminResolvePanelMissingResponse {
   // live) or deleted (deleted already, or no such service).
   string outcome = 1;
   string client_email = 2; // "" when unknown
+}
+
+message AdminListUndeliveredRequest {
+  int64 actor_telegram_id = 1;
+  int32 offset = 2;
+  int32 limit = 3; // 1 to 200; 0 is 25
+}
+
+// AdminUndeliveredOrder is a paid order whose service could not be made or applied yet.
+message AdminUndeliveredOrder {
+  string id = 1;
+  int64 telegram_id = 2; // the buyer
+  string username = 3; // "" when they have none
+  map<string, string> plan_name = 4; // language -> name
+  string type = 5; // what was bought: new, renew, topup...
+  int64 amount = 6; // what was paid, in currency's minor units
+  string currency = 7;
+  int32 attempts = 8;
+  string last_error = 9;
+  int64 created_at = 10; // unix seconds
+  int64 next_attempt_at = 11; // unix seconds; 0: not known
+  // seller_kind: "reseller" (the buyer is a reseller, buying for a customer), "referrer" (a reseller brought the
+  // buyer and is paid a commission) or "" (the store); seller_telegram_id and seller_username are that reseller.
+  string seller_kind = 12;
+  int64 seller_telegram_id = 13;
+  string seller_username = 14;
+  string label = 15; // a reseller's name for the service; "" when none
+  bool bulk = 16; // part of a bulk purchase
+}
+
+message AdminListUndeliveredResponse {
+  repeated AdminUndeliveredOrder orders = 1;
+  int64 total = 2; // how many there are in all
+}
+
+message AdminRetryUndeliveredRequest {
+  int64 actor_telegram_id = 1;
+  string order_id = 2; // "" tries every undelivered order again
+}
+
+message AdminRetryUndeliveredResponse {
+  // count is how many orders are tried again now; 0 for an order_id that is not waiting any more (delivered,
+  // refunded or being tried right now).
+  int32 count = 1;
+}
+
+message AdminRefundUndeliveredRequest {
+  int64 actor_telegram_id = 1;
+  string order_id = 2;
+  string reason = 3; // required, for the audit log
+  string note = 4; // optional, sent to the buyer with the refund (at most 500 characters)
+}
+
+message AdminRefundUndeliveredResponse {
+  // done; or gone: nothing was done, the order is not waiting any more (delivered, refunded, being tried right now,
+  // or no such order).
+  string outcome = 1;
+  int64 amount = 2; // what went back to the buyer's wallet
+  string currency = 3;
+  int64 commission_taken = 4; // the reseller's commission taken back with it (0: none)
 }
 
 message AdminServer {

@@ -1,5 +1,7 @@
 // Package notify turns core's events into Telegram messages: payment
-// results, wallet credits, delivered and extended services, reminders before
+// results, wallet credits (and a reseller's commission taken back with the
+// refund of an undelivered order), delivered and extended services (with an
+// apology when the customer was told they are late), reminders before
 // a service ends, support staff's replies, and admin alerts (core's
 // watchdog's system alerts, USDT deposits that matched no payment and manual
 // USDT proofs that name a deposit the watcher saw among them) and the daily
@@ -176,6 +178,9 @@ func (n *Notifier) Handle(ctx context.Context, m eventbus.Message) error {
 		case e.NameTaken != "":
 			text += "\n\n" + n.cat.T(lang, "cfg.delivered_taken", "name", html.EscapeString(e.NameTaken))
 		}
+		if e.Late { // the customer was told it is delayed (sub.delayed): sorry for the wait
+			text += "\n\n" + n.cat.T(lang, "sub.late")
+		}
 		if err := n.send(ctx, e.TelegramID, n.labelled(lang, e.Label, text), kb); err != nil {
 			return err
 		}
@@ -255,19 +260,39 @@ func (n *Notifier) Handle(ctx context.Context, m eventbus.Message) error {
 				"threshold", i18n.Number(lang, int64(e.TargetThreshold)), "amount", i18n.Money(lang, e.Amount, e.Currency),
 				"balance", n.balance(lang, e.Balance, e.Currency)), n.home(lang))
 		}
-		if e.Reason == events.CreditRefund && e.CashbackTaken > 0 {
-			// The refund also took back the cashback the order had earned: say so, with the balance after both.
-			return n.send(ctx, e.TelegramID, n.cat.T(lang, "wallet.credited_refund_cashback", "amount", i18n.Money(lang, e.Amount, e.Currency),
-				"cashback", i18n.Money(lang, e.CashbackTaken, e.Currency), "balance", n.balance(lang, e.Balance, e.Currency)), n.home(lang))
-		}
 		if e.FromCurrency != "" && e.Reason == events.CreditTopup {
 			// a USDT top-up, credited in Toman at the live rate
 			return n.send(ctx, e.TelegramID, n.cat.T(lang, "wallet.credited_converted", "from", i18n.Money(lang, e.FromAmount, e.FromCurrency),
 				"rate", i18n.Money(lang, e.Rate, "IRT"), "amount", i18n.Money(lang, e.Amount, e.Currency),
 				"balance", n.balance(lang, e.Balance, e.Currency)), n.home(lang))
 		}
-		return n.send(ctx, e.TelegramID, n.cat.T(lang, key,
-			"amount", i18n.Money(lang, e.Amount, e.Currency), "balance", n.balance(lang, e.Balance, e.Currency)), n.home(lang))
+		var text string
+		if e.Reason == events.CreditRefund && e.CashbackTaken > 0 {
+			// The refund also took back the cashback the order had earned: say so, with the balance after both.
+			text = n.cat.T(lang, "wallet.credited_refund_cashback", "amount", i18n.Money(lang, e.Amount, e.Currency),
+				"cashback", i18n.Money(lang, e.CashbackTaken, e.Currency), "balance", n.balance(lang, e.Balance, e.Currency))
+		} else {
+			text = n.cat.T(lang, key, "amount", i18n.Money(lang, e.Amount, e.Currency), "balance", n.balance(lang, e.Balance, e.Currency))
+		}
+		if note := strings.TrimSpace(e.Note); note != "" && e.Reason == events.CreditRefund {
+			// what staff wrote to the buyer with the refund
+			text += "\n\n" + n.cat.T(lang, "wallet.refund_note", "note", html.EscapeString(note))
+		}
+		return n.send(ctx, e.TelegramID, text, n.home(lang))
+
+	case events.CommissionReversed:
+		var e events.CommissionReversedEvent
+		if err := decode(m, &e); err != nil {
+			return err
+		}
+		if e.Amount <= 0 {
+			return nil // nothing was taken (the wallet held nothing): nothing changed for the reseller
+		}
+		// An order of the reseller's customer was refunded before it was delivered: the commission paid on it went
+		// back. As with the commission itself, the customer is not named.
+		lang := n.lang(ctx, e.TelegramID)
+		return n.send(ctx, e.TelegramID, n.cat.T(lang, "wallet.commission_reversed", "amount", i18n.Money(lang, e.Amount, e.Currency),
+			"balance", n.balance(lang, e.Balance, e.Currency)), n.home(lang))
 
 	case events.SubscriptionExtended:
 		var e events.SubscriptionExtendedEvent
@@ -280,8 +305,11 @@ func (n *Notifier) Handle(ctx context.Context, m eventbus.Message) error {
 		if e.Type == "traffic_topup" {
 			key = "sub.topped_up"
 		}
-		return n.send(ctx, e.TelegramID, n.labelled(lang, e.Label, n.cat.T(lang, key, "id", shortID(e.SubscriptionID),
-			"expires", n.expires(lang, e.ExpiresAt), "traffic", n.traffic(lang, e.TrafficTotalBytes))), kb)
+		text := n.cat.T(lang, key, "id", shortID(e.SubscriptionID), "expires", n.expires(lang, e.ExpiresAt), "traffic", n.traffic(lang, e.TrafficTotalBytes))
+		if e.Late { // the customer was told it is delayed (sub.delayed): sorry for the wait
+			text += "\n\n" + n.cat.T(lang, "sub.late")
+		}
+		return n.send(ctx, e.TelegramID, n.labelled(lang, e.Label, text), kb)
 
 	case events.SubscriptionReminder:
 		var e events.SubscriptionReminderEvent
@@ -317,9 +345,9 @@ func (n *Notifier) Handle(ctx context.Context, m eventbus.Message) error {
 			return err
 		}
 		if n.set.Bool("notify.provision_failed", true) {
-			if err := n.alert(ctx, 0, func(lang string) string {
+			if err := n.alertToContacts(ctx, n.set.Recipients(n.adminIDs), 0, func(c settings.Contact, lang string) (string, *tg.Keyboard) {
 				return n.cat.T(lang, "admin.provision_failed", "attempts", e.Attempts, "order", e.OrderID,
-					"tg", e.TelegramID, "error", html.EscapeString(truncate(e.Error, 500)))
+					"tg", e.TelegramID, "error", html.EscapeString(truncate(e.Error, 500))), n.undeliveredKeyboard(lang, c)
 			}); err != nil {
 				return err
 			}
@@ -438,14 +466,30 @@ func (n *Notifier) alertTo(ctx context.Context, to []settings.Contact, skip int6
 }
 
 // systemAlertKeyboard is the button under a watchdog alert, for the staff member c: the services whose
-// client is gone from the panel open the list to decide about each (owner and admin, services.write; a
-// configured owner core has not listed yet gets it too, and core checks the role on every tap). Nil for
-// every other alert, and once it is fixed.
+// client is gone from the panel open the list to decide about each, and the paid orders not delivered open
+// the list of undelivered orders to retry or refund each (owner and admin; a configured owner core has not
+// listed yet gets it too, and core checks the role on every tap). Nil for every other alert, and once it is
+// fixed.
 func (n *Notifier) systemAlertKeyboard(lang string, c settings.Contact, e events.SystemAlertEvent) *tg.Keyboard {
-	if e.TitleKey != "alert.panel_missing" || e.State == events.AlertResolved || c.Role == "support" {
+	if e.State == events.AlertResolved || c.Role == "support" {
 		return nil
 	}
-	return (&tg.Keyboard{}).Row(n.button(lang, "btn.pm_manage", "adm:pm"))
+	switch e.TitleKey {
+	case "alert.panel_missing":
+		return (&tg.Keyboard{}).Row(n.button(lang, "btn.pm_manage", "adm:pm"))
+	case "alert.provision_failed":
+		return n.undeliveredKeyboard(lang, c)
+	}
+	return nil
+}
+
+// undeliveredKeyboard is the button under an alert about a paid order not delivered: the list of the
+// undelivered orders (adm:ud). Support, who may not act on them, get none.
+func (n *Notifier) undeliveredKeyboard(lang string, c settings.Contact) *tg.Keyboard {
+	if c.Role == "support" {
+		return nil
+	}
+	return (&tg.Keyboard{}).Row(n.button(lang, "btn.ud_manage", "adm:ud"))
 }
 
 // alertToContacts is alertTo with the contact handed to render too (what they may do decides the buttons).

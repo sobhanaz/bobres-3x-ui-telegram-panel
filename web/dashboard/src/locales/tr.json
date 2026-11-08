@@ -331,7 +331,35 @@
     "cashback": "Cashback",
     "cashback_line": "{amount} · {base} üzerinden {percent}",
     "cashback_capped": "bir siparişin kazanabileceği üst sınıra indirildi",
-    "cashback_reversed": "{amount} iadeyle birlikte geri alındı"
+    "cashback_reversed": "{amount} iadeyle birlikte geri alındı",
+    "seller": "Satıcı",
+    "seller_store": "Mağazanın kendisi",
+    "seller_kind": {
+      "reseller": "Bir müşteri için satın alan bayi",
+      "referrer": "Alıcıyı getiren bayi"
+    },
+    "server": "Sunucu",
+    "server_plan": "Paketin sunucuları",
+    "server_chosen": "personel seçti",
+    "move": "Başka bir sunucuda teslim et",
+    "move_intro": "Hizmet, paketin sunucuları yerine seçtiğiniz sunucuda oluşturulur ve sipariş hemen yeniden denenir. Paket ve fiyat aynı kalır: alıcı fazladan bir şey ödemez.",
+    "move_server": "Sunucu",
+    "move_none": "Şu anda hiçbir sunucu yeni hizmet almıyor: Sunucular sayfasından birini açın.",
+    "move_servers_error": "Sunucular şu anda listelenemedi. Bir dakika sonra yeniden deneyin.",
+    "move_state_full": "Dolu",
+    "move_warn": {
+      "down": "Bu sunucu son kontrolde yanıt vermedi: teslimat yine başarısız olabilir.",
+      "unknown": "Bu sunucu henüz kontrol edilmedi.",
+      "full": "Bu sunucu istemci sınırına ulaştı: sınırı yükseltene veya yer açılana kadar hizmet orada oluşturulamaz."
+    },
+    "move_confirm": "Orada teslim et",
+    "move_done": "Sipariş {server} üzerinde teslim ediliyor",
+    "move_leftover": "Eski sunucunun paneli yanıt vermedi, bu yüzden orada yarım kalmış bir hesap kalmış olabilir. Onu orada elle silin.",
+    "refund_note": "Alıcıya not (isteğe bağlı)",
+    "refund_note_hint": "İade mesajıyla birlikte botta alıcıya gönderilir.",
+    "refund_commission": "Bu sipariş hiç teslim edilmedi: bir bayinin bundan kazandığı komisyon cüzdanından geri alınır.",
+    "refund_commission_named": "Bu sipariş hiç teslim edilmedi: {who} kullanıcısının bundan kazandığı komisyon cüzdanından geri alınır.",
+    "refund_commission_taken": "Bayiden geri alındı: {amount}."
   },
   "account": {
     "title": "Hesabım",
@@ -685,6 +713,23 @@
       "expired": "Süresi doldu"
     }
   },
+  "undelivered": {
+    "tab": "Teslim edilmeyenler",
+    "intro": "Bir sunucu yanıt vermediği için hizmeti henüz oluşturulamayan ödenmiş siparişler. En uzun bekleyenler önce gelir. Her biri en az 30 dakikada bir kendiliğinden yeniden denenir.",
+    "empty": "Ödenen her sipariş teslim edildi.",
+    "buyer": "Alıcı",
+    "paid": "Ödenen",
+    "waiting": "Bekleme başlangıcı",
+    "tries": "Denemeler",
+    "last_error": "Son hata",
+    "next_now": "sonraki deneme şimdi",
+    "actions": "İşlemler",
+    "refresh": "Yenile",
+    "retry_all": "Hepsini şimdi yeniden dene",
+    "retry_all_confirm": "Teslim edilmemiş {n} sipariş şimdi yeniden denenir. Sunucusu hâlâ yanıt vermeyenler bir sonraki denemeyi bekler.",
+    "retry_all_done": "{n} sipariş yeniden deneniyor",
+    "retry_all_none": "Bekleyen sipariş yoktu: yeniden denenecek bir şey yok."
+  },
   "review": {
     "status": {
       "approved": "Onaylandı",
@@ -704,6 +749,7 @@
       "referral": "Davet ödülü",
       "trial_grant": "Ücretsiz deneme",
       "commission": "Bayi komisyonu",
+      "commission_reversal": "Geri alınan bayi komisyonu",
       "settlement": "Bayi ödemesi",
       "gift_code": "Hediye kodu",
       "license_purchase": "BOBRES lisansı",
@@ -2358,7 +2404,10 @@
         "retry": "Sipariş yeniden denendi",
         "refund": "Sipariş iade edildi",
         "bulk": "Toplu satın alma yapıldı",
-        "cashback_reversal": "Cashback geri alındı"
+        "cashback_reversal": "Cashback geri alındı",
+        "move": "Sipariş başka sunucuya taşındı",
+        "retry_all": "Teslim edilmeyen siparişler yeniden denendi",
+        "commission_reversal": "Bayi komisyonu geri alındı"
       },
       "dashboard": {
         "login": "Giriş yapıldı",

@@ -21,6 +21,7 @@ import UserLink from '../components/UserLink.vue'
 import ReasonDialog from '../components/ReasonDialog.vue'
 import OrdersTable from '../components/OrdersTable.vue'
 import PaymentsTable from '../components/PaymentsTable.vue'
+import UndeliveredTab from '../components/orders/UndeliveredTab.vue'
 import { api } from '../api'
 import { errorText } from '../errors'
 import { useAuth } from '../stores/auth'
@@ -57,7 +58,10 @@ async function loadPending() {
 
 const orders = useList<OrderItem, { q: string; status: string; type: string }>('/orders', { q: '', status: '', type: '' })
 const history = useList<PaymentItem, { status: string; provider: string }>('/payments', { status: '', provider: '' })
-const loaded = new Set<string>()
+// The Undelivered tab loads with the page, for the count on its tab, and again when opened after a change.
+const undelivered = ref<InstanceType<typeof UndeliveredTab> | null>(null)
+const undeliveredTotal = ref(0)
+const loaded = new Set<string>(['undelivered'])
 function showTab(v: string | number) {
   tab.value = String(v)
   if (loaded.has(tab.value)) return
@@ -65,8 +69,14 @@ function showTab(v: string | number) {
   if (tab.value === 'queue') void loadPending()
   if (tab.value === 'orders') void orders.load()
   if (tab.value === 'history') void history.load()
+  if (tab.value === 'undelivered') void undelivered.value?.load()
 }
 onMounted(() => showTab(tab.value))
+// A retry, move or refund there changes the orders and payments the other tabs show.
+function undeliveredChanged() {
+  loaded.delete('orders')
+  loaded.delete('history')
+}
 
 const orderStatuses = computed(() => [
   { label: t('common.all'), value: '' },
@@ -114,6 +124,8 @@ async function confirmReview(reason: string) {
     toast.add({ severity: 'success', summary: decision === 'approved' ? t('payment.approved') : t('payment.rejected'), life: 4000 })
     loaded.delete('orders')
     loaded.delete('history')
+    // an approved payment whose delivery fails waits on the Undelivered tab
+    if (decision === 'approved') loaded.delete('undelivered')
   } catch (e) {
     const err = errorText(e, t)
     reviewError.value = err.text
@@ -133,6 +145,10 @@ async function confirmReview(reason: string) {
       <Tab value="queue">
         {{ t('payment.queue') }}
         <Tag v-if="pending.length" :value="num(pending.length, lang)" severity="warn" />
+      </Tab>
+      <Tab value="undelivered" class="undelivered-tab">
+        {{ t('undelivered.tab') }}
+        <Tag v-if="undeliveredTotal" :value="num(undeliveredTotal, lang)" severity="danger" class="undelivered-count" />
       </Tab>
       <Tab value="orders">{{ t('payment.orders') }}</Tab>
       <Tab value="history">{{ t('payment.history') }}</Tab>
@@ -189,6 +205,10 @@ async function confirmReview(reason: string) {
             </template>
           </Card>
         </div>
+      </TabPanel>
+
+      <TabPanel value="undelivered">
+        <UndeliveredTab ref="undelivered" @total="(n) => (undeliveredTotal = n)" @changed="undeliveredChanged" />
       </TabPanel>
 
       <TabPanel value="orders">

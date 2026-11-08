@@ -41,6 +41,17 @@ type orderJSON struct {
 	// List: an order listed in USDT and paid from the Toman wallet. Amount is then what was charged (Toman); this is the price it was listed at and the
 	// Toman per USDT it was worked out at (the discount, if any, is in the list currency).
 	List *orderList `json:"list"`
+	// Seller is who sold the order: {kind, user}, kind "reseller" (the buyer is a reseller, buying for a customer) or
+	// "referrer" (a reseller brought the buyer and is paid a commission); null for the store's own sale.
+	Seller *orderSeller `json:"seller"`
+	// ServerID is the server staff chose for an undelivered new service (Deliver on another server); null: the plan's.
+	ServerID *string `json:"server_id"`
+}
+
+// orderSeller is the reseller who sold an order.
+type orderSeller struct {
+	Kind string     `json:"kind"`
+	User *userBrief `json:"user"`
 }
 
 // orderList is the price an order was listed at and the rate it was charged at.
@@ -54,7 +65,10 @@ func orderOf(o *store.OrderRow) orderJSON {
 		ID: o.ID, User: briefOf(o.UserID, o.TelegramID, o.Username), Plan: planRef{o.PlanID, o.PlanName},
 		Type: o.Type, Status: o.Status, Amount: money{o.Amount, o.Currency}, SubscriptionID: o.SubscriptionID,
 		CreatedAt: o.CreatedAt.Unix(), UpdatedAt: o.UpdatedAt.Unix(), Attempts: o.Attempts, LastError: o.LastError,
-		NextAttemptAt: unix(o.NextAttemptAt), Staff: o.CreatedByName, Label: o.Label,
+		NextAttemptAt: unix(o.NextAttemptAt), Staff: o.CreatedByName, Label: o.Label, ServerID: o.ServerID,
+	}
+	if o.SellerKind != "" {
+		out.Seller = &orderSeller{Kind: o.SellerKind, User: briefOf(o.SellerID, o.SellerTelegramID, o.SellerUsername)}
 	}
 	discountCurrency := o.Currency
 	if o.ListAmount != nil && o.ListCurrency != nil && o.Rate != nil {
@@ -142,6 +156,8 @@ func (s *Server) getOrder(w http.ResponseWriter, r *http.Request) {
 		"can": map[string]bool{
 			"retry":  o.Status == "provision_failed",
 			"refund": paid && o.RefundedAt == nil && o.Amount > 0,
+			// a new service that waits may be delivered on another server (renewals stay on their service's)
+			"move": o.Status == "provision_failed" && o.SubscriptionID == nil,
 		},
 	})
 }
@@ -164,17 +180,24 @@ func (s *Server) retryOrder(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"order": orderOf(o)})
 }
 
-// refundOrder: POST /api/v1/orders/{id}/refund {reason} refunds to the wallet.
+// refundBody is a refund's reason (for the audit log) and an optional note to the buyer.
+type refundBody struct {
+	Reason string `json:"reason"`
+	Note   string `json:"note"`
+}
+
+// refundOrder: POST /api/v1/orders/{id}/refund {reason, note} refunds to the wallet; note goes to the buyer with the
+// message about it.
 func (s *Server) refundOrder(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(w, r, "id")
 	if !ok {
 		return
 	}
-	var req reasonBody
+	var req refundBody
 	if !readJSON(w, r, &req) {
 		return
 	}
-	res, err := s.cfg.Domain.RefundOrder(r.Context(), actor(r), s.cfg.Provisioner, id, req.Reason)
+	res, err := s.cfg.Domain.RefundOrderNote(r.Context(), actor(r), s.cfg.Provisioner, id, req.Reason, req.Note)
 	if err != nil {
 		s.fail(w, "refund order", err)
 		return
@@ -184,7 +207,8 @@ func (s *Server) refundOrder(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, "reload order", err)
 		return
 	}
-	out := map[string]any{"order": orderOf(o), "wallet": money{res.Wallet.Balance, res.Wallet.Currency}}
+	out := map[string]any{"order": orderOf(o), "wallet": money{res.Wallet.Balance, res.Wallet.Currency},
+		"commission_taken": money{res.CommissionTaken, res.Wallet.Currency}}
 	if res.PanelCleanup != "" {
 		s.cfg.Log.Warn("dashboard api: refund cleanup", "order_id", id, "err", res.PanelCleanup)
 		out["warning"] = "refunded; removing the unfinished account from the 3x-ui panel failed: remove it there by hand"

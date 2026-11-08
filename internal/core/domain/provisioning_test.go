@@ -47,6 +47,20 @@ type fakeProvisioner struct {
 	checkErr    error
 	renamed     []string
 	renameErr   error
+	// released records ReleaseClient calls by subscription id; release is their answer, releaseErr their error.
+	released   []string
+	release    Release
+	releaseErr error
+}
+
+func (f *fakeProvisioner) ReleaseClient(_ context.Context, subscriptionID string) (Release, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.releaseErr != nil {
+		return Release{}, f.releaseErr
+	}
+	f.released = append(f.released, subscriptionID)
+	return f.release, nil
 }
 
 func (f *fakeProvisioner) op(subscriptionID, what string) error {

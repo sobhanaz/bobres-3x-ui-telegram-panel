@@ -9,13 +9,16 @@ import Message from 'primevue/message'
 import Skeleton from 'primevue/skeleton'
 import UserLink from '../components/UserLink.vue'
 import StatusTag from '../components/StatusTag.vue'
-import ReasonDialog from '../components/ReasonDialog.vue'
 import PaymentsTable from '../components/PaymentsTable.vue'
+import SellerLink from '../components/orders/SellerLink.vue'
+import MoveDialog from '../components/orders/MoveDialog.vue'
+import RefundDialog from '../components/orders/RefundDialog.vue'
 import { api } from '../api'
 import { errorText } from '../errors'
 import { useAuth } from '../stores/auth'
 import { bytes, dateTime, money, num, percentBP, planName, shortId, type Lang } from '../format'
-import type { OrderItem, PaymentItem } from '../types'
+import { moveServers, serverName } from '../undelivered'
+import type { OrderDetail, UndeliveredServer } from '../types'
 
 const { t, locale } = useI18n()
 const lang = computed(() => locale.value as Lang)
@@ -25,25 +28,44 @@ const toast = useToast()
 const auth = useAuth()
 const id = computed(() => route.params.id as string)
 
-interface Detail {
-  order: OrderItem
-  payments: PaymentItem[] | null
-  payments_error: string
-  can: { retry: boolean; refund: boolean }
-}
-const d = ref<Detail | null>(null)
+const d = ref<OrderDetail | null>(null)
 const loadError = ref('')
 async function load() {
   loadError.value = ''
   try {
-    d.value = await api<Detail>('GET', `/orders/${id.value}`)
+    d.value = await api<OrderDetail>('GET', `/orders/${id.value}`)
   } catch (e) {
     loadError.value = errorText(e, t).text
   }
+  if (d.value && (d.value.can.move || d.value.order.server_id)) void loadServers()
 }
 onMounted(load)
 watch(id, load)
 const o = computed(() => d.value?.order)
+
+// The servers a new service may be moved to (and the name of the one it was moved to): read from the undelivered
+// list, which payments.read may read (the servers list itself is servers.write).
+const servers = ref<UndeliveredServer[]>([])
+const serversError = ref('')
+const serversLoading = ref(false)
+async function loadServers() {
+  serversLoading.value = true
+  try {
+    const res = await moveServers()
+    servers.value = res.servers
+    serversError.value = res.servers_error
+  } catch (e) {
+    serversError.value = errorText(e, t).text
+  } finally {
+    serversLoading.value = false
+  }
+}
+const chosenServer = computed(() => serverName(o.value?.server_id, servers.value))
+const moveOpen = ref(false)
+function openMove() {
+  moveOpen.value = true
+  void loadServers() // their health now, not when the page opened
+}
 
 const retrying = ref(false)
 async function retry() {
@@ -60,37 +82,12 @@ async function retry() {
 }
 
 const refundOpen = ref(false)
-const busy = ref(false)
-const refundError = ref('')
-const refundDetail = ref('')
-const delivered = computed(() => o.value?.status === 'active')
-async function refund(reason: string) {
-  busy.value = true
-  refundError.value = ''
-  try {
-    const res = await api<{ wallet: { amount: number; currency: string }; warning?: string }>('POST', `/orders/${id.value}/refund`, { reason })
-    refundOpen.value = false
-    toast.add({
-      severity: res.warning ? 'warn' : 'success',
-      summary: t('order.refund_done', { balance: money(res.wallet, lang.value) }),
-      detail: res.warning,
-      life: 7000,
-    })
-    await load()
-  } catch (e) {
-    const err = errorText(e, t)
-    refundError.value = err.text
-    refundDetail.value = err.detail
-  } finally {
-    busy.value = false
-  }
-}
 </script>
 
 <template>
   <div class="app-page-head">
     <h1 class="app-page-title">
-      <Button icon="pi pi-arrow-left" class="app-flip" text rounded :aria-label="t('common.back')" @click="router.push({ name: 'payments', query: { tab: 'orders' } })" />
+      <Button icon="pi pi-arrow-left" class="app-flip" text rounded :aria-label="t('common.back')" @click="router.push({ name: 'payments', query: { tab: o?.status === 'provision_failed' ? 'undelivered' : 'orders' } })" />
       {{ t('order.title') }}
       <span v-if="o" class="app-ltr app-mono app-muted">{{ shortId(o.id) }}</span>
     </h1>
@@ -100,14 +97,8 @@ async function refund(reason: string) {
         <span>{{ t('audit.history') }}</span>
       </RouterLink>
       <Button v-if="d.can.retry && auth.can('payments.review')" :label="t('order.retry')" icon="pi pi-replay" :loading="retrying" @click="retry" />
-      <Button
-        v-if="d.can.refund && auth.can('payments.review')"
-        :label="t('order.refund')"
-        icon="pi pi-undo"
-        severity="danger"
-        outlined
-        @click="(refundError = ''), (refundOpen = true)"
-      />
+      <Button v-if="d.can.move && auth.can('payments.review')" :label="t('order.move')" icon="pi pi-server" outlined class="move" @click="openMove" />
+      <Button v-if="d.can.refund && auth.can('payments.review')" :label="t('order.refund')" icon="pi pi-undo" severity="danger" outlined @click="refundOpen = true" />
     </div>
   </div>
   <Message v-if="loadError" severity="error" :closable="false">{{ loadError }}</Message>
@@ -117,6 +108,10 @@ async function refund(reason: string) {
       <dl v-if="o" class="app-facts">
         <dt>{{ t('common.customer') }}</dt>
         <dd><UserLink :user="o.user" /></dd>
+        <template v-if="o.seller">
+          <dt>{{ t('order.seller') }}</dt>
+          <dd class="seller"><SellerLink :seller="o.seller" inline /></dd>
+        </template>
         <dt>{{ t('common.plan') }}</dt>
         <dd><bdi>{{ planName(o.plan.name, lang) }}</bdi> · {{ t('order.type.' + o.type) }}</dd>
         <dt>{{ t('common.status') }}</dt>
@@ -170,6 +165,14 @@ async function refund(reason: string) {
             <div v-if="o.last_error && o.status === 'provision_failed'" class="app-ltr error">{{ o.last_error }}</div>
           </dd>
         </template>
+        <template v-if="o.server_id">
+          <dt>{{ t('order.server') }}</dt>
+          <dd class="chosen-server">
+            <bdi v-if="chosenServer">{{ chosenServer }}</bdi>
+            <span v-else class="app-ltr app-mono">{{ shortId(o.server_id) }}</span>
+            <span class="app-muted"> · {{ t('order.server_chosen') }}</span>
+          </dd>
+        </template>
         <template v-if="o.refund">
           <dt>{{ t('order.refunded') }}</dt>
           <dd>{{ money(o.refund.amount, lang) }} · {{ dateTime(o.refund.at, lang) }}</dd>
@@ -187,17 +190,8 @@ async function refund(reason: string) {
     </template>
   </Card>
 
-  <ReasonDialog
-    v-model:visible="refundOpen"
-    :title="t('order.refund')"
-    :message="o ? t(delivered ? 'order.refund_intro_delivered' : 'order.refund_intro', { amount: money(o.amount, lang) }) : ''"
-    :confirm-label="t('order.refund')"
-    danger
-    :busy="busy"
-    :error="refundError"
-    :detail="refundDetail"
-    @confirm="refund"
-  />
+  <MoveDialog v-model:visible="moveOpen" :order="o ?? null" :servers="servers" :servers-error="serversError" :servers-loading="serversLoading" @moved="load" />
+  <RefundDialog v-model:visible="refundOpen" :order="o ?? null" @refunded="load" />
 </template>
 
 <style scoped>

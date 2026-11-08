@@ -643,6 +643,52 @@ func (s *Server) DeleteClient(ctx context.Context, req *provisionerv1.DeleteClie
 	return &emptypb.Empty{}, nil
 }
 
+// releaseDeleteTimeout bounds the try to delete a released reservation's client from its panel: the panel is often
+// the one that does not answer, and staff are waiting for the answer.
+const releaseDeleteTimeout = 10 * time.Second
+
+// ReleaseClient forgets the reservation of a client that was never made on its panel, so that the next CreateClient
+// picks a server again (core's MoveOrder: staff deliver an undelivered order on another server). The client is
+// deleted from the old panel when it answers, as DeleteClient does; when it cannot be (the panel does not answer, or
+// the server is gone), the reservation is forgotten all the same and the answer says a client may be left there.
+// A client that was made is never released.
+func (s *Server) ReleaseClient(ctx context.Context, req *provisionerv1.ReleaseClientRequest) (*provisionerv1.ReleaseClientResponse, error) {
+	if req.GetSubscriptionId() == "" {
+		return nil, status.Error(codes.InvalidArgument, "subscription_id required")
+	}
+	cm, err := s.st.GetClientMap(ctx, req.GetSubscriptionId())
+	if errors.Is(err, store.ErrNotFound) {
+		return &provisionerv1.ReleaseClientResponse{}, nil
+	}
+	if err != nil {
+		return nil, status.Error(codes.Internal, "client map lookup failed")
+	}
+	if !cm.Pending {
+		return nil, status.Error(codes.FailedPrecondition, "the client was made on its panel: it is not moved")
+	}
+	leftover := true
+	if _, a, err := s.server(ctx, cm.ServerID); err == nil {
+		dctx, cancel := context.WithTimeout(ctx, releaseDeleteTimeout)
+		if err := a.Delete(dctx, cm.Email); err == nil {
+			leftover = false
+		} else {
+			existing, lookupErr := a.ClientSubID(dctx, cm.Email)
+			gone := noSuchClient(lookupErr) ||
+				(lookupErr == nil && cm.XUISubID != nil && *cm.XUISubID != "" && existing != *cm.XUISubID)
+			leftover = !gone
+		}
+		cancel()
+	}
+	if err := s.st.ReleaseReservation(ctx, req.GetSubscriptionId()); err != nil {
+		return nil, status.Error(codes.Internal, "release reservation failed")
+	}
+	if leftover {
+		s.log.Warn("a released reservation's panel could not be asked: a client may be left there",
+			"subscription_id", req.GetSubscriptionId(), "server_id", cm.ServerID, "email", cm.Email)
+	}
+	return &provisionerv1.ReleaseClientResponse{Released: true, Leftover: leftover, ServerId: cm.ServerID}, nil
+}
+
 // ResetTraffic zeroes the client's counter on the panel.
 func (s *Server) ResetTraffic(ctx context.Context, req *provisionerv1.ResetTrafficRequest) (*provisionerv1.Client, error) {
 	cm, _, a, err := s.subscription(ctx, req.GetSubscriptionId())

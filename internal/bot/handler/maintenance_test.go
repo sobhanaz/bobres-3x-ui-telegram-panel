@@ -311,6 +311,9 @@ func gatedCases() []gatedCase {
 		// The services not on the panel (the button under the staff alert, and the list's own).
 		"adm:pm", "adm:pm:1", "adm:pmd:0:00000000-0000-4000-8000-000000000001", "adm:pmy:d:0:00000000-0000-4000-8000-000000000001",
 		"adm:pma:r", "adm:pmz:d:3",
+		// The undelivered orders (the admin menu's list and its buttons).
+		"adm:ud", "adm:ud:1", "adm:udr:0:00000000-0000-4000-8000-000000000001", "adm:uda:0",
+		"adm:udf:0:00000000-0000-4000-8000-000000000001", "adm:udy:0:00000000-0000-4000-8000-000000000001",
 	} {
 		add(buttonCase(data))
 	}

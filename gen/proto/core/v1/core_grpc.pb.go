@@ -97,6 +97,9 @@ const (
 	CoreService_AdminBroadcast_FullMethodName            = "/core.v1.CoreService/AdminBroadcast"
 	CoreService_AdminListPanelMissing_FullMethodName     = "/core.v1.CoreService/AdminListPanelMissing"
 	CoreService_AdminResolvePanelMissing_FullMethodName  = "/core.v1.CoreService/AdminResolvePanelMissing"
+	CoreService_AdminListUndelivered_FullMethodName      = "/core.v1.CoreService/AdminListUndelivered"
+	CoreService_AdminRetryUndelivered_FullMethodName     = "/core.v1.CoreService/AdminRetryUndelivered"
+	CoreService_AdminRefundUndelivered_FullMethodName    = "/core.v1.CoreService/AdminRefundUndelivered"
 	CoreService_RedeemGiftCode_FullMethodName            = "/core.v1.CoreService/RedeemGiftCode"
 	CoreService_ListMyCodes_FullMethodName               = "/core.v1.CoreService/ListMyCodes"
 	CoreService_ListVendorOffers_FullMethodName          = "/core.v1.CoreService/ListVendorOffers"
@@ -246,6 +249,13 @@ type CoreServiceClient interface {
 	// subscription.delete) with the reason the bot gives.
 	AdminListPanelMissing(ctx context.Context, in *AdminListPanelMissingRequest, opts ...grpc.CallOption) (*AdminListPanelMissingResponse, error)
 	AdminResolvePanelMissing(ctx context.Context, in *AdminResolvePanelMissingRequest, opts ...grpc.CallOption) (*AdminResolvePanelMissingResponse, error)
+	// Undelivered orders (docs/03-bot-ux.md, "Undelivered orders"): paid orders whose service could not be made or
+	// applied yet (status provision_failed), the longest waiting first; trying one, or every one, again now; refunding
+	// one to the buyer's wallet (the reseller's commission on it is taken back). Owner and admin (payments.review on
+	// the dashboard); each change is audited as the dashboard's (order.retry, order.retry_all, order.refund).
+	AdminListUndelivered(ctx context.Context, in *AdminListUndeliveredRequest, opts ...grpc.CallOption) (*AdminListUndeliveredResponse, error)
+	AdminRetryUndelivered(ctx context.Context, in *AdminRetryUndeliveredRequest, opts ...grpc.CallOption) (*AdminRetryUndeliveredResponse, error)
+	AdminRefundUndelivered(ctx context.Context, in *AdminRefundUndeliveredRequest, opts ...grpc.CallOption) (*AdminRefundUndeliveredResponse, error)
 	// RedeemGiftCode applies a gift code to the customer's wallet (docs/03-bot-ux.md):
 	// an active account only (a banned one is PERMISSION_DENIED "user is banned").
 	// What a customer can get wrong is an outcome of the answer, not an error.
@@ -1066,6 +1076,36 @@ func (c *coreServiceClient) AdminResolvePanelMissing(ctx context.Context, in *Ad
 	return out, nil
 }
 
+func (c *coreServiceClient) AdminListUndelivered(ctx context.Context, in *AdminListUndeliveredRequest, opts ...grpc.CallOption) (*AdminListUndeliveredResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AdminListUndeliveredResponse)
+	err := c.cc.Invoke(ctx, CoreService_AdminListUndelivered_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) AdminRetryUndelivered(ctx context.Context, in *AdminRetryUndeliveredRequest, opts ...grpc.CallOption) (*AdminRetryUndeliveredResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AdminRetryUndeliveredResponse)
+	err := c.cc.Invoke(ctx, CoreService_AdminRetryUndelivered_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *coreServiceClient) AdminRefundUndelivered(ctx context.Context, in *AdminRefundUndeliveredRequest, opts ...grpc.CallOption) (*AdminRefundUndeliveredResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AdminRefundUndeliveredResponse)
+	err := c.cc.Invoke(ctx, CoreService_AdminRefundUndelivered_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *coreServiceClient) RedeemGiftCode(ctx context.Context, in *RedeemGiftCodeRequest, opts ...grpc.CallOption) (*RedeemGiftCodeResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RedeemGiftCodeResponse)
@@ -1330,6 +1370,13 @@ type CoreServiceServer interface {
 	// subscription.delete) with the reason the bot gives.
 	AdminListPanelMissing(context.Context, *AdminListPanelMissingRequest) (*AdminListPanelMissingResponse, error)
 	AdminResolvePanelMissing(context.Context, *AdminResolvePanelMissingRequest) (*AdminResolvePanelMissingResponse, error)
+	// Undelivered orders (docs/03-bot-ux.md, "Undelivered orders"): paid orders whose service could not be made or
+	// applied yet (status provision_failed), the longest waiting first; trying one, or every one, again now; refunding
+	// one to the buyer's wallet (the reseller's commission on it is taken back). Owner and admin (payments.review on
+	// the dashboard); each change is audited as the dashboard's (order.retry, order.retry_all, order.refund).
+	AdminListUndelivered(context.Context, *AdminListUndeliveredRequest) (*AdminListUndeliveredResponse, error)
+	AdminRetryUndelivered(context.Context, *AdminRetryUndeliveredRequest) (*AdminRetryUndeliveredResponse, error)
+	AdminRefundUndelivered(context.Context, *AdminRefundUndeliveredRequest) (*AdminRefundUndeliveredResponse, error)
 	// RedeemGiftCode applies a gift code to the customer's wallet (docs/03-bot-ux.md):
 	// an active account only (a banned one is PERMISSION_DENIED "user is banned").
 	// What a customer can get wrong is an outcome of the answer, not an error.
@@ -1602,6 +1649,15 @@ func (UnimplementedCoreServiceServer) AdminListPanelMissing(context.Context, *Ad
 }
 func (UnimplementedCoreServiceServer) AdminResolvePanelMissing(context.Context, *AdminResolvePanelMissingRequest) (*AdminResolvePanelMissingResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AdminResolvePanelMissing not implemented")
+}
+func (UnimplementedCoreServiceServer) AdminListUndelivered(context.Context, *AdminListUndeliveredRequest) (*AdminListUndeliveredResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AdminListUndelivered not implemented")
+}
+func (UnimplementedCoreServiceServer) AdminRetryUndelivered(context.Context, *AdminRetryUndeliveredRequest) (*AdminRetryUndeliveredResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AdminRetryUndelivered not implemented")
+}
+func (UnimplementedCoreServiceServer) AdminRefundUndelivered(context.Context, *AdminRefundUndeliveredRequest) (*AdminRefundUndeliveredResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AdminRefundUndelivered not implemented")
 }
 func (UnimplementedCoreServiceServer) RedeemGiftCode(context.Context, *RedeemGiftCodeRequest) (*RedeemGiftCodeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RedeemGiftCode not implemented")
@@ -3067,6 +3123,60 @@ func _CoreService_AdminResolvePanelMissing_Handler(srv interface{}, ctx context.
 	return interceptor(ctx, in, info, handler)
 }
 
+func _CoreService_AdminListUndelivered_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AdminListUndeliveredRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).AdminListUndelivered(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_AdminListUndelivered_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).AdminListUndelivered(ctx, req.(*AdminListUndeliveredRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_AdminRetryUndelivered_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AdminRetryUndeliveredRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).AdminRetryUndelivered(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_AdminRetryUndelivered_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).AdminRetryUndelivered(ctx, req.(*AdminRetryUndeliveredRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _CoreService_AdminRefundUndelivered_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AdminRefundUndeliveredRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CoreServiceServer).AdminRefundUndelivered(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: CoreService_AdminRefundUndelivered_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CoreServiceServer).AdminRefundUndelivered(ctx, req.(*AdminRefundUndeliveredRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _CoreService_RedeemGiftCode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RedeemGiftCodeRequest)
 	if err := dec(in); err != nil {
@@ -3619,6 +3729,18 @@ var CoreService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "AdminResolvePanelMissing",
 			Handler:    _CoreService_AdminResolvePanelMissing_Handler,
+		},
+		{
+			MethodName: "AdminListUndelivered",
+			Handler:    _CoreService_AdminListUndelivered_Handler,
+		},
+		{
+			MethodName: "AdminRetryUndelivered",
+			Handler:    _CoreService_AdminRetryUndelivered_Handler,
+		},
+		{
+			MethodName: "AdminRefundUndelivered",
+			Handler:    _CoreService_AdminRefundUndelivered_Handler,
 		},
 		{
 			MethodName: "RedeemGiftCode",
