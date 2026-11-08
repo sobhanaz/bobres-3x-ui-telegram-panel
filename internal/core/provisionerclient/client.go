@@ -46,6 +46,15 @@ func nameRefused(err error) bool {
 	return ok && st.Code() == codes.AlreadyExists && strings.Contains(st.Message(), "already uses this email")
 }
 
+// ReleaseClient implements domain.Provisioner.
+func (c *Client) ReleaseClient(ctx context.Context, subscriptionID string) (domain.Release, error) {
+	resp, err := c.rpc.ReleaseClient(ctx, &provisionerv1.ReleaseClientRequest{SubscriptionId: subscriptionID})
+	if err != nil {
+		return domain.Release{}, fmt.Errorf("provisioner.ReleaseClient: %w", err)
+	}
+	return domain.Release{Released: resp.GetReleased(), Leftover: resp.GetLeftover(), ServerID: resp.GetServerId()}, nil
+}
+
 // SetClientGroups implements domain.Provisioner.
 func (c *Client) SetClientGroups(ctx context.Context, items []domain.ClientGroup) (int, error) {
 	req := &provisionerv1.SetClientGroupsRequest{Clients: make([]*provisionerv1.ClientGroup, 0, len(items))}

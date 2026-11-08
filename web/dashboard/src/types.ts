@@ -87,6 +87,60 @@ export interface OrderItem {
   cashback?: { amount: Money; percent_bp: number; capped: boolean; at: number; reversed?: Money; reversed_at?: number } | null
   /** an order listed in USDT and paid from the Toman wallet: amount is what was charged; this is the price it was listed at (the discount is in it) and the Toman per USDT it was worked out at */
   list?: { price: Money; rate: number } | null
+  /** the reseller who sold it; null for the store's own sale. Older cores leave it out. */
+  seller?: OrderSeller | null
+  /** the server staff chose for an undelivered new service (Deliver on another server); null: the plan's servers */
+  server_id?: string | null
+}
+
+/** Who sold an order: "reseller", the buyer is a reseller buying for a customer of theirs; "referrer", a reseller
+ * brought the buyer and earns a commission on it. */
+export interface OrderSeller {
+  kind: 'reseller' | 'referrer'
+  user: UserBrief | null
+}
+
+/** One order and what staff may do with it (GET /orders/{id}). */
+export interface OrderDetail {
+  order: OrderItem
+  payments: PaymentItem[] | null
+  payments_error: string
+  /** move: an undelivered new service may be delivered on another server (older cores leave it out) */
+  can: { retry: boolean; refund: boolean; move?: boolean }
+}
+
+/** A server an undelivered new service may be moved to: the enabled ones, with their last health check
+ * (checked false: none yet, healthy means nothing then) and whether it is at its client limit. */
+export interface UndeliveredServer {
+  id: string
+  name: string
+  healthy: boolean
+  checked: boolean
+  error: string
+  full: boolean
+}
+
+/** GET /orders/undelivered: the paid orders not delivered yet, the longest waiting first, and the servers a new
+ * service may be moved to (servers_error: the provisioner did not answer, and servers is empty). */
+export interface UndeliveredPage extends Page<OrderItem> {
+  servers: UndeliveredServer[]
+  servers_error: string
+}
+
+/** POST /orders/{id}/move: leftover, the old server's panel did not answer and may keep a half-made client. */
+export interface MoveResult {
+  order: OrderItem
+  leftover: boolean
+  warning?: string
+}
+
+/** POST /orders/{id}/refund: the buyer's wallet after it, and the commission taken back from a reseller (amount 0:
+ * none). Older cores leave commission_taken out. */
+export interface RefundResult {
+  order: OrderItem
+  wallet: Money
+  commission_taken?: Money
+  warning?: string
 }
 
 export interface Proof {

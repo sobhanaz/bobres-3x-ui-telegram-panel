@@ -40,6 +40,9 @@ type Provisioner interface {
 	ResetTraffic(ctx context.Context, subscriptionID string) error
 	// Delete removes the client from the panel; deleting it again is fine.
 	Delete(ctx context.Context, subscriptionID string) error
+	// ReleaseClient forgets the server reservation of a client that was never made, so that the next CreateClient
+	// picks a server again (MoveOrder). It is refused for a client that was made.
+	ReleaseClient(ctx context.Context, subscriptionID string) (Release, error)
 	// RecreateClient makes a client that is gone from its panel again (an operator deleted it there):
 	// on the same server, in the same inbounds and group, with these absolute limits (unix seconds,
 	// bytes; 0 = unlimited). It changes nothing when the panel has the client.
@@ -48,6 +51,13 @@ type Provisioner interface {
 	// RenameClient renames the client on its panel, keeping its subscription link. ErrClientNameTaken when another
 	// client has the name, ErrNotRenamable when the server's panel cannot keep the link.
 	RenameClient(ctx context.Context, subscriptionID, name string) error
+}
+
+// Release is what ReleaseClient did: Released is false when there was no reservation; Leftover is true when the old
+// panel could not be asked and may keep a client nothing points to; ServerID is the server the reservation was on.
+type Release struct {
+	Released, Leftover bool
+	ServerID           string
 }
 
 // NameChecker asks the provisioner whether a config name is free on every panel (config_names.go).
@@ -277,7 +287,7 @@ func (w *ProvisionWorker) ProvisionNext(ctx context.Context) (bool, error) {
 		return true, w.extend(ctx, job)
 	}
 	days, traffic := planLimits(job.plan)
-	client, err := w.prov.CreateClient(ctx, job.sub.ID, job.sub.ClientEmail, days, traffic, job.plan.ServerIDs, job.plan.Inbounds, job.group)
+	client, err := w.prov.CreateClient(ctx, job.sub.ID, job.sub.ClientEmail, days, traffic, candidates(job), job.plan.Inbounds, job.group)
 	if errors.Is(err, ErrClientNameTaken) && job.order.ClientName != nil && job.sub.ClientEmail == *job.order.ClientName {
 		// The panel has a client of the name the buyer chose (made there since it was checked): the service gets the
 		// automatic name instead and is delivered, and the customer is told. A paid order never fails for its name.
@@ -287,7 +297,7 @@ func (w *ProvisionWorker) ProvisionNext(ctx context.Context) (bool, error) {
 		}
 		w.log.Info("the config name chosen was taken on the panel; the automatic name is used", "order_id", job.order.ID)
 		job.sub.ClientEmail = auto
-		client, err = w.prov.CreateClient(ctx, job.sub.ID, auto, days, traffic, job.plan.ServerIDs, job.plan.Inbounds, job.group)
+		client, err = w.prov.CreateClient(ctx, job.sub.ID, auto, days, traffic, candidates(job), job.plan.Inbounds, job.group)
 	}
 	var links Links
 	if err == nil {
@@ -300,6 +310,21 @@ func (w *ProvisionWorker) ProvisionNext(ctx context.Context) (bool, error) {
 		return true, w.fail(ctx, job, err)
 	}
 	return true, w.succeed(ctx, job, client, links, traffic)
+}
+
+// candidates are the servers a new service may go to: the one staff chose for the order (MoveOrder), else the plan's.
+func candidates(job *provisionJob) []string {
+	if job.order.ServerID != nil && *job.order.ServerID != "" {
+		return []string{*job.order.ServerID}
+	}
+	return job.plan.ServerIDs
+}
+
+// late reports a delivery the customer was told is delayed: an attempt after the one that announced the failure
+// (AlertAfter, ProvisionFailed). Its message says sorry for the wait. A service of a bulk purchase is not: the bulk's
+// one message says how its services are.
+func (w *ProvisionWorker) late(job *provisionJob) bool {
+	return job.attempt > w.AlertAfter && job.order.BulkID == nil
 }
 
 func (w *ProvisionWorker) succeed(ctx context.Context, job *provisionJob, c ProvisionedClient, links Links, traffic int64) error {
@@ -340,7 +365,7 @@ func (w *ProvisionWorker) succeed(ctx context.Context, job *provisionJob, c Prov
 		e := events.SubscriptionProvisionedEvent{
 			SubscriptionID: job.sub.ID, OrderID: job.order.ID, UserID: job.user.ID, TelegramID: job.user.TelegramID,
 			SubscriptionLink: links.SubscriptionLink, ExpiresAt: c.ExpiresAt, TrafficBytes: traffic, Label: derefStr(job.sub.Label),
-			BulkID: bulkID,
+			BulkID: bulkID, Late: w.late(job),
 		}
 		if chosen := derefStr(job.order.ClientName); chosen != "" {
 			if job.sub.ClientEmail == chosen {
@@ -392,7 +417,7 @@ func (w *ProvisionWorker) extend(ctx context.Context, job *provisionJob) error {
 		return w.svc.publish(ctx, tx, events.SubscriptionExtended, events.SubscriptionExtendedEvent{
 			SubscriptionID: job.sub.ID, OrderID: o.ID, UserID: job.user.ID, TelegramID: job.user.TelegramID,
 			Type: o.Type, ExpiresAt: expires, TrafficTotalBytes: traffic, TrafficUsedBytes: job.sub.TrafficUsed,
-			Label: derefStr(job.sub.Label),
+			Label: derefStr(job.sub.Label), Late: w.late(job),
 		})
 	})
 }

@@ -111,6 +111,9 @@ describe('audit links', () => {
     expect(auditLink(entry('subscription', uuid))).toEqual({ name: 'service', params: { id: uuid } })
     expect(auditLink(entry('order', uuid))).toEqual({ name: 'order', params: { id: uuid } })
     expect(auditLink(entry('user', ''))).toBeNull()
+    // every undelivered order retried at once (order.retry_all) has no id: it opens their list
+    expect(auditLink(entry('order', ''))).toEqual({ name: 'payments', query: { tab: 'undelivered' } })
+    expect(auditLink(entry('order', 'nope'))).toBeNull()
   })
   it('opens a payment through its order, when known', () => {
     expect(auditLink(entry('payment_intent', uuid, { order_id: uuid, decision: 'approved' }))).toEqual({ name: 'order', params: { id: uuid } })

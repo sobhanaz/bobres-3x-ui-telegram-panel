@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"math"
 	"time"
 
 	corev1 "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/core/v1"
@@ -176,6 +177,62 @@ func (s *Server) AdminResolvePanelMissing(ctx context.Context, req *corev1.Admin
 	out := &corev1.AdminResolvePanelMissingResponse{Outcome: outcome}
 	if sub != nil {
 		out.ClientEmail = sub.ClientEmail
+	}
+	return out, nil
+}
+
+// AdminListUndelivered lists a page of the paid orders whose service could not be made or applied yet, the longest
+// waiting first (owner and admin).
+func (s *Server) AdminListUndelivered(ctx context.Context, req *corev1.AdminListUndeliveredRequest) (*corev1.AdminListUndeliveredResponse, error) {
+	page, err := s.dom.AdminListUndelivered(ctx, req.GetActorTelegramId(), int(req.GetOffset()), int(req.GetLimit()))
+	if err != nil {
+		return nil, fail(err)
+	}
+	out := &corev1.AdminListUndeliveredResponse{Total: page.Total}
+	for i := range page.Orders {
+		r := &page.Orders[i]
+		o := &corev1.AdminUndeliveredOrder{
+			Id: r.ID, TelegramId: r.TelegramID, Username: r.Username, PlanName: r.PlanName, Type: r.Type,
+			Amount: r.Amount, Currency: r.Currency, Attempts: int32(min(r.Attempts, math.MaxInt32)), //nolint:gosec // bounded
+			LastError: r.LastError, CreatedAt: r.CreatedAt.Unix(),
+			SellerKind: r.SellerKind, SellerTelegramId: r.SellerTelegramID, SellerUsername: r.SellerUsername,
+			Bulk: r.BulkID != nil,
+		}
+		if r.NextAttemptAt != nil {
+			o.NextAttemptAt = r.NextAttemptAt.Unix()
+		}
+		if r.Label != nil {
+			o.Label = *r.Label
+		}
+		out.Orders = append(out.Orders, o)
+	}
+	return out, nil
+}
+
+// AdminRetryUndelivered tries one undelivered order, or every one, again now (owner and admin).
+func (s *Server) AdminRetryUndelivered(ctx context.Context, req *corev1.AdminRetryUndeliveredRequest) (*corev1.AdminRetryUndeliveredResponse, error) {
+	ctx = fromBot(ctx)
+	n, err := s.dom.AdminRetryUndelivered(ctx, req.GetActorTelegramId(), req.GetOrderId())
+	if err != nil {
+		return nil, fail(err)
+	}
+	return &corev1.AdminRetryUndeliveredResponse{Count: int32(min(n, math.MaxInt32))}, nil //nolint:gosec // bounded
+}
+
+// AdminRefundUndelivered refunds an undelivered order to the buyer's wallet (owner and admin); an order that is not
+// waiting any more is the outcome gone, and nothing is done.
+func (s *Server) AdminRefundUndelivered(ctx context.Context, req *corev1.AdminRefundUndeliveredRequest) (*corev1.AdminRefundUndeliveredResponse, error) {
+	ctx = fromBot(ctx)
+	if err := s.needProvisioner(); err != nil {
+		return nil, err
+	}
+	outcome, res, err := s.dom.AdminRefundUndelivered(ctx, req.GetActorTelegramId(), s.prov, req.GetOrderId(), req.GetReason(), req.GetNote())
+	if err != nil {
+		return nil, fail(err)
+	}
+	out := &corev1.AdminRefundUndeliveredResponse{Outcome: outcome}
+	if res != nil && res.Order != nil {
+		out.Amount, out.Currency, out.CommissionTaken = res.Order.Amount, res.Order.Currency, res.CommissionTaken
 	}
 	return out, nil
 }

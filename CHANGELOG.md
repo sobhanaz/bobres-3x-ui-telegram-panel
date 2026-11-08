@@ -8,6 +8,18 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+### Updating
+- One database migration, additive, in core: 00057 (`orders.server_id`, the server staff chose for an undelivered order, and the ledger kind `commission_reversal`). Its Down drops the column and refuses new `commission_reversal` entries (the ledger keeps the ones it has). Update the bot, core and the provisioner together (new gRPC calls; the update does that).
+
+### Added
+- **Undelivered orders.** Paid orders whose service could not be made because a server did not answer now have a place of their own: the dashboard's **Payments > Undelivered** tab (also linked from the Overview's "Failed deliveries" card) and **Undelivered orders** in the bot's admin panel. Each order shows the buyer, the **seller** (the reseller who bought it for a customer, or the reseller whose link brought the buyer), the plan, the price, how long it has waited, the tries and the last error. Staff can:
+  - **retry** one order, or **all of them**, now (the worker still retries each on its own, at most every 30 minutes);
+  - **deliver a new service on another server** they pick (dashboard): the plan and the price stay the same, the order is tried at once on that server only, and a half-made reservation on the old server is released (when the old panel does not answer, the answer says a half-made account may be left there, to delete by hand);
+  - **refund** it to the buyer's wallet with an optional **note to the buyer**. The commission a reseller was paid on an order that was never delivered is **taken back** with the refund (as far as their wallet holds it; a shortfall is written to the audit log), and the reseller is told.
+- The bot's alerts about paid orders not delivered (the watchdog's "not delivered in the past hour" and the one per order after its third failed try) carry an **📦 Undelivered orders** button that opens the list (owners and admins).
+- When a delivery the customer was told is delayed finally works (after a retry, a move, or the server coming back), the "service ready" message says sorry for the wait.
+- Every order in the dashboard API carries its `seller` and the chosen `server_id`; new audit actions `order.move`, `order.retry_all` and `order.commission_reversal`.
+
 ## [0.22.1] — 2026-11-02
 
 **The Config names card on the Settings page, and a faster name lookup.** One additive migration (provisioner 00009, an index).

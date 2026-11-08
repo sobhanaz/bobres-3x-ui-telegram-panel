@@ -157,6 +157,8 @@ func (h *Handler) routeAdmin(r *req, rest string) {
 		h.sendDashboardLink(r)
 	case "pm", "pmr", "pmd", "pmy", "pma", "pmz":
 		h.routePanelMissing(r, verb, arg)
+	case "ud", "udr", "uda", "udf", "udy":
+		h.routeUndelivered(r, verb, arg)
 	default:
 		h.showAdmin(r)
 	}
@@ -193,6 +195,9 @@ func (h *Handler) showAdmin(r *req) {
 		Row(r.button("btn.adm_plans", "adm:plans"), r.button("btn.adm_discounts", "adm:disc")).
 		Row(r.button("btn.adm_notify", "adm:notif"), r.button("btn.adm_broadcast", "adm:bc")).
 		Row(r.button("btn.adm_settings", "adm:set"), r.button("btn.adm_servers", "adm:srv"))
+	if n := st.GetProvisionFailedOrders(); n > 0 { // paid orders whose service could not be made yet
+		kb.Row(r.button("btn.adm_undelivered", "adm:ud:0", "n", i18n.Number(r.lang, n)))
+	}
 	if n := st.GetServicesPanelMissing(); n > 0 { // services whose client an operator deleted in the panel
 		kb.Row(r.button("btn.adm_panel_missing", "adm:pm:0", "n", i18n.Number(r.lang, n)))
 	}

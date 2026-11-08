@@ -184,7 +184,7 @@ services. They are being prepared: you will get all the links in one message." w
   "Provisioning failed" alert for each failed service (the order id names it) and the customer no "taking longer" note per
   service; if none is ready the message says so ("Your N services are not ready yet"). Nothing paid for is lost: a
   service the panel cannot make stays a paid order the worker retries with growing waits, and staff can retry or refund it
-  from the dashboard as any order.
+  from the dashboard as any order, or from the bot's **Undelivered orders**.
 - **Staff and records.** The staff alert for a sale (`notify.sales`) is one message per bulk, for the whole quantity ("New
   bulk sale: @name bought 3 × Plan for 450,000 Toman"). The audit log has one `order.bulk` entry per bulk (the buyer as the
   actor, source bot, with the plan, the quantity, the price of each and the total); the orders, the ledger and every report
@@ -313,8 +313,8 @@ With the setting off nothing shows: no line, no button, and an old menu's button
 command: the old ones still work, and each usage text ends with "open /admin and use the buttons".
 
 **Menu:** payments to review (count) | today and find a user | plans and discounts | notifications and broadcast |
-settings and servers | not on the panel (N), while there are any | owner only: payment methods and staff | dashboard
-link | home.
+settings and servers | undelivered orders (N) and not on the panel (N), each while there are any | owner only: payment
+methods and staff | dashboard link | home.
 - **Payments to review:** a list, oldest first, eight to a page: each payment is a button (who paid, how much, when; a
   warning sign when the bank reference was seen before) that opens its card with the receipt or TXID and Approve / Reject.
   Every owner and admin sees the same list and the same alerts; a payment one of them decides leaves everyone's list, and
@@ -358,6 +358,38 @@ link | home.
   or forged one does nothing but show the list ("That button is out of date", or "no longer on the list"); a customer,
   a reseller or support tapping one gets "This is for admins only" and nothing changes. The maintenance tables include
   these verbs (a customer's tap during maintenance gets the maintenance popup).
+- **Undelivered orders** (owner and admin, `payments.review` on the dashboard; built 2026-11-05): paid orders whose
+  service could not be made or applied yet because a server did not answer (status `provision_failed`). Core tries each
+  again on its own with growing waits, at least every 30 minutes; the admin menu shows **📦 Undelivered orders (N)** while
+  N > 0 (`AdminStats.provision_failed_orders`, the count on the admin screen's "Failed provisioning" line). The list is
+  five to a page, the longest waiting first: the plan in the staff member's language (and "renewal" or "extra traffic"
+  when it is not a new service), the amount, the buyer (@username, else the Telegram id), the reseller behind it ("👤
+  reseller @x" when a reseller bought it for a customer, with the name they gave the service; "@buyer · via reseller @x"
+  when a reseller brought the buyer and is paid a commission), how long it has waited, the attempts, and core's last
+  error cut to 120 characters. Each order has 🔁 **Retry** and 💸 **Refund**; under the list **Retry all**, paging and
+  Back. Retry makes the order due now and the worker tries it at once: the popup says "Tried again now", or "This order is
+  not waiting any more" (delivered, refunded or being tried right now), and the list is shown again in place. Retry all
+  says how many it tried. Refund asks first with the order's summary and what it does (the money goes back to the buyer's
+  wallet, the order is cancelled, a reseller's commission on it is taken back, the buyer is told); ✅ **Refund** (green)
+  or Back. The outcome is written above the list: the amount refunded and the commission taken back, or "not waiting any
+  more: nothing was done". The audit log keeps `order.retry`, `order.retry_all` and `order.refund` as the dashboard's,
+  with the fixed reason "Refunded from the bot (undelivered order)" in the staff member's language and no note to the
+  buyer. gRPC `AdminListUndelivered`, `AdminRetryUndelivered` (one order, or `""` for all; the count) and
+  `AdminRefundUndelivered` (the outcome `done` or `gone`, the amount and the commission taken), each checking the role
+  again. Callbacks (within 64 bytes, every order id checked as a UUID before core is asked): `adm:ud:<page>` (a page in
+  place; `adm:ud` is the first), `adm:udr:<page>:<id>` (retry one), `adm:uda:<page>` (retry all),
+  `adm:udf:<page>:<id>` (ask to refund), `adm:udy:<page>:<id>` (Refund). A stale or forged one does nothing but show the
+  list ("That button is out of date"); a customer, a reseller or support gets "This is for admins only". The maintenance
+  tables include these verbs.
+  What the others are told: the buyer gets the usual refund message ("An order was refunded: X was added to your wallet")
+  and, when staff wrote one on the dashboard, a line "📝 Note from the store: …" under it. A customer who had been told
+  "Preparing your service is taking longer than usual" (`sub.delayed`, sent at the third failed attempt) gets the usual
+  delivery, renewal or traffic message when it finally works, with "🙏 Sorry this took longer than usual: one of our
+  servers was not answering." at the end (core's `Late`; never for a service of a bulk purchase, whose one message says
+  how its services are). The reseller whose commission on a refunded undelivered order was taken back is told the amount
+  and the balance after (`wallet.commission_reversed`, never naming the customer), and the statement names the entry
+  "Commission taken back (refund)" (ledger kind `commission_reversal`). Nothing is taken below zero: what the wallet
+  could not cover stays in the audit log.
 
 **Input steps** (plan, top-up, trial, discount, setting, server weight, staff, broadcast) share one engine: each step
 says "Step n of m", what is wanted, the allowed range and an example; a refused answer is explained above the same
@@ -594,8 +626,9 @@ Customer languages; not in the bot's admin settings), codes with the store's def
   `internal/bot/i18n/locales/<lang>.json` (the tests check every key, placeholder, tag and plural form).
 
 ## Notifications
-Expiry (3d/1d/expired), traffic (80%/100%), payment result, ticket reply, wallet change (resellers: commission and
-recorded payments), panel/server alerts (admin only).
+Expiry (3d/1d/expired), traffic (80%/100%), payment result, ticket reply, wallet change (resellers: commission, a
+commission taken back with the refund of an undelivered order, and recorded payments), a late delivery's apology,
+panel/server alerts (admin only).
 All user-configurable except billing-critical ones.
 
 ## Copy and states to write (see 08-brand)

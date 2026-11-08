@@ -108,8 +108,11 @@ type Order struct {
 	Rate         *int64
 	// ClientName is the config name the buyer chose for a new service (with a reseller's prefix in front); nil = the automatic name.
 	ClientName *string
-	CreatedAt  time.Time
-	UpdatedAt  time.Time
+	// ServerID is the server staff chose for an undelivered new service (MoveOrder): the worker offers the provisioner
+	// that server instead of the plan's. nil = the plan's servers.
+	ServerID  *string
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 // Bulk mirrors core.bulk_orders: a purchase of Quantity services of one plan
