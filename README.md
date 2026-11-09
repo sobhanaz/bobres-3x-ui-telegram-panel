@@ -524,6 +524,63 @@ back by itself** if the new version does not come up healthy. `sudo bobres updat
 always move together; a database migration is run by the update and is additive, so a rollback keeps your orders and
 credit. The stable channel is the default; `updates.channel` can be set to beta for pre-releases.
 
+#### Backups, restoring and moving to a new server
+
+The store backs itself up every day (at 03:30 in the store's time zone by default), encrypted with its **backup key**. The newest 7 backups stay in
+`/opt/bobres/backups`, each one is also sent to the owner on Telegram, and copies can go to S3-compatible storage.
+`sudo bobres backup` makes one now.
+
+**Your backup key.** The install shows it once, on its last card. To see it again, run `sudo bobres` and choose
+**11. Backup key**. Keep it somewhere off the server, such as a password manager. Without it no backup can be opened, and
+anyone who has it can read your backups.
+
+**Restore on the same server.** In the dashboard, use **System > Backups**: it makes a safety backup first and rolls back
+by itself if the restored store is not healthy. Or run:
+
+```sh
+sudo bobres restore /opt/bobres/backups/bobres-20261011T033000Z.bkp
+```
+
+It checks the whole file, shows when it was made and asks before it changes anything. It saves the current data first
+(`bobres-<now>-before-restore.bkp`), so a restore can itself be undone.
+
+**Move to a new server** (or rebuild this one):
+
+1. If the old server still runs, make a last backup there and stop the store. Then no order is lost, and the two
+   servers do not both answer the same bot:
+
+   ```sh
+   sudo bobres backup && sudo bobres stop
+   ```
+
+2. Point your domain's DNS record (`A`) to the new server's IP.
+3. Install BOBRES on the new server (see [Run it](#-run-it)) with the **same domain and the same bot token**.
+4. Copy the backup to it: the newest one from Telegram, or one from the old server's `/opt/bobres/backups`:
+
+   ```sh
+   scp bobres-20261011T033000Z.bkp root@NEW_SERVER_IP:/root/
+   ```
+
+5. On the new server, put the **old** server's backup key in a file. Paste it into `cat`, not on the command line, so that
+   it stays out of the shell history. Press Enter, then Ctrl-D:
+
+   ```sh
+   umask 077; cat > /root/old-backup-key.txt
+   ```
+
+6. Restore with that key, then delete the key file:
+
+   ```sh
+   sudo bobres restore /root/bobres-20261011T033000Z.bkp --key-file /root/old-backup-key.txt
+   rm /root/old-backup-key.txt
+   ```
+
+Everything comes back: customers, services, orders, wallets, resellers and settings. The backup carries the master
+keys, so 3x-ui panel tokens, payment gateway settings and staff two-factor keys keep working. On the same domain the
+license keeps working too, because the database carries the install id. From then on, new backups use the new server's
+own backup key: save it as well. Backups from S3, every error message and what to check afterwards are in
+[docs/runbooks/restore.md](docs/runbooks/restore.md).
+
 #### Uninstall
 
 | Command | What it does |
