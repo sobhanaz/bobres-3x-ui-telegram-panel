@@ -291,7 +291,7 @@ func TestUsageWorkerSyncsAndReminds(t *testing.T) {
 	}
 
 	// A renewal starts a new period: the reminders can come again.
-	if err := s.ApplySubscriptionLimits(ctx, s.Conn(), sub.ID, nil, nil); err != nil {
+	if err := s.ApplySubscriptionLimits(ctx, s.Conn(), sub.ID, nil, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	got, _ = s.GetSubscription(ctx, s.Conn(), sub.ID)

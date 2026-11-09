@@ -154,6 +154,8 @@ func (s *Server) AdminListPanelMissing(ctx context.Context, req *corev1.AdminLis
 		}
 		if r.ExpiresAt != nil {
 			sv.ExpiresAt = r.ExpiresAt.Unix()
+		} else if r.FirstUseDays != nil {
+			sv.FirstUseDays = *r.FirstUseDays
 		}
 		if r.PanelMissingSince != nil {
 			sv.MissingSince = r.PanelMissingSince.Unix()

@@ -22,7 +22,9 @@ type Provisioner interface {
 	// plan's choice of panel inbounds per server (empty = the provisioner's
 	// default for the server it picks). group is the 3x-ui client group the
 	// client is put in ("" is the default group, "BOBRES").
-	CreateClient(ctx context.Context, subscriptionID, email string, durationDays, trafficBytes int64, candidates []string, inbounds []store.PlanInbound, group string) (ProvisionedClient, error)
+	// firstUse: the durationDays start at the client's first connection (first_use.go); the client's ExpiresAt is then
+	// negative.
+	CreateClient(ctx context.Context, subscriptionID, email string, durationDays, trafficBytes int64, candidates []string, inbounds []store.PlanInbound, group string, firstUse bool) (ProvisionedClient, error)
 	// SetClientGroups changes the group clients should be in ("" is the default
 	// group): a reseller's clients made before they had a group move into it. It
 	// returns how many subscriptions the provisioner held.
@@ -92,7 +94,7 @@ type Usage struct {
 type ProvisionedClient struct {
 	ServerID  string
 	XUISubID  string
-	ExpiresAt int64 // unix seconds, 0 = no expiry
+	ExpiresAt int64 // unix seconds, 0 = no expiry, negative = waits for its first connection, then runs that long
 }
 
 // Links are what the user needs to connect.
@@ -230,9 +232,9 @@ func (w *ProvisionWorker) ProvisionNext(ctx context.Context) (bool, error) {
 				days, bytes := orderLimits(o, plan)
 				// A renewal bought with a plan restarts the time from now; a staff member's extension adds to the time left.
 				restart := o.ExtendDays == nil && o.ExtendBytes == nil
-				o.TargetExpiresAt, o.TargetTrafficBytes = extendBy(o.Type, sub, days, bytes, w.now(), restart)
+				o.TargetExpiresAt, o.TargetTrafficBytes, o.TargetFirstUseDays = extendBy(o.Type, sub, days, bytes, w.now(), restart)
 				o.TargetsSet = true
-				if err := st.SetOrderTargets(ctx, tx, o.ID, o.TargetExpiresAt, o.TargetTrafficBytes); err != nil {
+				if err := st.SetOrderTargets(ctx, tx, o.ID, o.TargetExpiresAt, o.TargetTrafficBytes, o.TargetFirstUseDays); err != nil {
 					return err
 				}
 			}
@@ -287,7 +289,8 @@ func (w *ProvisionWorker) ProvisionNext(ctx context.Context) (bool, error) {
 		return true, w.extend(ctx, job)
 	}
 	days, traffic := planLimits(job.plan)
-	client, err := w.prov.CreateClient(ctx, job.sub.ID, job.sub.ClientEmail, days, traffic, candidates(job), job.plan.Inbounds, job.group)
+	firstUse := w.startsOnFirstUse(ctx, job)
+	client, err := w.prov.CreateClient(ctx, job.sub.ID, job.sub.ClientEmail, days, traffic, candidates(job), job.plan.Inbounds, job.group, firstUse)
 	if errors.Is(err, ErrClientNameTaken) && job.order.ClientName != nil && job.sub.ClientEmail == *job.order.ClientName {
 		// The panel has a client of the name the buyer chose (made there since it was checked): the service gets the
 		// automatic name instead and is delivered, and the customer is told. A paid order never fails for its name.
@@ -297,7 +300,7 @@ func (w *ProvisionWorker) ProvisionNext(ctx context.Context) (bool, error) {
 		}
 		w.log.Info("the config name chosen was taken on the panel; the automatic name is used", "order_id", job.order.ID)
 		job.sub.ClientEmail = auto
-		client, err = w.prov.CreateClient(ctx, job.sub.ID, auto, days, traffic, candidates(job), job.plan.Inbounds, job.group)
+		client, err = w.prov.CreateClient(ctx, job.sub.ID, auto, days, traffic, candidates(job), job.plan.Inbounds, job.group, firstUse)
 	}
 	var links Links
 	if err == nil {
@@ -329,17 +332,14 @@ func (w *ProvisionWorker) late(job *provisionJob) bool {
 
 func (w *ProvisionWorker) succeed(ctx context.Context, job *provisionJob, c ProvisionedClient, links Links, traffic int64) error {
 	st := w.svc.st
-	var expiresAt *time.Time
-	if c.ExpiresAt > 0 {
-		t := time.Unix(c.ExpiresAt, 0).UTC()
-		expiresAt = &t
-	}
+	// What the panel holds decides (not the switch): a client an earlier attempt made the other way is adopted as it is.
+	expiresAt, firstUseDays := panelExpiry(c.ExpiresAt)
 	var total *int64
 	if traffic > 0 {
 		total = &traffic
 	}
 	return st.WithTx(ctx, func(tx pgx.Tx) error {
-		if err := st.ActivateSubscription(ctx, tx, job.sub.ID, c.ServerID, c.XUISubID, links.SubscriptionLink, expiresAt, total); err != nil {
+		if err := st.ActivateSubscription(ctx, tx, job.sub.ID, c.ServerID, c.XUISubID, links.SubscriptionLink, expiresAt, total, firstUseDays); err != nil {
 			return err
 		}
 		ok, err := st.TransitionOrder(ctx, tx, job.order.ID, []string{"provisioning"}, "active")
@@ -364,8 +364,8 @@ func (w *ProvisionWorker) succeed(ctx context.Context, job *provisionJob, c Prov
 		}
 		e := events.SubscriptionProvisionedEvent{
 			SubscriptionID: job.sub.ID, OrderID: job.order.ID, UserID: job.user.ID, TelegramID: job.user.TelegramID,
-			SubscriptionLink: links.SubscriptionLink, ExpiresAt: c.ExpiresAt, TrafficBytes: traffic, Label: derefStr(job.sub.Label),
-			BulkID: bulkID, Late: w.late(job),
+			SubscriptionLink: links.SubscriptionLink, ExpiresAt: max(c.ExpiresAt, 0), TrafficBytes: traffic, Label: derefStr(job.sub.Label),
+			BulkID: bulkID, Late: w.late(job), FirstUseDays: deref32(firstUseDays),
 		}
 		if chosen := derefStr(job.order.ClientName); chosen != "" {
 			if job.sub.ClientEmail == chosen {
@@ -383,8 +383,11 @@ func (w *ProvisionWorker) succeed(ctx context.Context, job *provisionJob, c Prov
 func (w *ProvisionWorker) extend(ctx context.Context, job *provisionJob) error {
 	o := job.order
 	var expires, traffic int64
-	if o.TargetExpiresAt != nil {
+	switch {
+	case o.TargetExpiresAt != nil:
 		expires = o.TargetExpiresAt.Unix()
+	case o.TargetFirstUseDays != nil:
+		expires = waitingExpiry(*o.TargetFirstUseDays) // still waiting for its first connection, for longer
 	}
 	if o.TargetTrafficBytes != nil {
 		traffic = *o.TargetTrafficBytes
@@ -397,7 +400,7 @@ func (w *ProvisionWorker) extend(ctx context.Context, job *provisionJob) error {
 	}
 	st := w.svc.st
 	return st.WithTx(ctx, func(tx pgx.Tx) error {
-		if err := st.ApplySubscriptionLimits(ctx, tx, job.sub.ID, o.TargetExpiresAt, o.TargetTrafficBytes); err != nil {
+		if err := st.ApplySubscriptionLimits(ctx, tx, job.sub.ID, o.TargetExpiresAt, o.TargetTrafficBytes, o.TargetFirstUseDays); err != nil {
 			return err
 		}
 		ok, err := st.TransitionOrder(ctx, tx, o.ID, []string{"provisioning"}, "active")
@@ -416,8 +419,8 @@ func (w *ProvisionWorker) extend(ctx context.Context, job *provisionJob) error {
 		}
 		return w.svc.publish(ctx, tx, events.SubscriptionExtended, events.SubscriptionExtendedEvent{
 			SubscriptionID: job.sub.ID, OrderID: o.ID, UserID: job.user.ID, TelegramID: job.user.TelegramID,
-			Type: o.Type, ExpiresAt: expires, TrafficTotalBytes: traffic, TrafficUsedBytes: job.sub.TrafficUsed,
-			Label: derefStr(job.sub.Label), Late: w.late(job),
+			Type: o.Type, ExpiresAt: max(expires, 0), TrafficTotalBytes: traffic, TrafficUsedBytes: job.sub.TrafficUsed,
+			Label: derefStr(job.sub.Label), Late: w.late(job), FirstUseDays: deref32(o.TargetFirstUseDays),
 		})
 	})
 }

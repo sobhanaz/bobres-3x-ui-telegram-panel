@@ -46,6 +46,8 @@ watch(id, load)
 const s = computed(() => service.value)
 const live = computed(() => !!s.value && s.value.status !== 'deleted' && s.value.status !== 'pending')
 const left = computed(() => (s.value?.expires_at ? daysLeft(s.value.expires_at) : null))
+/** the days the service runs once its config first connects, while it waits for that (no end date yet); else null */
+const waiting = computed(() => (s.value && !s.value.expires_at && s.value.first_use_days ? s.value.first_use_days : null))
 
 // One dialog at a time; each action knows its request.
 type Action = 'extend' | 'reset' | 'disable' | 'enable' | 'delete' | 'page_regenerate' | 'recreate' | 'rename'
@@ -79,6 +81,8 @@ const newExpiry = computed(() => {
   const base = Math.max(s.value.expires_at, Date.now() / 1000)
   return base + extendDays.value * 86400
 })
+/** a waiting service keeps waiting: the days added go to the days it runs from its first connection (core caps them at 36500) */
+const newWaiting = computed(() => (waiting.value && extendDays.value > 0 ? Math.min(waiting.value + extendDays.value, 36500) : null))
 const dialog = computed(() => {
   switch (action.value) {
     case 'extend':
@@ -250,6 +254,10 @@ async function copyPage() {
             {{ dateTime(s.expires_at, lang) }}
             <span class="app-muted">({{ left! >= 0 ? t('service.days_left', { n: num(left!, lang) }, left!) : t('service.days_ago', { n: num(-left!, lang) }, -left!) }})</span>
           </template>
+          <template v-else-if="waiting">
+            {{ t('service.first_use', { n: num(waiting, lang) }, waiting) }}
+            <small class="app-muted hint">{{ t('service.first_use_hint') }}</small>
+          </template>
           <span v-else class="app-muted">{{ t('service.never') }}</span>
         </dd>
         <dt>{{ t('service.traffic') }}</dt>
@@ -324,7 +332,7 @@ async function copyPage() {
       <div class="app-row">
         <label>
           <span>{{ t('service.add_days') }}</span>
-          <InputText v-model="days" inputmode="numeric" dir="ltr" autocomplete="off" :disabled="!s?.expires_at" />
+          <InputText v-model="days" inputmode="numeric" dir="ltr" autocomplete="off" :disabled="!s?.expires_at && !waiting" />
         </label>
         <label>
           <span>{{ t('service.add_gb') }}</span>
@@ -332,6 +340,7 @@ async function copyPage() {
         </label>
       </div>
       <small v-if="newExpiry" class="app-muted">{{ t('service.new_expiry', { date: date(newExpiry, lang) }) }}</small>
+      <small v-else-if="newWaiting" class="app-muted">{{ t('service.new_first_use', { n: num(newWaiting, lang) }, newWaiting) }}</small>
     </div>
     <div v-else-if="action === 'rename'" class="app-form">
       <label>

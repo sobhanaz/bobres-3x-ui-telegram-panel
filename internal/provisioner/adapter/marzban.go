@@ -215,8 +215,8 @@ func (a *Marzban) Renew(ctx context.Context, email string, addDays, addBytes int
 }
 
 func (a *Marzban) SetLimits(ctx context.Context, email string, expiryMs, totalBytes int64) error {
-	if expiryMs < 0 || totalBytes < 0 {
-		return errors.New("marzban: SetLimits needs limits >= 0")
+	if totalBytes < 0 { // a negative expiry puts the user on hold for that long
+		return errors.New("marzban: SetLimits needs a quota >= 0")
 	}
 	body := expiryFields(expiryMs)
 	body["data_limit"] = totalBytes

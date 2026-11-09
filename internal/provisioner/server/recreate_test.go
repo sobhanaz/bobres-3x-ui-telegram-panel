@@ -136,8 +136,11 @@ func TestRecreateClientRefusals(t *testing.T) {
 	if _, err := f.client.CreateClient(ctx, &provisionerv1.CreateClientRequest{SubscriptionId: sub1, Email: "u13-taken", DurationDays: 5, TrafficBytes: 1 << 30}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.client.RecreateClient(ctx, &provisionerv1.RecreateClientRequest{SubscriptionId: sub1, ExpiresAt: -1}); status.Code(err) != codes.InvalidArgument {
-		t.Fatalf("a negative expiry: %v", err)
+	if _, err := f.client.RecreateClient(ctx, &provisionerv1.RecreateClientRequest{SubscriptionId: sub1, ExpiresAt: -(maxWaitingDays + 1) * 86400}); status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("too many days waiting for the first connection: %v", err)
+	}
+	if _, err := f.client.RecreateClient(ctx, &provisionerv1.RecreateClientRequest{SubscriptionId: sub1, TrafficTotalBytes: -1}); status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("a negative quota: %v", err)
 	}
 	// The email is somebody else's on the panel now: nothing of ours can be made under it.
 	f.deleteOnPanel(t, "u13-taken")

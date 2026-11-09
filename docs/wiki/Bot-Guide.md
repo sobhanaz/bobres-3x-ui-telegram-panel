@@ -54,6 +54,16 @@ By default every new config gets an automatic name (`u<telegram id>-<random>`). 
 - **Rename:** each service has **Change config name** in My services (and the Mini App; staff have **Rename** on the dashboard's service page). The subscription link stays the same. Services on a **Marzban** or **S-UI** server cannot be renamed (the button is hidden there): Marzban cannot change a username, and S-UI's link carries the name.
 - Renewals, traffic packages and bulk purchases never ask for a name.
 
+### Days from the first connection
+
+By default a service's days start when it is made: a 30-day service bought today ends 30 days from today, even if the customer sets it up next week. You can make the days start at the **first connection** instead: **Settings → Days from the first connection**, one switch for customers' purchases and one for resellers' (one at a time or in bulk), both off until you turn them on.
+
+- A service bought while it is on waits for its first connection, as long as that takes. Until then it shows **30 days, from the first connection** instead of an end date (bot, Mini App, dashboard and the service's page), it cannot expire, and no reminder about its end goes out.
+- When the config first connects, the server sets the end (30 days from then) and the service runs like any other.
+- **Renewing** a service that is still waiting adds the days to the wait (30 + 30 = 60 days from the first connection). A traffic package keeps the wait.
+- The **free trial** still starts at once. Services sold before you turned it on keep their dates, and turning it off changes no service.
+- It works on every panel BOBRES supports: 3x-ui, Marzban, S-UI and Hiddify.
+
 ### After the purchase
 
 - **Renew and add traffic** from My services, with the same link.

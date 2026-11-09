@@ -84,6 +84,7 @@ var contexts = map[string]Context{
 	"admin.plan_off": CtxButton,
 
 	"sub.no_expiry":          CtxButtonHTML,
+	"sub.first_use":          CtxButtonHTML, // a service waiting for its first connection: in place of its end, on a button and in messages
 	"reason.amount":          CtxButtonHTML,
 	"reason.unreadable":      CtxButtonHTML,
 	"reason.not_received":    CtxButtonHTML,
@@ -335,6 +336,7 @@ var markupArgs = map[string][]string{
 	"sup.product":          {"stock"},
 	"sup.product_desc":     {"stock"},
 	"renew.detail":         {"limits"},
+	"renew.detail_waiting": {"limits"},
 	"pay.crypto":           {"addresses"},
 	"admin.pending_item":   {"proof", "dup", "method"},
 	"admin.title":          {"panel"},

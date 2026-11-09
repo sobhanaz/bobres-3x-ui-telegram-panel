@@ -42,6 +42,20 @@ func (h *Handler) expires(r *req, unix int64) string {
 	return i18n.Date(r.lang, time.Unix(unix, 0))
 }
 
+// waitsForFirstUse reports whether a service waits for its first connection: its days start then, and it has no end date yet.
+func waitsForFirstUse(s *corev1.Subscription) bool {
+	return s.GetFirstUseDays() > 0 && s.GetExpiresAt() <= 0
+}
+
+// ends is when a service ends, as a list or its page says it: its date, never, or (while it waits for its first
+// connection) the days it will run from then.
+func (h *Handler) ends(r *req, s *corev1.Subscription) string {
+	if waitsForFirstUse(s) {
+		return r.t("sub.first_use", "days", i18n.Number(r.lang, int64(s.GetFirstUseDays())))
+	}
+	return h.expires(r, s.GetExpiresAt())
+}
+
 func (h *Handler) traffic(r *req, b int64) string {
 	if b <= 0 {
 		return r.t("sub.unlimited")
@@ -81,7 +95,7 @@ func (h *Handler) serviceButton(r *req, s *corev1.Subscription) string {
 	if s.GetLabel() != "" {
 		name = s.GetLabel()
 	}
-	return name + " · " + r.t("subs.item", "status", statusText(r, s.GetStatus()), "expires", h.expires(r, s.GetExpiresAt()))
+	return name + " · " + r.t("subs.item", "status", statusText(r, s.GetStatus()), "expires", h.ends(r, s))
 }
 
 func (h *Handler) showServices(r *req) {
@@ -154,7 +168,7 @@ func (h *Handler) showService(r *req, id string) {
 	}
 	kb.Row(r.button("btn.back", "subs"), r.button("btn.home", "home"))
 	text := r.t("sub.detail", "id", shortID(id), "status", statusText(r, s.GetStatus()),
-		"expires", h.expires(r, s.GetExpiresAt()), "traffic", h.traffic(r, s.GetTrafficTotalBytes()),
+		"expires", h.ends(r, s), "traffic", h.traffic(r, s.GetTrafficTotalBytes()),
 		"link", esc(s.GetSubscriptionLink()))
 	used, total := s.GetTrafficUsedBytes(), s.GetTrafficTotalBytes()
 	switch {

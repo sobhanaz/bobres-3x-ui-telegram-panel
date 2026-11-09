@@ -178,12 +178,17 @@ func (s *Server) SetLatency(d time.Duration) { s.mu.Lock(); s.latency = d; s.mu.
 func (s *Server) Calls(name string) int { s.mu.Lock(); defer s.mu.Unlock(); return s.calls[name] }
 
 // AddUsage simulates traffic usage for a client.
+// A client waiting for its first connection (a negative expiry) starts with
+// its first traffic, as the panel does: its end becomes now plus that duration.
 func (s *Server) AddUsage(email string, up, down int64) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if r, ok := s.clients[email]; ok {
 		r.up += up
 		r.down += down
+		if r.ExpiryTime < 0 && up+down > 0 {
+			r.ExpiryTime = time.Now().UnixMilli() - r.ExpiryTime
+		}
 	}
 }
 

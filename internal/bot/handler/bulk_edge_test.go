@@ -264,7 +264,7 @@ func fillServices(t *testing.T, w *world, n int) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := st.ActivateSubscription(ctx, st.Conn(), sub.ID, "00000000-0000-7000-8000-000000000001", "x", "", &expires, nil); err != nil {
+		if err := st.ActivateSubscription(ctx, st.Conn(), sub.ID, "00000000-0000-7000-8000-000000000001", "x", "", &expires, nil, nil); err != nil {
 			t.Fatal(err)
 		}
 	}

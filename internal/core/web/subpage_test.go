@@ -439,3 +439,16 @@ func TestBotUsernameSetting(t *testing.T) {
 		t.Error("renew button with no bot username")
 	}
 }
+
+// A service waiting for its first connection says so where the end date goes, with all its days left.
+func TestSubPageOfAServiceWaitingForItsFirstConnection(t *testing.T) {
+	f := newPageFixture(t)
+	f.sql(`UPDATE core.subscriptions SET expires_at = NULL, first_use_days = 30 WHERE id = $1`, f.subID)
+	code, _, en := f.page("/sub/" + f.token + "?l=en")
+	if code != 200 || !strings.Contains(en, "Starts at the first connection") || !strings.Contains(en, "30 days") || strings.Contains(en, "No expiry") {
+		t.Fatalf("en page: %d %s", code, en)
+	}
+	if _, _, fa := f.page("/sub/" + f.token); !strings.Contains(fa, "از اولین اتصال شروع می\u200cشود") || !strings.Contains(fa, "۳۰ روز") {
+		t.Fatalf("fa page: %s", fa)
+	}
+}

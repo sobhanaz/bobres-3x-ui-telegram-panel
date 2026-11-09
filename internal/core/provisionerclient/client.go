@@ -24,10 +24,10 @@ type Client struct {
 func New(rpc provisionerv1.ProvisionerServiceClient) *Client { return &Client{rpc: rpc} }
 
 // CreateClient implements domain.Provisioner.
-func (c *Client) CreateClient(ctx context.Context, subscriptionID, email string, durationDays, trafficBytes int64, candidates []string, inbounds []store.PlanInbound, group string) (domain.ProvisionedClient, error) {
+func (c *Client) CreateClient(ctx context.Context, subscriptionID, email string, durationDays, trafficBytes int64, candidates []string, inbounds []store.PlanInbound, group string, firstUse bool) (domain.ProvisionedClient, error) {
 	cl, err := c.rpc.CreateClient(ctx, &provisionerv1.CreateClientRequest{
 		SubscriptionId: subscriptionID, Email: email, DurationDays: durationDays, TrafficBytes: trafficBytes,
-		CandidateServerIds: candidates, Inbounds: inboundSelections(inbounds), Group: group,
+		CandidateServerIds: candidates, Inbounds: inboundSelections(inbounds), Group: group, StartOnFirstUse: firstUse,
 	})
 	if nameRefused(err) {
 		return domain.ProvisionedClient{}, fmt.Errorf("provisioner.CreateClient: %w: %w", domain.ErrClientNameTaken, err)

@@ -13,14 +13,14 @@ import (
 const orderCols = `id, user_id, plan_id, type, status, amount, currency, idempotency_key, created_at, updated_at,
 	subscription_id, discount_code, discount_amount, targets_set, target_expires_at, target_traffic_bytes,
 	extend_days, extend_bytes, created_by, refunded_at, refund_amount, label, bulk_id, bulk_index,
-	list_amount, list_currency, rate, client_name, server_id`
+	list_amount, list_currency, rate, client_name, server_id, target_first_use_days`
 
 func orderDest(o *Order) []any {
 	return []any{&o.ID, &o.UserID, &o.PlanID, &o.Type, &o.Status,
 		&o.Amount, &o.Currency, &o.IdempotencyKey, &o.CreatedAt, &o.UpdatedAt,
 		&o.SubscriptionID, &o.DiscountCode, &o.DiscountAmount, &o.TargetsSet, &o.TargetExpiresAt, &o.TargetTrafficBytes,
 		&o.ExtendDays, &o.ExtendBytes, &o.CreatedBy, &o.RefundedAt, &o.RefundAmount, &o.Label, &o.BulkID, &o.BulkIndex,
-		&o.ListAmount, &o.ListCurrency, &o.Rate, &o.ClientName, &o.ServerID}
+		&o.ListAmount, &o.ListCurrency, &o.Rate, &o.ClientName, &o.ServerID, &o.TargetFirstUseDays}
 }
 
 func scanOrder(row pgx.Row) (*Order, error) {
@@ -62,11 +62,13 @@ func (s *Store) CreateOrder(ctx context.Context, q querier, o *Order) (*Order, b
 }
 
 // SetOrderTargets stores the limits a renewal or top-up applies, computed
-// once so every retry sets the same values.
-func (s *Store) SetOrderTargets(ctx context.Context, q querier, id string, expiresAt *time.Time, trafficBytes *int64) error {
+// once so every retry sets the same values. firstUseDays is set (and
+// expiresAt nil) for a service still waiting for its first connection.
+func (s *Store) SetOrderTargets(ctx context.Context, q querier, id string, expiresAt *time.Time, trafficBytes *int64, firstUseDays *int32) error {
 	tag, err := q.Exec(ctx, `
-		UPDATE core.orders SET targets_set = true, target_expires_at = $2, target_traffic_bytes = $3, updated_at = now()
-		WHERE id = $1`, id, expiresAt, trafficBytes)
+		UPDATE core.orders SET targets_set = true, target_expires_at = $2, target_traffic_bytes = $3, target_first_use_days = $4,
+		    updated_at = now()
+		WHERE id = $1`, id, expiresAt, trafficBytes, firstUseDays)
 	if err != nil {
 		return fmt.Errorf("set order targets: %w", err)
 	}

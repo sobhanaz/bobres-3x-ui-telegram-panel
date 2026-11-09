@@ -304,6 +304,8 @@ type SubscriptionProvisionedEvent struct {
 	// Late is true when the customer was told the service is delayed (ProvisionFailed): its message says sorry for
 	// the wait.
 	Late bool `json:"late,omitempty"`
+	// FirstUseDays: the service waits for its first connection and then runs this many days (ExpiresAt is 0 then).
+	FirstUseDays int32 `json:"first_use_days,omitempty"`
 }
 
 // RewardCodeIssuedEvent: the buyer of a plan that gives a reward got a discount code, bound to them, one use, for any plan. It is a percent
@@ -389,6 +391,8 @@ type SubscriptionExtendedEvent struct {
 	// Late is true when the customer was told the order is delayed (ProvisionFailed): its message says sorry for the
 	// wait.
 	Late bool `json:"late,omitempty"`
+	// FirstUseDays: the service waits for its first connection and then runs this many days (ExpiresAt is 0 then).
+	FirstUseDays int32 `json:"first_use_days,omitempty"`
 }
 
 // Kinds of subscription.reminder.v1.

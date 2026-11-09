@@ -583,8 +583,8 @@ func (c *Client) SetLimits(ctx context.Context, email string, expiryMs, totalByt
 	if err := validIdent(email); err != nil {
 		return err
 	}
-	if expiryMs < 0 || totalBytes < 0 {
-		return errors.New("xui: SetLimits needs limits >= 0")
+	if totalBytes < 0 { // a negative expiry waits for the first connection, then runs that long
+		return errors.New("xui: SetLimits needs a quota >= 0")
 	}
 	defer c.lock(email)()
 	stored, err := c.storedClient(ctx, email)

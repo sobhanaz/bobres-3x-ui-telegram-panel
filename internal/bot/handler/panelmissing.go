@@ -146,7 +146,7 @@ func (h *Handler) showPanelMissing(r *req, page int, note string, fresh bool) {
 		n := i18n.Number(r.lang, int64(page*pmPage+i+1))
 		lines = append(lines, r.t("admin.pm_item", "n", n, "email", esc(s.GetClientEmail()),
 			"customer", esc(pmCustomer(s)), "plan", esc(pmPlanName(r, s.GetPlanName())),
-			"expires", pmExpires(r, s.GetExpiresAt()), "since", i18n.DateTime(r.lang, time.Unix(s.GetMissingSince(), 0))))
+			"expires", pmExpires(r, s), "since", i18n.DateTime(r.lang, time.Unix(s.GetMissingSince(), 0))))
 		p := strconv.Itoa(page)
 		kb.Row(r.button("btn.pm_recreate", "adm:pmr:"+p+":"+s.GetId(), "n", n),
 			r.button("btn.pm_delete", "adm:pmd:"+p+":"+s.GetId(), "n", n))
@@ -189,11 +189,14 @@ func pmPlanName(r *req, names map[string]string) string {
 	return "?"
 }
 
-func pmExpires(r *req, unix int64) string {
-	if unix <= 0 {
-		return r.t("sub.no_expiry")
+func pmExpires(r *req, s *corev1.AdminPanelMissingService) string {
+	switch {
+	case s.GetExpiresAt() > 0:
+		return i18n.Date(r.lang, time.Unix(s.GetExpiresAt(), 0))
+	case s.GetFirstUseDays() > 0: // waits for its first connection
+		return r.t("sub.first_use", "days", i18n.Number(r.lang, int64(s.GetFirstUseDays())))
 	}
-	return i18n.Date(r.lang, time.Unix(unix, 0))
+	return r.t("sub.no_expiry")
 }
 
 // findPanelMissing looks a service up in the list (it is not there: made again, deleted, back on the panel).
@@ -235,7 +238,7 @@ func (h *Handler) askPanelMissing(r *req, act string, page int, id string) {
 	p := strconv.Itoa(page)
 	kb := (&tg.Keyboard{}).Row(r.button("btn.pm_yes", "adm:pmy:"+act+":"+p+":"+id), r.button("btn.pm_no", "adm:pm:"+p))
 	r.show(r.t(key, "email", esc(s.GetClientEmail()), "customer", esc(pmCustomer(s)),
-		"plan", esc(pmPlanName(r, s.GetPlanName())), "expires", pmExpires(r, s.GetExpiresAt())), kb)
+		"plan", esc(pmPlanName(r, s.GetPlanName())), "expires", pmExpires(r, s)), kb)
 }
 
 // pmReason is what the audit log keeps as the reason: what was done, from the bot, by whom.

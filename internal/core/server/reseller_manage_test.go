@@ -110,7 +110,7 @@ func TestResellerManagementOverGRPC(t *testing.T) {
 		}
 		exp := time.Now().Add(20 * 24 * time.Hour)
 		total := int64(50 << 30)
-		if err := f.st.ActivateSubscription(ctx, f.st.Conn(), sub.ID, "00000000-0000-7000-8000-000000000001", "x", "https://sub.example/"+sub.ID, &exp, &total); err != nil {
+		if err := f.st.ActivateSubscription(ctx, f.st.Conn(), sub.ID, "00000000-0000-7000-8000-000000000001", "x", "https://sub.example/"+sub.ID, &exp, &total, nil); err != nil {
 			t.Fatal(err)
 		}
 		if statusName != "active" {

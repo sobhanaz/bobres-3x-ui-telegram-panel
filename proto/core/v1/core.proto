@@ -144,6 +144,10 @@ message Subscription {
   // config_names.customers or config_names.resellers), the service is delivered, and its server keeps the link
   // when a client is renamed (3x-ui, Hiddify; not Marzban or S-UI). False from an older core.
   bool renamable = 16;
+  // The service waits for its first connection and then runs this many days (expires_at is 0 until the panel sets
+  // the end then): the settings first_use.customers and first_use.resellers. 0 for any other service, and from an
+  // older core.
+  int32 first_use_days = 17;
 }
 
 message FindServiceByLinkRequest {
@@ -1308,6 +1312,7 @@ message AdminPanelMissingService {
   int64 expires_at = 6; // unix seconds; 0: never
   int64 missing_since = 7; // unix seconds: when core first saw the panel without it
   string status = 8;
+  int32 first_use_days = 9; // waits for its first connection, then runs this many days (expires_at is 0); 0 otherwise
 }
 
 message AdminListPanelMissingResponse {

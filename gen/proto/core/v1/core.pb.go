@@ -965,7 +965,11 @@ type Subscription struct {
 	// The owner may rename the service now (RenameService): config names are on for them (the settings
 	// config_names.customers or config_names.resellers), the service is delivered, and its server keeps the link
 	// when a client is renamed (3x-ui, Hiddify; not Marzban or S-UI). False from an older core.
-	Renamable     bool `protobuf:"varint,16,opt,name=renamable,proto3" json:"renamable,omitempty"`
+	Renamable bool `protobuf:"varint,16,opt,name=renamable,proto3" json:"renamable,omitempty"`
+	// The service waits for its first connection and then runs this many days (expires_at is 0 until the panel sets
+	// the end then): the settings first_use.customers and first_use.resellers. 0 for any other service, and from an
+	// older core.
+	FirstUseDays  int32 `protobuf:"varint,17,opt,name=first_use_days,json=firstUseDays,proto3" json:"first_use_days,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1110,6 +1114,13 @@ func (x *Subscription) GetRenamable() bool {
 		return x.Renamable
 	}
 	return false
+}
+
+func (x *Subscription) GetFirstUseDays() int32 {
+	if x != nil {
+		return x.FirstUseDays
+	}
+	return 0
 }
 
 type FindServiceByLinkRequest struct {
@@ -9309,6 +9320,7 @@ type AdminPanelMissingService struct {
 	ExpiresAt     int64                  `protobuf:"varint,6,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`                                                                       // unix seconds; 0: never
 	MissingSince  int64                  `protobuf:"varint,7,opt,name=missing_since,json=missingSince,proto3" json:"missing_since,omitempty"`                                                              // unix seconds: when core first saw the panel without it
 	Status        string                 `protobuf:"bytes,8,opt,name=status,proto3" json:"status,omitempty"`
+	FirstUseDays  int32                  `protobuf:"varint,9,opt,name=first_use_days,json=firstUseDays,proto3" json:"first_use_days,omitempty"` // waits for its first connection, then runs this many days (expires_at is 0); 0 otherwise
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -9397,6 +9409,13 @@ func (x *AdminPanelMissingService) GetStatus() string {
 		return x.Status
 	}
 	return ""
+}
+
+func (x *AdminPanelMissingService) GetFirstUseDays() int32 {
+	if x != nil {
+		return x.FirstUseDays
+	}
+	return 0
 }
 
 type AdminListPanelMissingResponse struct {
@@ -12464,7 +12483,7 @@ const file_core_v1_core_proto_rawDesc = "" +
 	"\rbalance_after\x18\t \x01(\x03R\fbalanceAfter\x12\x1d\n" +
 	"\n" +
 	"created_at\x18\n" +
-	" \x01(\x03R\tcreatedAt\"\xf4\x03\n" +
+	" \x01(\x03R\tcreatedAt\"\x9a\x04\n" +
 	"\fSubscription\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
 	"\auser_id\x18\x02 \x01(\tR\x06userId\x12\x19\n" +
@@ -12483,7 +12502,8 @@ const file_core_v1_core_proto_rawDesc = "" +
 	"\x05label\x18\r \x01(\tR\x05label\x12\x19\n" +
 	"\bpage_url\x18\x0e \x01(\tR\apageUrl\x12\x12\n" +
 	"\x04note\x18\x0f \x01(\tR\x04note\x12\x1c\n" +
-	"\trenamable\x18\x10 \x01(\bR\trenamable\"G\n" +
+	"\trenamable\x18\x10 \x01(\bR\trenamable\x12$\n" +
+	"\x0efirst_use_days\x18\x11 \x01(\x05R\ffirstUseDays\"G\n" +
 	"\x18FindServiceByLinkRequest\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x12\n" +
 	"\x04link\x18\x02 \x01(\tR\x04link\"k\n" +
@@ -13135,7 +13155,7 @@ const file_core_v1_core_proto_rawDesc = "" +
 	"\x1cAdminListPanelMissingRequest\x12*\n" +
 	"\x11actor_telegram_id\x18\x01 \x01(\x03R\x0factorTelegramId\x12\x16\n" +
 	"\x06offset\x18\x02 \x01(\x05R\x06offset\x12\x14\n" +
-	"\x05limit\x18\x03 \x01(\x05R\x05limit\"\xf1\x02\n" +
+	"\x05limit\x18\x03 \x01(\x05R\x05limit\"\x97\x03\n" +
 	"\x18AdminPanelMissingService\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12!\n" +
 	"\fclient_email\x18\x02 \x01(\tR\vclientEmail\x12\x1f\n" +
@@ -13146,7 +13166,8 @@ const file_core_v1_core_proto_rawDesc = "" +
 	"\n" +
 	"expires_at\x18\x06 \x01(\x03R\texpiresAt\x12#\n" +
 	"\rmissing_since\x18\a \x01(\x03R\fmissingSince\x12\x16\n" +
-	"\x06status\x18\b \x01(\tR\x06status\x1a;\n" +
+	"\x06status\x18\b \x01(\tR\x06status\x12$\n" +
+	"\x0efirst_use_days\x18\t \x01(\x05R\ffirstUseDays\x1a;\n" +
 	"\rPlanNameEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"t\n" +

@@ -44,7 +44,7 @@ func (h *Handler) onFindLink(r *req) {
 
 // showFound shows a service that is not in the customer's list: its state, with Renew when it can be.
 func (h *Handler) showFound(r *req, s *corev1.Subscription, secret string) {
-	text := r.t("find.detail", "status", statusText(r, s.GetStatus()), "expires", h.expires(r, s.GetExpiresAt()),
+	text := r.t("find.detail", "status", statusText(r, s.GetStatus()), "expires", h.ends(r, s),
 		"traffic", h.traffic(r, s.GetTrafficTotalBytes()))
 	used, total := s.GetTrafficUsedBytes(), s.GetTrafficTotalBytes()
 	switch {
@@ -55,7 +55,7 @@ func (h *Handler) showFound(r *req, s *corev1.Subscription, secret string) {
 	}
 	kb := &tg.Keyboard{}
 	if renewable(s) {
-		n, ok := h.saveCheckout(r, state.Checkout{Type: "renew", SubscriptionID: s.GetId(), LinkSecret: secret})
+		n, ok := h.saveCheckout(r, state.Checkout{Type: "renew", SubscriptionID: s.GetId(), LinkSecret: secret, Waiting: waitsForFirstUse(s)})
 		if !ok {
 			return
 		}
@@ -86,5 +86,9 @@ func (h *Handler) onFoundRenew(r *req, n string) {
 		r.fail(err)
 		return
 	}
-	h.showPicker(r, c, ps, r.t("find.renew_pick", "id", shortID(c.SubscriptionID)))
+	key := "find.renew_pick"
+	if c.Waiting { // its days have not started: the renewal adds to them
+		key = "find.renew_pick_waiting"
+	}
+	h.showPicker(r, c, ps, r.t(key, "id", shortID(c.SubscriptionID)))
 }

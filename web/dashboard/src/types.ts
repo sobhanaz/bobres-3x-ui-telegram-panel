@@ -52,6 +52,9 @@ export interface ServiceItem {
   /** the branded page's address (detail endpoints only; empty while it is off) */
   page_url?: string
   expires_at: number | null
+  /** the service waits for its config's first connection and then runs this many days (expires_at is null meanwhile);
+   * null for any other service. Older cores leave it out. */
+  first_use_days?: number | null
   traffic_total: number | null
   traffic_used: number
   last_synced_at: number | null

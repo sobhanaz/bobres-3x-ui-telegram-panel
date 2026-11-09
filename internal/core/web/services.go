@@ -13,16 +13,19 @@ type planRef struct {
 }
 
 type serviceJSON struct {
-	ID           string     `json:"id"`
-	User         *userBrief `json:"user"`
-	Plan         planRef    `json:"plan"`
-	Status       string     `json:"status"`
-	ClientEmail  string     `json:"client_email"`
-	SubLink      string     `json:"sub_link"`
-	ExpiresAt    *int64     `json:"expires_at"`
-	TrafficTotal *int64     `json:"traffic_total"`
-	TrafficUsed  int64      `json:"traffic_used"`
-	LastSyncedAt *int64     `json:"last_synced_at"`
+	ID          string     `json:"id"`
+	User        *userBrief `json:"user"`
+	Plan        planRef    `json:"plan"`
+	Status      string     `json:"status"`
+	ClientEmail string     `json:"client_email"`
+	SubLink     string     `json:"sub_link"`
+	ExpiresAt   *int64     `json:"expires_at"`
+	// FirstUseDays: the service waits for its first connection and then runs this many days (expires_at is null
+	// meanwhile); null for any other service.
+	FirstUseDays *int32 `json:"first_use_days"`
+	TrafficTotal *int64 `json:"traffic_total"`
+	TrafficUsed  int64  `json:"traffic_used"`
+	LastSyncedAt *int64 `json:"last_synced_at"`
 	// PanelMissingSince is when core first saw that the panel has no client for the service (an operator
 	// deleted it there); null while the panel has it.
 	PanelMissingSince *int64  `json:"panel_missing_since"`
@@ -37,12 +40,16 @@ type serviceJSON struct {
 }
 
 func serviceOf(r *store.SubscriptionRow) serviceJSON {
-	return serviceJSON{
+	j := serviceJSON{
 		ID: r.ID, User: briefOf(r.UserID, r.TelegramID, r.Username), Plan: planRef{r.PlanID, r.PlanName},
 		Status: r.Status, ClientEmail: r.ClientEmail, SubLink: r.SubLink, ExpiresAt: unix(r.ExpiresAt),
 		TrafficTotal: r.TrafficTotal, TrafficUsed: r.TrafficUsed, LastSyncedAt: unix(r.LastSyncedAt), CreatedAt: r.CreatedAt.Unix(),
 		PanelMissingSince: unix(r.PanelMissingSince), Label: r.Label,
 	}
+	if r.ExpiresAt == nil {
+		j.FirstUseDays = r.FirstUseDays // only while it waits: an end date wins
+	}
+	return j
 }
 
 // listServices: GET /api/v1/services?q=&status=&user=&panel=missing&page=&size=

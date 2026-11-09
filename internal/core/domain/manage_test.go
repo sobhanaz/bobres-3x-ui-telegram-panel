@@ -91,13 +91,13 @@ func TestExtendSubscriptionRules(t *testing.T) {
 	// An expired service needs days; a service without expiry takes no days.
 	past := time.Now().Add(-time.Hour)
 	total := int64(10 << 30)
-	if err := s.ApplySubscriptionLimits(ctx, s.Conn(), sub.ID, &past, &total); err != nil {
+	if err := s.ApplySubscriptionLimits(ctx, s.Conn(), sub.ID, &past, &total, nil); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := svc.ExtendSubscription(ctx, staff, ExtendParams{SubscriptionID: sub.ID, Bytes: 1 << 30, Reason: "r", IdempotencyKey: "k7"}); !errors.Is(err, ErrState) {
 		t.Fatalf("traffic for an expired service: %v", err)
 	}
-	if err := s.ApplySubscriptionLimits(ctx, s.Conn(), sub.ID, nil, &total); err != nil {
+	if err := s.ApplySubscriptionLimits(ctx, s.Conn(), sub.ID, nil, &total, nil); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := svc.ExtendSubscription(ctx, staff, ExtendParams{SubscriptionID: sub.ID, Days: 3, Reason: "r", IdempotencyKey: "k8"}); !errors.Is(err, ErrState) {

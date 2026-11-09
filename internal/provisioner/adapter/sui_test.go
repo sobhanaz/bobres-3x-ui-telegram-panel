@@ -131,8 +131,8 @@ func TestSUICreateDefaultsAndRefusals(t *testing.T) {
 	if err := a.Renew(ctx, "u2-x", 1, 0); err == nil || !strings.Contains(err.Error(), "unlimited") {
 		t.Fatalf("renew of an unlimited client: %v", err)
 	}
-	if err := a.SetLimits(ctx, "u3-y", -1, 0); err == nil {
-		t.Fatal("negative limits taken")
+	if err := a.SetLimits(ctx, "u3-y", 0, -1); err == nil {
+		t.Fatal("a negative quota taken")
 	}
 	// A wrong token.
 	bad, _ := NewSUI(fake.URL, "wrong-token", xui.AllowInsecureHTTP(), xui.AllowPrivateAddresses())

@@ -43,6 +43,7 @@
   "services.expires": "Действует до {date}",
   "services.days_left": "Осталось: {n|# день|# дня|# дней}",
   "services.expired": "Закончился",
+  "services.first_use": "{n|# день|# дня|# дней} · с первого подключения",
   "services.traffic": "{used} из {total}",
   "services.traffic_free": "Использовано {used}",
   "services.renew": "Продлить",

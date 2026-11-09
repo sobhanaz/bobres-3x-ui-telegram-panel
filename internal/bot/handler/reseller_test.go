@@ -95,7 +95,7 @@ func (w *world) seedService(telegramID int64, label string) string {
 		w.t.Fatal(err)
 	}
 	expires, traffic := time.Now().Add(30*24*time.Hour), int64(50<<30)
-	if err := st.ActivateSubscription(ctx, st.Conn(), sub.ID, server, "", testenv.SubBase+sub.ID, &expires, &traffic); err != nil {
+	if err := st.ActivateSubscription(ctx, st.Conn(), sub.ID, server, "", testenv.SubBase+sub.ID, &expires, &traffic, nil); err != nil {
 		w.t.Fatal(err)
 	}
 	return sub.ID

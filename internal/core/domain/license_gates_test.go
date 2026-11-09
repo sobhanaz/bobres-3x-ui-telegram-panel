@@ -359,7 +359,7 @@ func (w *gateWorld) activeServices(n int) []*store.Subscription {
 		if err != nil {
 			w.t.Fatal(err)
 		}
-		if err := w.s.ActivateSubscription(ctx, w.s.Conn(), sub.ID, "00000000-0000-7000-8000-000000000001", "x", "https://link/"+sub.ID, &expires, &total); err != nil {
+		if err := w.s.ActivateSubscription(ctx, w.s.Conn(), sub.ID, "00000000-0000-7000-8000-000000000001", "x", "https://link/"+sub.ID, &expires, &total, nil); err != nil {
 			w.t.Fatal(err)
 		}
 		sub.UserID = u.ID

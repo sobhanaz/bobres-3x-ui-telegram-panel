@@ -494,6 +494,8 @@ func subscriptionToProto(sc *store.Subscription, page func(token string) string)
 	}
 	if sc.ExpiresAt != nil {
 		sp.ExpiresAt = sc.ExpiresAt.Unix()
+	} else if sc.FirstUseDays != nil {
+		sp.FirstUseDays = *sc.FirstUseDays
 	}
 	if sc.TrafficTotal != nil {
 		sp.TrafficTotalBytes = *sc.TrafficTotal

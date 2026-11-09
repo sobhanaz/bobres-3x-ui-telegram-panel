@@ -313,8 +313,8 @@ func TestSetLimitsKeepsTheClientIdentity(t *testing.T) {
 	if _, ok := got["reverse"]; ok {
 		t.Fatalf("an empty reverse must be left out (the panel wants an object): %v", got["reverse"])
 	}
-	if err := c.SetLimits(context.Background(), "u1", -1, 0); err == nil {
-		t.Fatal("negative limits accepted")
+	if err := c.SetLimits(context.Background(), "u1", 0, -1); err == nil {
+		t.Fatal("a negative quota accepted")
 	}
 }
 

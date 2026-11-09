@@ -158,6 +158,11 @@ var SettingSpecs = []SettingSpec{
 		Help: "true = customers may choose the name of a new service's config while buying (or keep the automatic name) and rename their services from My services, in the bot and the Mini App: 4 to 20 lowercase letters and digits with at least one of each, checked on every server before payment; a service on a Marzban or S-UI server cannot be renamed (its link would change); false = automatic names only (the default)"},
 	{Key: SettingConfigNamesResellers, Group: "config_names", Kind: KindBool, Perm: permSettings, Default: "false",
 		Help: "true = resellers may choose the config name of a service they buy for a customer and rename their services, as customers can; the reseller's prefix stays in front (sob-name1234); false = automatic names only (the default)"},
+	// Days from the first connection (first_use.go): a new service's days start when its config first connects. Off by default.
+	{Key: SettingFirstUseCustomers, Group: "first_use", Kind: KindBool, Perm: permSettings, Default: "false",
+		Help: "true = a service a customer buys starts counting its days at its first connection, not when it is made (it waits for that connection as long as it takes, and cannot expire meanwhile); the free trial still starts at once; services made before keep their dates; false = the days start when the service is made (the default)"},
+	{Key: SettingFirstUseResellers, Group: "first_use", Kind: KindBool, Perm: permSettings, Default: "false",
+		Help: "true = a service a reseller buys (one at a time or in bulk) starts counting its days at its first connection, so it can be handed to a customer later; false = the days start when the service is made (the default)"},
 	{Key: "support.autoclose_days", Group: "support", Kind: KindInt, Perm: permSettings, Default: "7", Min: 0, Max: 90,
 		Help: "close a ticket this many days after staff answered, when the customer does not write back (0 = never)"},
 	{Key: "limits.bot_per_10s", Group: "limits", Kind: KindInt, Perm: permSettings, Default: "20", Min: 5, Max: 200,

@@ -97,7 +97,7 @@ func TestStaleSubLinks(t *testing.T) {
 			t.Fatal(err)
 		}
 		if server != "" {
-			if err := s.ActivateSubscription(ctx, s.Conn(), sub.ID, server, "x", link, nil, nil); err != nil {
+			if err := s.ActivateSubscription(ctx, s.Conn(), sub.ID, server, "x", link, nil, nil, nil); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -190,7 +190,7 @@ func TestPostponeSubLink(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.ActivateSubscription(ctx, s.Conn(), sub.ID, srvA, "x", "https://old/p", nil, nil); err != nil {
+	if err := s.ActivateSubscription(ctx, s.Conn(), sub.ID, srvA, "x", "https://old/p", nil, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	due := func() []StaleSubLink {

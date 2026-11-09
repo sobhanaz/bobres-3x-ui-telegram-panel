@@ -6,8 +6,8 @@
 // note, pause or resume, and delete after a confirmation.
 // Core decides what is allowed; the buttons follow the can_* answers.
 import { computed, ref } from 'vue'
-import { fmtBytes, fmtDate, fmtNum, statusKey } from '../../fmt'
-import { daysLeft, isolate } from '../../format'
+import { fmtBytes, fmtNum, serviceEnd, statusKey } from '../../fmt'
+import { isolate } from '../../format'
 import { haptic, copyText, openLink } from '../../telegram'
 import { tr } from '../../i18n'
 import { fail } from '../../store'
@@ -30,12 +30,7 @@ const title = computed(() => props.service.label || tr('reseller.services.unname
 const status = computed(() => (props.service.status === 'disabled' ? tr('reseller.status.disabled') : tr(statusKey(props.service.status))))
 const pending = computed(() => props.service.status === 'pending')
 
-const expiry = computed(() => {
-  const at = props.service.expires_at
-  if (!at) return ''
-  const n = daysLeft(at, Date.now())
-  return n < 0 ? tr('services.expired') : tr('services.days_left', { n: fmtNum(n) }) + ' · ' + tr('services.expires', { date: fmtDate(at) })
-})
+const expiry = computed(() => serviceEnd(props.service))
 const usage = computed(() =>
   props.service.traffic_total
     ? tr('services.traffic', { used: fmtBytes(props.service.traffic_used), total: fmtBytes(props.service.traffic_total) })

@@ -111,6 +111,7 @@ type BulkService struct {
 	ExpiresAt      *time.Time
 	TrafficTotal   *int64
 	SubLabel       *string
+	FirstUseDays   *int32 // the service waits for its first connection, to run this many days
 }
 
 // BulkServices lists the orders of a bulk with their services, in their
@@ -118,9 +119,9 @@ type BulkService struct {
 func (s *Store) BulkServices(ctx context.Context, q querier, bulkID string) ([]BulkService, error) {
 	rows, err := q.Query(ctx, `
 		SELECT `+orderColsO+`, COALESCE(sub.id::text, ''), COALESCE(sub.status, ''), COALESCE(sub.sub_link, ''),
-			sub.expires_at, sub.traffic_total_bytes, sub.label
+			sub.expires_at, sub.traffic_total_bytes, sub.label, sub.first_use_days
 		FROM core.orders o
-		LEFT JOIN LATERAL (SELECT id, status, sub_link, expires_at, traffic_total_bytes, label
+		LEFT JOIN LATERAL (SELECT id, status, sub_link, expires_at, traffic_total_bytes, label, first_use_days
 			FROM core.subscriptions WHERE order_id = o.id ORDER BY created_at, id LIMIT 1) sub ON true
 		WHERE o.bulk_id = $1
 		ORDER BY o.bulk_index`, bulkID)
@@ -132,7 +133,7 @@ func (s *Store) BulkServices(ctx context.Context, q querier, bulkID string) ([]B
 	for rows.Next() {
 		var bs BulkService
 		dest := append(orderDest(&bs.Order), &bs.SubscriptionID, &bs.SubStatus, &bs.SubLink,
-			&bs.ExpiresAt, &bs.TrafficTotal, &bs.SubLabel)
+			&bs.ExpiresAt, &bs.TrafficTotal, &bs.SubLabel, &bs.FirstUseDays)
 		if err := rows.Scan(dest...); err != nil {
 			return nil, err
 		}

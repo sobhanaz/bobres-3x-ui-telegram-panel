@@ -495,6 +495,8 @@
     "never": "Hiçbir zaman",
     "days_left": "{n} gün kaldı",
     "days_ago": "{n} gün önce bitti",
+    "first_use": "{n} gün · ilk bağlantıdan itibaren",
+    "first_use_hint": "Günleri, yapılandırması ilk bağlandığında başlar. O zamana kadar bekler ve sona eremez.",
     "traffic": "Trafik",
     "traffic_of": "{used} / {total}",
     "traffic_unlimited": "{used} kullanıldı · sınırsız",
@@ -511,6 +513,7 @@
     "add_days": "Eklenecek gün",
     "add_gb": "Eklenecek GB",
     "new_expiry": "Yeni bitiş tarihi: yaklaşık {date}",
+    "new_first_use": "İlk bağlantıdan itibaren {n} gün çalışacak",
     "reset": "Trafiği sıfırla",
     "reset_intro": "Kullanılan trafiği panelde sıfıra çeker (tamamını kullanmış bir hizmet yeniden çalışır).",
     "disable": "Kapat",
@@ -1859,6 +1862,11 @@
         "title": "Yapılandırma adları",
         "desc": "Alıcılar yeni bir hizmetin yapılandırma adını otomatik ad yerine kendileri seçsin ve hizmetlerini yeniden adlandırsın.",
         "note": "Ad, her birinden en az bir tane olmak üzere 4 ile 20 küçük harf ve rakamdan oluşur ve ödemeden önce tüm sunucularda denetlenir; hizmet oluşturulana kadar bir sunucu onu almışsa hizmet otomatik adı alır ve müşteriye söylenir. Yeniden adlandırma abonelik bağlantısını korur, bu yüzden yalnızca 3x-ui ve Hiddify sunucularındaki hizmetler için sunulur (Marzban ve S-UI değil). Yenilemeler ve trafik paketleri asla ad sormaz. Personel bir hizmeti her zaman kendi sayfasından yeniden adlandırabilir. Siz açana kadar kapalıdır."
+      },
+      "first_use": {
+        "title": "İlk bağlantıdan itibaren günler",
+        "desc": "Satın alınan bir hizmetin günleri, oluşturulduğunda değil, yapılandırması ilk bağlandığında başlasın.",
+        "note": "Yeni bir hizmet, etkin ve bitiş tarihi olmadan, yapılandırması ilk kez bağlanana kadar ne kadar sürerse sürsün bekler: bu sırada sona eremez. Sonra günleri (örneğin 30) başlar. Ücretsiz deneme yine hemen başlar. Hâlâ bekleyen bir hizmeti yenilemek, günlerini beklemeye ekler. Daha önce oluşturulan hizmetler tarihlerini korur. 3x-ui, Marzban, S-UI ve Hiddify sunucularında çalışır. Siz açana kadar kapalıdır."
       }
     },
     "field": {
@@ -2188,6 +2196,16 @@
         "resellers": {
           "label": "Bayiler yapılandırma adı seçer",
           "help": "Açık: bayiler bir müşteri için aldıkları hizmete ad verebilir ve hizmetlerini yeniden adlandırabilir; önekleri önde kalır (sob-name1234)."
+        }
+      },
+      "first_use": {
+        "customers": {
+          "label": "Müşteri hizmetleri ilk bağlantıda başlar",
+          "help": "Açık: bir müşterinin (botta veya Mini Uygulamada) aldığı hizmetin günleri, yapılandırması ilk bağlandığında başlar."
+        },
+        "resellers": {
+          "label": "Bayi hizmetleri ilk bağlantıda başlar",
+          "help": "Açık: bir bayinin bir müşteri için tek tek veya toplu aldığı hizmetin günleri, yapılandırması ilk bağlandığında başlar."
         }
       }
     },

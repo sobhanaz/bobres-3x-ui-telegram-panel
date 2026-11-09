@@ -495,6 +495,8 @@
     "never": "Never",
     "days_left": "{n} day left | {n} days left",
     "days_ago": "ended {n} day ago | ended {n} days ago",
+    "first_use": "{n} day · from the first connection | {n} days · from the first connection",
+    "first_use_hint": "Its days start when its config first connects. Until then it waits and cannot end.",
     "traffic": "Traffic",
     "traffic_of": "{used} of {total}",
     "traffic_unlimited": "{used} used · unlimited",
@@ -511,6 +513,7 @@
     "add_days": "Days to add",
     "add_gb": "GB to add",
     "new_expiry": "New end date: about {date}",
+    "new_first_use": "It will run {n} day from the first connection | It will run {n} days from the first connection",
     "reset": "Reset traffic",
     "reset_intro": "Sets the used traffic back to zero on the panel (a service that had used it all works again).",
     "disable": "Turn off",
@@ -1859,6 +1862,11 @@
         "title": "Config names",
         "desc": "Let buyers choose the name of a new service's config instead of the automatic one, and rename their services.",
         "note": "A name is 4 to 20 lowercase letters and digits with at least one of each, and is checked on every server before payment; if a server took it by the time the service is made, the service gets the automatic name and the customer is told. Renaming keeps the subscription link, so it is offered only for services on 3x-ui and Hiddify servers (not Marzban or S-UI). Renewals and traffic packages never ask for a name. Staff can always rename a service from its page. Off until you turn it on."
+      },
+      "first_use": {
+        "title": "Days from the first connection",
+        "desc": "Start a bought service's days when its config first connects, not when it is made.",
+        "note": "A new service waits, active and with no end date, until its config connects for the first time, however long that takes: it cannot expire meanwhile. Then its days (for example 30) start. The free trial still starts at once. Renewing a service that is still waiting adds its days to the wait. Services made before keep their dates. Works on 3x-ui, Marzban, S-UI and Hiddify servers. Off until you turn it on."
       }
     },
     "field": {
@@ -2188,6 +2196,16 @@
         "resellers": {
           "label": "Resellers choose config names",
           "help": "On: resellers can name a service they buy for a customer and rename their services; their prefix stays in front (sob-name1234)."
+        }
+      },
+      "first_use": {
+        "customers": {
+          "label": "Customers' services start at the first connection",
+          "help": "On: the days of a service a customer buys (in the bot or the Mini App) start when its config first connects."
+        },
+        "resellers": {
+          "label": "Resellers' services start at the first connection",
+          "help": "On: the days of a service a reseller buys for a customer, one at a time or in bulk, start when its config first connects."
         }
       }
     },

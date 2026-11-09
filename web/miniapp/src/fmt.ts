@@ -1,7 +1,7 @@
 // Formatting in the current language, for templates.
 import { lang, planName as pickName, tr, type Key } from './i18n'
-import { ago, bytes, clock, date, dateTime, exactMoney, money, num } from './format'
-import type { Plan, PlanGroup } from './api'
+import { ago, bytes, clock, date, dateTime, daysLeft, exactMoney, money, num } from './format'
+import type { Plan, PlanGroup, Service } from './api'
 
 export const fmtMoney = (amount: number, currency: string, scale: number) => money(amount, currency, scale, lang.value)
 /** fmtExact is an amount to send, with every decimal (fmtMoney keeps two). */
@@ -26,6 +26,14 @@ export function planFacts(p: Plan): string {
   if (p.traffic_bytes) parts.push(fmtBytes(p.traffic_bytes))
   else if (p.kind !== 'time') parts.push(tr('plans.unlimited'))
   return parts.join(' · ')
+}
+
+/** serviceEnd: "20 days left · Ends 1 Dec", "Ended", or for a service still waiting for its config's first connection
+ * "30 days · from the first connection"; empty for a service that never ends. */
+export function serviceEnd(s: Pick<Service, 'expires_at' | 'first_use_days'>): string {
+  if (!s.expires_at) return s.first_use_days ? tr('services.first_use', { n: fmtNum(s.first_use_days) }) : ''
+  const n = daysLeft(s.expires_at, Date.now())
+  return n < 0 ? tr('services.expired') : tr('services.days_left', { n: fmtNum(n) }) + ' · ' + tr('services.expires', { date: fmtDate(s.expires_at) })
 }
 
 export function statusKey(status: string): Key {

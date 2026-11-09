@@ -119,7 +119,8 @@ func (s *Store) ListUsers(ctx context.Context, q querier, f UserFilter, p Page) 
 // subscriptionColsS is subscriptionCols for a query that names the table s.
 const subscriptionColsS = `s.id, s.user_id, s.order_id, COALESCE(s.server_id::text, ''), s.client_email, s.sub_id, s.status,
 	s.expires_at, s.traffic_total_bytes, COALESCE(s.traffic_used_bytes, 0), s.last_synced_at, COALESCE(s.sub_link, ''), s.created_at,
-	s.notified_expiring_at, s.notified_low_traffic_at, s.notified_ended_at, s.label, s.page_token, s.note, s.panel_missing_since`
+	s.notified_expiring_at, s.notified_low_traffic_at, s.notified_ended_at, s.label, s.page_token, s.note, s.panel_missing_since,
+	s.first_use_days`
 
 // SubscriptionFilter narrows the services list. Query matches a Telegram id,
 // part of a username or panel email, or part of a service id (the bot shows
@@ -249,7 +250,7 @@ func idPart(q string) string {
 const orderColsO = `o.id, o.user_id, o.plan_id, o.type, o.status, o.amount, o.currency, o.idempotency_key, o.created_at, o.updated_at,
 	o.subscription_id, o.discount_code, o.discount_amount, o.targets_set, o.target_expires_at, o.target_traffic_bytes,
 	o.extend_days, o.extend_bytes, o.created_by, o.refunded_at, o.refund_amount, o.label, o.bulk_id, o.bulk_index,
-	o.list_amount, o.list_currency, o.rate, o.client_name, o.server_id`
+	o.list_amount, o.list_currency, o.rate, o.client_name, o.server_id, o.target_first_use_days`
 
 // OrderFilter narrows the orders list. Query matches a Telegram id, part of a
 // username or part of an order id. Oldest lists the oldest first (the

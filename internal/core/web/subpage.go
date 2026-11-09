@@ -50,7 +50,9 @@ type pageText struct {
 	Title, Expires, DaysLeftLabel, Traffic, Renew, LinkTitle, LinkHint, QRAlt,
 	AppsTitle, AddTo, AppsHint, Support, Terms, Privacy, Unlimited, NoExpiry,
 	UsedOf, UsedOnly, DayOne, DayMany string
-	Status map[string]string
+	// FirstUse stands for the end of a service waiting for its first connection (its days are the time left).
+	FirstUse string
+	Status   map[string]string
 }
 
 var pageTexts = map[string]pageText{
@@ -62,6 +64,7 @@ var pageTexts = map[string]pageText{
 		AppsHint: "If a button does nothing, install the app first, or copy the link above and add it in the app by hand.",
 		Support:  "Support", Terms: "Terms", Privacy: "Privacy", Unlimited: "Unlimited", NoExpiry: "No expiry",
 		UsedOf: "{used} used of {total}", UsedOnly: "{used} used", DayOne: "{n} day", DayMany: "{n} days",
+		FirstUse: "Starts at the first connection",
 		Status: map[string]string{"active": "Active", "expiring_soon": "Expiring soon", "expired": "Expired",
 			"depleted": "Traffic used up", "disabled": "Disabled"},
 	},
@@ -73,6 +76,7 @@ var pageTexts = map[string]pageText{
 		AppsHint: "اگر دکمه\u200cای کاری نکرد، ابتدا برنامه را نصب کنید یا لینک بالا را کپی کرده و در برنامه دستی اضافه کنید.",
 		Support:  "پشتیبانی", Terms: "قوانین", Privacy: "حریم خصوصی", Unlimited: "نامحدود", NoExpiry: "بدون انقضا",
 		UsedOf: "{used} از {total} مصرف شده", UsedOnly: "{used} مصرف شده", DayOne: "{n} روز", DayMany: "{n} روز",
+		FirstUse: "از اولین اتصال شروع می\u200cشود",
 		Status: map[string]string{"active": "فعال", "expiring_soon": "رو به پایان", "expired": "منقضی شده",
 			"depleted": "حجم تمام شده", "disabled": "غیرفعال"},
 	},
@@ -232,6 +236,9 @@ func (s *Server) pageData(r *http.Request, settings map[string]string, conf doma
 		if days > 0 && days <= expiringDays && status == "active" {
 			status = "expiring_soon"
 		}
+	} else if sub.FirstUseDays != nil {
+		d.Expires = t.FirstUse // the days start at the first connection: they are all left
+		days = int(*sub.FirstUseDays)
 	} else {
 		d.Expires = t.NoExpiry
 	}

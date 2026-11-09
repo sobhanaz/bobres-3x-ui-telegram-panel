@@ -322,7 +322,11 @@ func (h *Handler) showCheckout(r *req, c state.Checkout) {
 	var text string
 	switch c.Type {
 	case "renew":
-		text = r.t("renew.detail", "id", shortID(c.SubscriptionID), "name", esc(planName(r, p)), "limits", planLimits(r, p), "price", r.money(price, cur))
+		key := "renew.detail"
+		if c.Waiting { // the service waits for its first connection: the days are added to the wait
+			key = "renew.detail_waiting"
+		}
+		text = r.t(key, "id", shortID(c.SubscriptionID), "name", esc(planName(r, p)), "limits", planLimits(r, p), "price", r.money(price, cur))
 	case "traffic_topup":
 		text = r.t("topup.detail", "id", shortID(c.SubscriptionID), "name", esc(planName(r, p)),
 			"size", i18n.Bytes(r.lang, p.GetTrafficBytes()), "price", r.money(price, cur))
