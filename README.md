@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/readme/hero.svg" alt="BOBRES: launch your own VPN store on Telegram, in one command. Live v0.24.0." width="100%">
+  <img src="docs/readme/hero.svg" alt="BOBRES: launch your own VPN store on Telegram, in one command. Live v0.24.1." width="100%">
 </p>
 
 <p align="center">
@@ -449,8 +449,8 @@ Run `sudo bobres` for the management menu, or use any item as a command. The hea
 <summary><b>The same menu as text (<code>sudo bobres</code>)</b></summary>
 
 ```text
-   n____n   BOBRES manager  bobres v0.24.0
-  ( o  o )  /opt/bobres  ·  shop.example.com  ·  version 0.24.0
+   n____n   BOBRES manager  bobres v0.24.1
+  ( o  o )  /opt/bobres  ·  shop.example.com  ·  version 0.24.1
    \_||_/   Store     running (9/9 services)
             License   Standard license, 214 days left
             HTTPS     auto, certificate expires in 79 days
@@ -786,10 +786,10 @@ at `https://<domain>/admin`
 
 ### 🚦 Status
 
-**Latest release: v0.24.0 (2026-11-09)**: a bought service's days can start at its config's first connection instead of
-when it is made (one switch for customers, one for resellers, off until the owner turns them on); v0.23.0 brought the
-undelivered orders list, late card receipts that still reach the owner, and the welcome with the bottom menu only
-([CHANGELOG.md](CHANGELOG.md)).
+**Latest release: v0.24.1 (2026-11-09)**: the live USDT price is read from Nobitex, Tabdeal and Wallex, so it works
+again on servers where it had stopped (Tetherland's API is gone, and Wallex blocks some servers). v0.24.0 brought days from the first
+connection: a bought service's days can start when its config first connects (one switch for customers, one for
+resellers, off until the owner turns them on) ([CHANGELOG.md](CHANGELOG.md)).
 
 Phases 0 to 7 of the plan are built and tested in CI ([docs/PLAN.md](docs/PLAN.md) §10). The first public release, v0.1.0,
 came out on 2026-10-14, and 28 stable releases have followed. Each one is signed, built for amd64 and arm64, and verified by the

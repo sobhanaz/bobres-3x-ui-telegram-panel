@@ -8,9 +8,17 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+## [0.24.1] — 2026-11-09
+
+**The live USDT price works again on servers where it had stopped, and the README shows how to restore a backup or move to a new server.** No migration; only the bot changes (the update does that).
+
 ### Fixed
 - **The live USDT price stopped on some servers.** The bot read it from Tetherland and Wallex. Tetherland's API is gone, and Wallex does not answer some servers outside Iran, so on those servers no source answered: with no rate of the owner's own (`payments.usdt_rate`), paying in USDT was not offered for Toman prices. The bot now reads **Nobitex, Tabdeal and Wallex** and uses the middle price of those that answer (still refused when they are more than 3% apart), so one exchange that is down or blocks the server leaves two.
 - When no exchange answers, the error now names each one and why it gave nothing (unreachable, timed out, an HTTP status, no usable price), in the bot's log and on the dashboard's **Read it now** (Gateways); before it only said that none answered.
+
+### Docs
+- The README has a new section, **Backups, restoring and moving to a new server**: where backups are, where to see the backup key again (`sudo bobres` > 11), restoring on the same server, and moving to a new server in six steps. The steps are: a last backup and stopping the old store, DNS, an install with the same domain and bot token, copying the backup, the old key in a file, then `bobres restore --key-file`. The section also says what comes back.
+- The README shows a screenshot of `sudo bobres` on a real store.
 
 ## [0.24.0] — 2026-11-09
 
