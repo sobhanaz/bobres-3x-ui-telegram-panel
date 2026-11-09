@@ -4,11 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"math"
+	"net"
 	"net/http"
 	"sort"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -25,9 +29,11 @@ type RateSource struct {
 	Parse func(body []byte) (float64, error)
 }
 
-// DefaultRateSources are the pages the live rate is read from.
+// DefaultRateSources are the pages the live rate is read from: three exchanges, so that one that is down or blocks the store's server (Wallex
+// does not answer some servers outside Iran) leaves two. Tetherland was one until its API went away in November 2026.
 var DefaultRateSources = []RateSource{
-	{Name: "tetherland", URL: "https://api.tetherland.com/currencies", Parse: parseTetherland},
+	{Name: "nobitex", URL: "https://apiv2.nobitex.ir/market/stats?srcCurrency=usdt&dstCurrency=rls", Parse: parseNobitexStats},
+	{Name: "tabdeal", URL: "https://api1.tabdeal.org/r/api/v1/depth?symbol=USDTIRT&limit=1", Parse: parseTabdealDepth},
 	{Name: "wallex", URL: "https://api.wallex.ir/v1/depth?symbol=USDTTMN", Parse: parseWallexDepth},
 }
 
@@ -43,19 +49,73 @@ const (
 	maxRateAnswer     = 1 << 20
 )
 
-// parseTetherland reads {"data":{"currencies":{"USDT":{"price":271600}}}}.
-func parseTetherland(body []byte) (float64, error) {
+// middlePrice is the average of the prices above zero (the best ask and the best bid of a book, or the one there is).
+func middlePrice(prices ...float64) (float64, error) {
+	sum, n := 0.0, 0
+	for _, p := range prices {
+		if p > 0 {
+			sum += p
+			n++
+		}
+	}
+	if n == 0 {
+		return 0, errors.New("no order book")
+	}
+	return sum / float64(n), nil
+}
+
+// price is a price written as a JSON number or a string; "", null or anything that is not a finite number is no price (0), so one empty side
+// of a book does not lose the other.
+type price float64
+
+func (p *price) UnmarshalJSON(b []byte) error {
+	f, err := strconv.ParseFloat(strings.Trim(string(b), `"`), 64)
+	if err != nil || math.IsNaN(f) || math.IsInf(f, 0) {
+		f = 0
+	}
+	*p = price(f)
+	return nil
+}
+
+// parseNobitexStats reads {"status":"ok","stats":{"usdt-rls":{"isClosed":false,"bestSell":"2649490","bestBuy":"2649400"}}}: the middle of
+// the best sell and the best buy, in Rial (ten to a Toman). A closed market has no price.
+func parseNobitexStats(body []byte) (float64, error) {
 	var v struct {
-		Data struct {
-			Currencies map[string]struct {
-				Price float64 `json:"price"`
-			} `json:"currencies"`
-		} `json:"data"`
+		Status string `json:"status"`
+		Stats  map[string]struct {
+			IsClosed bool  `json:"isClosed"`
+			BestSell price `json:"bestSell"`
+			BestBuy  price `json:"bestBuy"`
+		} `json:"stats"`
 	}
 	if err := json.Unmarshal(body, &v); err != nil {
 		return 0, err
 	}
-	return v.Data.Currencies["USDT"].Price, nil
+	m, ok := v.Stats["usdt-rls"]
+	if v.Status != "ok" || !ok || m.IsClosed {
+		return 0, errors.New("no open USDT market")
+	}
+	rial, err := middlePrice(float64(m.BestSell), float64(m.BestBuy))
+	return rial / 10, err
+}
+
+// parseTabdealDepth reads the order book {"asks":[["265000.0","615.7"]],"bids":[["264950.0","38.9"]]} (Toman; [price, amount]): the middle
+// of the best ask and the best bid (or the one there is).
+func parseTabdealDepth(body []byte) (float64, error) {
+	var v struct {
+		Asks [][]price `json:"asks"`
+		Bids [][]price `json:"bids"`
+	}
+	if err := json.Unmarshal(body, &v); err != nil {
+		return 0, err
+	}
+	best := func(side [][]price) float64 {
+		if len(side) == 0 || len(side[0]) == 0 {
+			return 0
+		}
+		return float64(side[0][0])
+	}
+	return middlePrice(best(v.Asks), best(v.Bids))
 }
 
 // parseWallexDepth reads the order book {"result":{"ask":[{"price":271742}],"bid":[{"price":271620}]}}: the middle of the best ask and the
@@ -74,21 +134,14 @@ func parseWallexDepth(body []byte) (float64, error) {
 	if err := json.Unmarshal(body, &v); err != nil {
 		return 0, err
 	}
-	var prices []float64
+	var ask, bid float64
 	if len(v.Result.Ask) > 0 {
-		prices = append(prices, v.Result.Ask[0].Price)
+		ask = v.Result.Ask[0].Price
 	}
 	if len(v.Result.Bid) > 0 {
-		prices = append(prices, v.Result.Bid[0].Price)
+		bid = v.Result.Bid[0].Price
 	}
-	if len(prices) == 0 {
-		return 0, errors.New("no order book")
-	}
-	sum := 0.0
-	for _, p := range prices {
-		sum += p
-	}
-	return sum / float64(len(prices)), nil
+	return middlePrice(ask, bid)
 }
 
 // RateProxy serves POST /internal/usdt-rate.
@@ -114,7 +167,8 @@ func medianRate(rates []float64) int64 {
 	return int64(math.Round((rates[n/2-1] + rates[n/2]) / 2))
 }
 
-// Read asks every source at once and gives the median of the usable answers and the names of the sources that gave one.
+// Read asks every source at once and gives the median of the usable answers and the names of the sources that gave one. When none did, the
+// error names each source and why it gave nothing (unreachable, timed out, an HTTP status, no usable price), so the owner sees which page broke.
 func (p RateProxy) Read(ctx context.Context) (rate int64, sources []string, err error) {
 	srcs := p.Sources
 	if srcs == nil {
@@ -131,35 +185,51 @@ func (p RateProxy) Read(ctx context.Context) (rate int64, sources []string, err 
 		rate float64
 	}
 	var (
-		mu  sync.Mutex
-		got []result
-		wg  sync.WaitGroup
+		mu     sync.Mutex
+		got    []result
+		failed []string
+		wg     sync.WaitGroup
 	)
 	for _, s := range srcs {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+			fail := func(why string) {
+				mu.Lock()
+				failed = append(failed, s.Name+": "+why)
+				mu.Unlock()
+			}
 			ctx, cancel := context.WithTimeout(ctx, rateSourceTimeout)
 			defer cancel()
 			req, err := http.NewRequestWithContext(ctx, http.MethodGet, s.URL, nil)
 			if err != nil {
+				fail("bad address")
 				return
 			}
 			req.Header.Set("Accept", "application/json")
 			resp, err := hc.Do(req)
 			if err != nil {
+				var ne net.Error
+				if errors.As(err, &ne) && ne.Timeout() {
+					fail("timed out")
+				} else {
+					fail("unreachable")
+				}
 				return
 			}
 			defer func() { _ = resp.Body.Close() }()
 			if resp.StatusCode != http.StatusOK {
+				fail(fmt.Sprintf("HTTP %d", resp.StatusCode))
 				return
 			}
 			body, err := io.ReadAll(io.LimitReader(resp.Body, maxRateAnswer+1))
 			if err != nil || len(body) > maxRateAnswer {
+				fail("unreadable answer")
 				return
 			}
 			r, err := s.Parse(body)
 			if err != nil || math.IsNaN(r) || r < minRate || r > maxRate {
+				fail("no usable price")
 				return
 			}
 			mu.Lock()
@@ -169,7 +239,8 @@ func (p RateProxy) Read(ctx context.Context) (rate int64, sources []string, err 
 	}
 	wg.Wait()
 	if len(got) == 0 {
-		return 0, nil, errors.New("no price source answered")
+		sort.Strings(failed)
+		return 0, nil, fmt.Errorf("no price source answered (%s)", strings.Join(failed, "; "))
 	}
 	sort.Slice(got, func(i, j int) bool { return got[i].name < got[j].name })
 	rates := make([]float64, len(got))
@@ -203,7 +274,7 @@ func (p RateProxy) Handler() http.Handler {
 		w.Header().Set("Cache-Control", "no-store")
 		rate, sources, err := p.Read(r.Context())
 		if err != nil {
-			log.Warn("the live USDT rate could not be read")
+			log.Warn("the live USDT rate could not be read", "err", err)
 			licenseError(w, http.StatusBadGateway, "unreachable", err.Error())
 			return
 		}

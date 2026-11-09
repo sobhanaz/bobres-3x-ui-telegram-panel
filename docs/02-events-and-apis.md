@@ -421,9 +421,10 @@ photos customers sent (core's service token; images and PDFs, 10 MB at most).
 The bot's `GET /internal/public-ip` (core's service token) tells core this server's public IP address, because core has
 
 **The live USDT price.** Core has no internet access, so every two minutes (while automatic rates are on and an USDT address is set) it asks the bot at
-`POST /internal/usdt-rate` (core's service token, no body); the bot reads two fixed public price pages (Tetherland's currencies list and Wallex's USDT/Toman
-order book) at once, drops what is not a number between 1,000 and 100,000,000 Toman, refuses the reading when the sources are more than 3% apart (one of them is wrong), and answers `{"rate": <Toman per USDT, the median>, "sources": [...],
-"at": <unix>}`, or 502 `{"error", "message"}` when none answered. Core keeps the last answer as the internal state `state.usdt_rate.live` and uses it while it
+`POST /internal/usdt-rate` (core's service token, no body); the bot reads three fixed public price pages (Nobitex's USDT/Rial market stats, read in Toman, and Tabdeal's and Wallex's
+USDT/Toman order books) at once, drops what is not a number between 1,000 and 100,000,000 Toman, refuses the reading when the sources are more than 3% apart (one of them is wrong), and answers `{"rate": <Toman per USDT, the median>, "sources": [...],
+"at": <unix>}`, or 502 `{"error", "message"}` when none answered (the message names each source and why it gave nothing: unreachable, timed out, an
+HTTP status or no usable price). Core keeps the last answer as the internal state `state.usdt_rate.live` and uses it while it
 is at most 30 minutes old: the rate every conversion of a Toman price into USDT uses (`Service.UsdtRate`: the live price plus the margin
 `payments.usdt_rate_margin` percent, rounded up; or `payments.usdt_rate` when `payments.usdt_rate_auto` is off or the live price is old). The bot's
 `GetSettings` carries that rate as `payments.usdt_rate`, so the amounts it shows are the ones core charges. Dashboard: `GET /api/v1/usdt-rate` and

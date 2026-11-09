@@ -19,39 +19,93 @@ func rateServer(t *testing.T, status int, body string) *httptest.Server {
 	return srv
 }
 
+// Answers as the exchanges gave them on 2026-11-09 (Nobitex in Rial, the others in Toman).
+const (
+	nobitexAnswer = `{"status":"ok","stats":{"usdt-rls":{"isClosed":false,"bestSell":"2649490","bestBuy":"2649400","latest":"2649500","dayLow":"2625000"}},"global":{"binance":{}}}`
+	tabdealAnswer = `{"asks":[["265000.0000000000000000","615.76667000"]],"bids":[["264950.0000000000000000","38.95451900"]]}`
+	wallexAnswer  = `{"result":{"ask":[{"price":271742,"quantity":1}],"bid":[{"price":271620,"quantity":2}]}}`
+)
+
 func TestRateParsers(t *testing.T) {
-	if r, err := parseTetherland([]byte(`{"status":200,"data":{"currencies":{"USDT":{"price":271600,"sell_price":271600}}}}`)); err != nil || r != 271600 {
-		t.Fatalf("tetherland: %v %v", r, err)
+	for _, c := range []struct {
+		name  string
+		parse func([]byte) (float64, error)
+		body  string
+		want  float64
+	}{
+		{"nobitex, Rial to Toman", parseNobitexStats, nobitexAnswer, 264944.5},
+		{"nobitex, numbers", parseNobitexStats, `{"status":"ok","stats":{"usdt-rls":{"bestSell":2650000,"bestBuy":2640000}}}`, 264500},
+		{"nobitex, one side", parseNobitexStats, `{"status":"ok","stats":{"usdt-rls":{"bestSell":"2650000","bestBuy":""}}}`, 265000},
+		{"tabdeal", parseTabdealDepth, tabdealAnswer, 264975},
+		{"tabdeal, one side", parseTabdealDepth, `{"asks":[],"bids":[["264950","1"]]}`, 264950},
+		{"wallex", parseWallexDepth, wallexAnswer, 271681},
+		{"wallex, one side", parseWallexDepth, `{"result":{"ask":[{"price":271742}],"bid":[]}}`, 271742},
+	} {
+		if r, err := c.parse([]byte(c.body)); err != nil || r != c.want {
+			t.Errorf("%s: %v %v, want %v", c.name, r, err, c.want)
+		}
 	}
-	if r, err := parseWallexDepth([]byte(`{"result":{"ask":[{"price":271742,"quantity":1}],"bid":[{"price":271620,"quantity":2}]}}`)); err != nil || r != 271681 {
-		t.Fatalf("wallex: %v %v", r, err)
+	for _, c := range []struct {
+		name  string
+		parse func([]byte) (float64, error)
+		body  string
+	}{
+		{"nobitex, closed market", parseNobitexStats, `{"status":"ok","stats":{"usdt-rls":{"isClosed":true,"bestSell":"2649490","bestBuy":"2649400"}}}`},
+		{"nobitex, failed", parseNobitexStats, `{"status":"failed","message":"Unavailable"}`},
+		{"nobitex, another market", parseNobitexStats, `{"status":"ok","stats":{"btc-rls":{"bestSell":"1","bestBuy":"1"}}}`},
+		{"nobitex, no prices", parseNobitexStats, `{"status":"ok","stats":{"usdt-rls":{"bestSell":"","bestBuy":"x"}}}`},
+		{"nobitex, not numbers", parseNobitexStats, `{"status":"ok","stats":{"usdt-rls":{"bestSell":"NaN","bestBuy":null}}}`},
+		{"tabdeal, empty book", parseTabdealDepth, `{"asks":[],"bids":[]}`},
+		{"tabdeal, empty level", parseTabdealDepth, `{"asks":[[]],"bids":[[]]}`},
+		{"wallex, empty book", parseWallexDepth, `{"result":{"ask":[],"bid":[]}}`},
+		{"html", parseNobitexStats, `<html>`},
+		{"html", parseTabdealDepth, `<html>`},
+		{"html", parseWallexDepth, `<html>`},
+	} {
+		if r, err := c.parse([]byte(c.body)); err == nil {
+			t.Errorf("%s was read: %v", c.name, r)
+		}
 	}
-	if r, err := parseWallexDepth([]byte(`{"result":{"ask":[{"price":271742}],"bid":[]}}`)); err != nil || r != 271742 {
-		t.Fatalf("wallex, one side: %v %v", r, err)
+}
+
+// Every default source has a parser that reads its real answer into a sensible Toman price, and the three agree.
+func TestDefaultRateSources(t *testing.T) {
+	answers := map[string]string{"nobitex": nobitexAnswer, "tabdeal": tabdealAnswer, "wallex": wallexAnswer}
+	if len(DefaultRateSources) != len(answers) {
+		t.Fatalf("%d sources, want %d", len(DefaultRateSources), len(answers))
 	}
-	if _, err := parseWallexDepth([]byte(`{"result":{"ask":[],"bid":[]}}`)); err == nil {
-		t.Error("an empty book was read")
-	}
-	if _, err := parseTetherland([]byte(`<html>`)); err == nil {
-		t.Error("html was read")
+	for _, s := range DefaultRateSources {
+		body, ok := answers[s.Name]
+		if !ok || !strings.HasPrefix(s.URL, "https://") {
+			t.Fatalf("source %s at %s", s.Name, s.URL)
+		}
+		if r, err := s.Parse([]byte(body)); err != nil || r < minRate || r > maxRate {
+			t.Errorf("%s: %v %v", s.Name, r, err)
+		}
 	}
 }
 
 // The rate is the median of the sources that gave a usable price: a broken, slow-to-fail or absurd page is left out, and with none the call fails.
 func TestRateProxy(t *testing.T) {
-	a := rateServer(t, 200, `{"data":{"currencies":{"USDT":{"price":271600}}}}`)
+	a := rateServer(t, 200, `{"asks":[["271600","1"]],"bids":[]}`)
 	b := rateServer(t, 200, `{"result":{"ask":[{"price":271800}],"bid":[{"price":271600}]}}`)
 	bad := rateServer(t, 500, `oops`)
-	absurd := rateServer(t, 200, `{"data":{"currencies":{"USDT":{"price":3}}}}`)
+	absurd := rateServer(t, 200, `{"asks":[["3","1"]],"bids":[]}`)
+	gone := rateServer(t, 200, "")
+	gone.Close()
 	srcs := func(servers ...*httptest.Server) []RateSource {
-		names := []string{"a", "b", "bad", "absurd", "far"}
+		names := map[*httptest.Server]string{a: "a", b: "b", bad: "bad", absurd: "absurd", gone: "gone"}
 		var out []RateSource
-		for i, s := range servers {
-			parse := parseTetherland
+		for _, s := range servers {
+			parse := parseTabdealDepth
 			if s == b {
 				parse = parseWallexDepth
 			}
-			out = append(out, RateSource{Name: names[i], URL: s.URL, Parse: parse})
+			name, ok := names[s]
+			if !ok {
+				name = "far"
+			}
+			out = append(out, RateSource{Name: name, URL: s.URL, Parse: parse})
 		}
 		return out
 	}
@@ -75,7 +129,7 @@ func TestRateProxy(t *testing.T) {
 		t.Fatalf("two sources: %d %s", rec.Code, rec.Body)
 	}
 	// Sources that disagree by more than 3% are not averaged: the reading is refused (core keeps the last good price, then its own rate).
-	far := rateServer(t, 200, `{"data":{"currencies":{"USDT":{"price":300000}}}}`)
+	far := rateServer(t, 200, `{"asks":[["300000","1"]],"bids":[]}`)
 	if rec := post(t, handler(a, far), "/internal/usdt-rate", coreTok, ""); rec.Code != http.StatusBadGateway || !strings.Contains(rec.Body.String(), "disagree") {
 		t.Fatalf("sources that disagree: %d %s", rec.Code, rec.Body)
 	}
@@ -88,7 +142,9 @@ func TestRateProxy(t *testing.T) {
 	if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &out) != nil || out.Rate != 271600 || len(out.Sources) != 1 || out.Sources[0] != "a" {
 		t.Fatalf("one usable source: %d %s", rec.Code, rec.Body)
 	}
-	if rec := post(t, handler(bad, absurd), "/internal/usdt-rate", coreTok, ""); rec.Code != http.StatusBadGateway {
+	// None usable: the answer says which source failed and why.
+	rec = post(t, handler(bad, absurd, gone), "/internal/usdt-rate", coreTok, "")
+	if rec.Code != http.StatusBadGateway || !strings.Contains(rec.Body.String(), "absurd: no usable price; bad: HTTP 500; gone: unreachable") {
 		t.Fatalf("none usable: %d %s", rec.Code, rec.Body)
 	}
 	if got := medianRate([]float64{3, 1, 2}); got != 2 {

@@ -8,6 +8,10 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+### Fixed
+- **The live USDT price stopped on some servers.** The bot read it from Tetherland and Wallex. Tetherland's API is gone, and Wallex does not answer some servers outside Iran, so on those servers no source answered: with no rate of the owner's own (`payments.usdt_rate`), paying in USDT was not offered for Toman prices. The bot now reads **Nobitex, Tabdeal and Wallex** and uses the middle price of those that answer (still refused when they are more than 3% apart), so one exchange that is down or blocks the server leaves two.
+- When no exchange answers, the error now names each one and why it gave nothing (unreachable, timed out, an HTTP status, no usable price), in the bot's log and on the dashboard's **Read it now** (Gateways); before it only said that none answered.
+
 ## [0.24.0] — 2026-11-09
 
 **Days from the first connection: a bought service can start its days when its config first connects.** Off until the owner turns it on (Settings > Days from the first connection, one switch for customers and one for resellers). One additive migration (core 00058); the bot, core and the provisioner update together (the update does that).
