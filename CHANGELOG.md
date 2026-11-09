@@ -8,6 +8,10 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+## [0.24.0] — 2026-11-09
+
+**Days from the first connection: a bought service can start its days when its config first connects.** Off until the owner turns it on (Settings > Days from the first connection, one switch for customers and one for resellers). One additive migration (core 00058); the bot, core and the provisioner update together (the update does that).
+
 ### Updating
 - One database migration, additive, in core: 00058 (`subscriptions.first_use_days`, the days a service waiting for its first connection will run, and `orders.target_first_use_days`, a renewal's new wait). Its Down drops both. The bot, core and the provisioner update together (the update does that); an older provisioner ignores the new request field and makes the service start at once.
 
