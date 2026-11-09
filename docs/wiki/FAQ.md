@@ -44,7 +44,7 @@ Not without a paid license from the owner. See the [LICENSE](https://github.com/
 Wallet, card to card, manual USDT, a Zarinpal link, Zarinpal online, IDPay, NextPay, Aqayepardakht, Telegram Stars, automatic USDT on TRON and automatic TON. IDPay, NextPay, Aqayepardakht and automatic TON are not yet tried against the real services. See [Payments](Payments).
 
 **How is the USDT price worked out?**
-The bot reads the live Toman price of USDT from Tetherland and Wallex every couple of minutes. You can add a margin of 0 to 30%, or use your own rate.
+The bot reads the live Toman price of USDT from Nobitex, Tabdeal and Wallex every couple of minutes. You can add a margin of 0 to 30%, or use your own rate.
 
 **Can I delete a plan?**
 Only the owner can. It is taken off sale but never erased: old orders, reports and refunds keep it, and its services keep working.

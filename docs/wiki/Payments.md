@@ -70,7 +70,7 @@ Plans are priced in Toman. Every USDT amount is worked out from the price of one
 | `payments.usdt_rate_margin` | 0 | Percent added on top of the live rate, 0 to 30, for the exchange's spread and fees |
 | `payments.usdt_rate` | none | Your own Toman per 1 USDT. Used when the live rate is off, or cannot be read or is older than 30 minutes |
 
-The bot reads Tetherland and Wallex about every two minutes. Core has no internet access, so the bot makes the call for it. The amount is rounded up to a whole Toman, so a margin never disappears. The Gateways page shows what is charged now and where it comes from, and has a **Read it now** button. The bot's crypto screen shows "1 USDT = N Toman".
+The bot reads Nobitex, Tabdeal and Wallex about every two minutes and uses the middle price of those that answer, so one exchange that is down, or that blocks your server, does not stop it. Core has no internet access, so the bot makes the call for it. The amount is rounded up to a whole Toman, so a margin never disappears. The Gateways page shows what is charged now and where it comes from, and has a **Read it now** button; when no exchange answers, it says which one failed and why. The bot's crypto screen shows "1 USDT = N Toman".
 
 If you used to set your own rate and want to keep using only that, turn `payments.usdt_rate_auto` off.
 

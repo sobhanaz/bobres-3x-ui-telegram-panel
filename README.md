@@ -120,7 +120,7 @@ flowchart LR
     panels["<b>VPN panels</b><br/>3x-ui · Marzban<br/>S-UI · Hiddify"]
     gateways["<b>Card gateways</b><br/>Zarinpal · IDPay · NextPay<br/>Aqayepardakht"]
     tron["<b>TRON network</b><br/>automatic USDT (TRC20)"]
-    rates["<b>USDT price</b><br/>Tetherland · Wallex"]
+    rates["<b>USDT price</b><br/>Nobitex · Tabdeal · Wallex"]
     github["<b>GitHub</b><br/>signed releases · images"]
     vendor["<b>License server</b><br/>the vendor's"]
     supplier["<b>Supplier API</b><br/>digital accounts"]
