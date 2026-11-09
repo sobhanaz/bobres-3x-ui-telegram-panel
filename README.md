@@ -439,10 +439,14 @@ same server, S3 copies of the backups, Zarinpal, a different SSH port, hardening
 
 ### The `bobres` command
 
-Run `sudo bobres` for the management menu, or use any item as a command. The header is a live status board (services, license, HTTPS certificate, newest backup, dashboard address); each line of the menu is a numbered choice:
+Run `sudo bobres` for the management menu, or use any item as a command. The header is a live status board (services, license, HTTPS certificate, newest backup, dashboard address); each line of the menu is a numbered choice. This is the menu on a real store running v0.24.0:
+
+<p align="center">
+  <img src="docs/readme/cli-menu.webp" alt="sudo bobres on a real store running v0.24.0: the beaver banner with the version and links, then the BOBRES manager status board (store running, 9 of 9 services; pro license; automatic HTTPS, certificate expires in 70 days; newest backup 18 hours ago; the dashboard address) and the 21 numbered menu items." width="760">
+</p>
 
 <details>
-<summary><b>The menu (<code>sudo bobres</code>)</b></summary>
+<summary><b>The same menu as text (<code>sudo bobres</code>)</b></summary>
 
 ```text
    n____n   BOBRES manager  bobres v0.24.0
