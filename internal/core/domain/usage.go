@@ -142,14 +142,21 @@ func (w *UsageWorker) record(ctx context.Context, id string, u Usage, uerr error
 		if uerr == nil && !missing {
 			sub.TrafficUsed = u.UsedBytes
 			// The panel's limits are what the customer has (an operator may
-			// have changed them there). A start-on-first-use expiry is the
+			// have changed them there). A service waiting for its first
+			// connection (first_use.go) starts when the panel sets its end, and
+			// keeps the days the panel holds while it waits. On any other
+			// service a start-on-first-use expiry an operator set is the
 			// panel's business; core keeps its own date for it.
 			switch {
 			case u.ExpiresAt == 0:
-				sub.ExpiresAt = nil
+				sub.ExpiresAt, sub.FirstUseDays = nil, nil
 			case u.ExpiresAt > 0:
-				t := time.Unix(u.ExpiresAt, 0).UTC()
-				sub.ExpiresAt = &t
+				if isWaiting(sub) {
+					w.log.Info("the service started: its first connection", "subscription_id", sub.ID)
+				}
+				sub.ExpiresAt, sub.FirstUseDays = panelExpiry(u.ExpiresAt)
+			case isWaiting(sub):
+				_, sub.FirstUseDays = panelExpiry(u.ExpiresAt)
 			}
 			sub.TrafficTotal = nil
 			if u.TotalBytes > 0 {
@@ -214,7 +221,8 @@ func (w *UsageWorker) record(ctx context.Context, id string, u Usage, uerr error
 // subscription in the panel) is cleared, so the next period is reminded too.
 func reminderDue(sub *store.Subscription, now time.Time) (store.SubscriptionSync, string, int) {
 	r := store.SubscriptionSync{Status: "active", TrafficUsed: sub.TrafficUsed, ExpiresAt: sub.ExpiresAt, TrafficTotal: sub.TrafficTotal,
-		NotifiedExpiringAt: sub.NotifiedExpiringAt, NotifiedLowTrafficAt: sub.NotifiedLowTrafficAt, NotifiedEndedAt: sub.NotifiedEndedAt}
+		NotifiedExpiringAt: sub.NotifiedExpiringAt, NotifiedLowTrafficAt: sub.NotifiedLowTrafficAt, NotifiedEndedAt: sub.NotifiedEndedAt,
+		FirstUseDays: sub.FirstUseDays}
 	expired := sub.ExpiresAt != nil && !now.Before(*sub.ExpiresAt)
 	depleted := sub.TrafficTotal != nil && sub.TrafficUsed >= *sub.TrafficTotal
 	if !expired && !depleted {

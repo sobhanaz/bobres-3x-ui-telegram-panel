@@ -68,7 +68,7 @@ func TestConfigNamesOverGRPC(t *testing.T) {
 		t.Fatal(err)
 	}
 	expires := time.Now().Add(48 * time.Hour)
-	if err := f.st.ActivateSubscription(ctx, f.st.Conn(), sub.ID, namesServerID, "sub1", "https://sub.example/x", &expires, nil); err != nil {
+	if err := f.st.ActivateSubscription(ctx, f.st.Conn(), sub.ID, namesServerID, "sub1", "https://sub.example/x", &expires, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 

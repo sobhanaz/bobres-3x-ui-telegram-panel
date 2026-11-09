@@ -93,6 +93,9 @@ type Checkout struct {
 	// full name core said it gets (a reseller's prefix in front), which the menu shows. Both "" = the automatic name.
 	ClientName string `json:"cn,omitempty"`
 	ClientFull string `json:"cnf,omitempty"`
+	// Waiting: the service renewed still waits for its first connection, so the renewal adds its days to the wait
+	// instead of starting them again from today (the screens say so).
+	Waiting bool `json:"wait,omitempty"`
 }
 
 func checkoutKey(userID int64, nonce string) string {

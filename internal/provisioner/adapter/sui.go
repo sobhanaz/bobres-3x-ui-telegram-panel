@@ -236,8 +236,8 @@ func (a *SUI) Renew(ctx context.Context, email string, addDays, addBytes int64) 
 }
 
 func (a *SUI) SetLimits(ctx context.Context, email string, expiryMs, totalBytes int64) error {
-	if expiryMs < 0 || totalBytes < 0 {
-		return errors.New("s-ui: SetLimits needs limits >= 0")
+	if totalBytes < 0 { // a negative expiry is a delayed start of that many days
+		return errors.New("s-ui: SetLimits needs a quota >= 0")
 	}
 	r, err := a.record(ctx, email)
 	if err != nil {

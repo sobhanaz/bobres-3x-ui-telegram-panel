@@ -8,6 +8,16 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+### Updating
+- One database migration, additive, in core: 00058 (`subscriptions.first_use_days`, the days a service waiting for its first connection will run, and `orders.target_first_use_days`, a renewal's new wait). Its Down drops both. The bot, core and the provisioner update together (the update does that); an older provisioner ignores the new request field and makes the service start at once.
+
+### Added
+- **Days from the first connection.** A bought service's days can start when its config first connects instead of when it is made, so a customer who sets the app up a week later loses nothing, and a reseller can hand a config out later. Two switches in the dashboard's **Settings > Days from the first connection** (and `/set` in the bot): `first_use.customers` for customers' purchases and `first_use.resellers` for resellers' (one at a time or in bulk), both **off by default**.
+  - The service is made on the panel with a delayed start (3x-ui, Marzban, S-UI and Hiddify all have one). Until its first connection it is active with no end date: it waits as long as that takes, cannot expire and gets no reminder about its end. The bot, the Mini App, the dashboard and the service's page show *30 days, from the first connection* instead of a date.
+  - The panel sets the end at the first connection; the usage sync takes it and the service runs like any other.
+  - Renewing a service still waiting adds the days to the wait; a traffic package keeps it; days staff add go to the wait; a client made again after it was deleted on the panel is made waiting again.
+  - The free trial starts at once, as before. Services made before the switch was turned on keep their dates.
+
 ## [0.23.0] — 2026-11-08
 
 **Undelivered orders get a place of their own, a receipt sent late reaches the owner, and `/start` leaves the welcome in view.** One additive migration (core 00057); the bot, core and the provisioner update together (the update does that).

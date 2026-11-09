@@ -122,6 +122,10 @@ function pick(id: string, on: boolean) {
             left(s)! >= 0 ? t('service.days_left', { n: num(left(s)!, lang) }, left(s)!) : t('service.days_ago', { n: num(-left(s)!, lang) }, -left(s)!)
           }}</small>
         </template>
+        <!-- waiting for its config's first connection: its days start then -->
+        <div v-else-if="s.first_use_days" class="first-use" :title="t('service.first_use_hint')">
+          {{ t('service.first_use', { n: num(s.first_use_days, lang) }, s.first_use_days) }}
+        </div>
         <span v-else class="app-muted">{{ t('service.never') }}</span>
       </template>
     </Column>

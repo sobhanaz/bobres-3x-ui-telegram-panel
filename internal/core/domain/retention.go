@@ -206,10 +206,12 @@ func (s *Service) QuoteOrder(ctx context.Context, p QuoteParams) (*Quote, error)
 // days again from now (the days left are not carried over, so a service
 // never lasts longer than one plan period) and adds the plan's traffic to the
 // quota (so the traffic left is not lost); a top-up adds traffic only. A
-// subscription without expiry or traffic limit keeps it that way.
+// subscription without expiry or traffic limit keeps it that way. One still
+// waiting for its first connection adds the days to its wait (extendBy).
 func extendTargets(typ string, sub *store.Subscription, plan *store.Plan, now time.Time) (*time.Time, *int64) {
 	days, bytes := planLimits(plan)
-	return extendBy(typ, sub, days, bytes, now, true)
+	exp, traffic, _ := extendBy(typ, sub, days, bytes, now, true)
+	return exp, traffic
 }
 
 // orderLimits is what an order adds: a staff member's extension carries its
@@ -229,9 +231,18 @@ func orderLimits(o *store.Order, plan *store.Plan) (days, bytes int64) {
 
 // extendBy is extendTargets for a number of days and bytes. With restart the days count from now (what a renewal bought with a
 // plan does); without it they are added to the time left (counted from now once it ended), which is what a staff member's
-// "add N days" means.
-func extendBy(typ string, sub *store.Subscription, days, bytes int64, now time.Time, restart bool) (*time.Time, *int64) {
+// "add N days" means. A service still waiting for its first connection (first_use.go) has no end to move: a renewal adds
+// its days to the wait, whichever way, and the third result is that wait (nil for any other service).
+func extendBy(typ string, sub *store.Subscription, days, bytes int64, now time.Time, restart bool) (*time.Time, *int64, *int32) {
 	expires, traffic := sub.ExpiresAt, sub.TrafficTotal
+	var waiting *int32 // a service still waiting for its first connection keeps waiting: a renewal adds to its days
+	if isWaiting(sub) {
+		w := *sub.FirstUseDays
+		if typ == OrderRenew && days > 0 {
+			w = int32(min(int64(w)+days, maxFirstUseDays)) //nolint:gosec // 1 to maxFirstUseDays: w and days are positive
+		}
+		waiting = &w
+	}
 	if typ == OrderRenew && days > 0 && expires != nil {
 		base := *expires
 		if restart || base.Before(now) {
@@ -244,7 +255,7 @@ func extendBy(typ string, sub *store.Subscription, days, bytes int64, now time.T
 		t := *traffic + bytes
 		traffic = &t
 	}
-	return expires, traffic
+	return expires, traffic, waiting
 }
 
 // checkDiscount runs in the transaction that pays an order with a discount

@@ -3,8 +3,7 @@ import { onMounted, ref } from 'vue'
 import type { Service } from '../api'
 import { errorKey } from '../errors'
 import { tr } from '../i18n'
-import { fmtBytes, fmtDate, fmtNum, statusKey } from '../fmt'
-import { daysLeft } from '../format'
+import { fmtBytes, serviceEnd, statusKey } from '../fmt'
 import { fail, loadServices, state } from '../store'
 import { copyText, openLink } from '../telegram'
 import RenameForm from '../sections/names/RenameForm.vue'
@@ -46,12 +45,6 @@ function done(s: Service, name: string, fresh: Service | undefined) {
   if (i >= 0) list[i] = fresh ?? { ...list[i], config_name: name }
 }
 
-function expiry(s: Service): string {
-  if (!s.expires_at) return ''
-  const n = daysLeft(s.expires_at, Date.now())
-  return n < 0 ? tr('services.expired') : tr('services.days_left', { n: fmtNum(n) }) + ' · ' + tr('services.expires', { date: fmtDate(s.expires_at) })
-}
-
 function usage(s: Service): string {
   return s.traffic_total
     ? tr('services.traffic', { used: fmtBytes(s.traffic_used), total: fmtBytes(s.traffic_total) })
@@ -74,7 +67,7 @@ const percent = (s: Service) => (s.traffic_total ? Math.min(100, Math.round((s.t
           <span class="badge" :class="s.status">{{ tr(statusKey(s.status)) }}</span>
         </div>
         <p v-if="s.config_name" class="muted small" dir="auto">{{ tr('names.current', { name: s.config_name }) }}</p>
-        <p class="muted">{{ expiry(s) }}</p>
+        <p class="muted">{{ serviceEnd(s) }}</p>
         <p class="muted">{{ usage(s) }}</p>
         <div v-if="s.traffic_total" class="bar" role="progressbar" :aria-valuenow="percent(s)" aria-valuemin="0" aria-valuemax="100">
           <span :style="{ width: percent(s) + '%' }"></span>

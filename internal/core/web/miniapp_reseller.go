@@ -199,7 +199,7 @@ func (s *Server) miniResellerServiceBody(r *http.Request, sub *store.Subscriptio
 		note = *sub.Note
 	}
 	return map[string]any{
-		"id": sub.ID, "label": label, "note": note, "status": sub.Status, "expires_at": expires,
+		"id": sub.ID, "label": label, "note": note, "status": sub.Status, "expires_at": expires, "first_use_days": firstUseDays(sub),
 		"traffic_total": miniUnix(sub.TrafficTotal), "traffic_used": sub.TrafficUsed, "created_at": sub.CreatedAt.Unix(),
 		"link": sub.SubLink, "page_url": s.pageURL(r, sub),
 		"can_renew":  renewable,

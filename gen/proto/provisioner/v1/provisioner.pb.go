@@ -23,14 +23,16 @@ const (
 )
 
 type Client struct {
-	state             protoimpl.MessageState `protogen:"open.v1"`
-	SubscriptionId    string                 `protobuf:"bytes,1,opt,name=subscription_id,json=subscriptionId,proto3" json:"subscription_id,omitempty"`
-	ServerId          string                 `protobuf:"bytes,2,opt,name=server_id,json=serverId,proto3" json:"server_id,omitempty"`
-	Email             string                 `protobuf:"bytes,3,opt,name=email,proto3" json:"email,omitempty"`
-	XuiSubId          string                 `protobuf:"bytes,4,opt,name=xui_sub_id,json=xuiSubId,proto3" json:"xui_sub_id,omitempty"`
-	InboundIds        []int32                `protobuf:"varint,5,rep,packed,name=inbound_ids,json=inboundIds,proto3" json:"inbound_ids,omitempty"`
-	ExpiresAt         int64                  `protobuf:"varint,6,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
-	TrafficTotalBytes int64                  `protobuf:"varint,7,opt,name=traffic_total_bytes,json=trafficTotalBytes,proto3" json:"traffic_total_bytes,omitempty"`
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	SubscriptionId string                 `protobuf:"bytes,1,opt,name=subscription_id,json=subscriptionId,proto3" json:"subscription_id,omitempty"`
+	ServerId       string                 `protobuf:"bytes,2,opt,name=server_id,json=serverId,proto3" json:"server_id,omitempty"`
+	Email          string                 `protobuf:"bytes,3,opt,name=email,proto3" json:"email,omitempty"`
+	XuiSubId       string                 `protobuf:"bytes,4,opt,name=xui_sub_id,json=xuiSubId,proto3" json:"xui_sub_id,omitempty"`
+	InboundIds     []int32                `protobuf:"varint,5,rep,packed,name=inbound_ids,json=inboundIds,proto3" json:"inbound_ids,omitempty"`
+	// unix seconds; 0 = no expiry; negative = the client waits for its first
+	// connection and then runs that many seconds (whole days)
+	ExpiresAt         int64 `protobuf:"varint,6,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
+	TrafficTotalBytes int64 `protobuf:"varint,7,opt,name=traffic_total_bytes,json=trafficTotalBytes,proto3" json:"traffic_total_bytes,omitempty"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -581,9 +583,15 @@ type CreateClientRequest struct {
 	// group, "BOBRES"; a reseller's clients are in "BOBRES-<NAME>"). Marzban and
 	// Hiddify have no groups and ignore it. An older provisioner ignores the
 	// field too.
-	Group         string `protobuf:"bytes,8,opt,name=group,proto3" json:"group,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Group string `protobuf:"bytes,8,opt,name=group,proto3" json:"group,omitempty"`
+	// The duration_days start at the client's first connection instead of now
+	// (3x-ui: a negative expiry; Marzban: on hold; S-UI: a delayed start;
+	// Hiddify: no start date). The panel sets the end when the client first
+	// connects; the Client's expires_at is then negative. Ignored without
+	// duration_days. An older provisioner ignores it, and the client starts now.
+	StartOnFirstUse bool `protobuf:"varint,9,opt,name=start_on_first_use,json=startOnFirstUse,proto3" json:"start_on_first_use,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *CreateClientRequest) Reset() {
@@ -670,6 +678,13 @@ func (x *CreateClientRequest) GetGroup() string {
 		return x.Group
 	}
 	return ""
+}
+
+func (x *CreateClientRequest) GetStartOnFirstUse() bool {
+	if x != nil {
+		return x.StartOnFirstUse
+	}
+	return false
 }
 
 // SetClientGroupsRequest records the group each client should be in; a 3x-ui
@@ -933,10 +948,12 @@ func (x *RenewClientRequest) GetAddBytes() int64 {
 // SetClientLimitsRequest sets absolute limits (so a retry is harmless) and
 // enables the client: renewals and traffic top-ups.
 type SetClientLimitsRequest struct {
-	state             protoimpl.MessageState `protogen:"open.v1"`
-	SubscriptionId    string                 `protobuf:"bytes,1,opt,name=subscription_id,json=subscriptionId,proto3" json:"subscription_id,omitempty"`
-	ExpiresAt         int64                  `protobuf:"varint,2,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`                           // unix seconds, 0 = no expiry
-	TrafficTotalBytes int64                  `protobuf:"varint,3,opt,name=traffic_total_bytes,json=trafficTotalBytes,proto3" json:"traffic_total_bytes,omitempty"` // 0 = unlimited
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	SubscriptionId string                 `protobuf:"bytes,1,opt,name=subscription_id,json=subscriptionId,proto3" json:"subscription_id,omitempty"`
+	// unix seconds, 0 = no expiry, negative = waits for the first connection and
+	// then runs that many seconds (whole days; at most 36500 days)
+	ExpiresAt         int64 `protobuf:"varint,2,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`
+	TrafficTotalBytes int64 `protobuf:"varint,3,opt,name=traffic_total_bytes,json=trafficTotalBytes,proto3" json:"traffic_total_bytes,omitempty"` // 0 = unlimited
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -998,7 +1015,7 @@ func (x *SetClientLimitsRequest) GetTrafficTotalBytes() int64 {
 type RecreateClientRequest struct {
 	state             protoimpl.MessageState `protogen:"open.v1"`
 	SubscriptionId    string                 `protobuf:"bytes,1,opt,name=subscription_id,json=subscriptionId,proto3" json:"subscription_id,omitempty"`
-	ExpiresAt         int64                  `protobuf:"varint,2,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`                           // unix seconds, 0 = no expiry
+	ExpiresAt         int64                  `protobuf:"varint,2,opt,name=expires_at,json=expiresAt,proto3" json:"expires_at,omitempty"`                           // as SetClientLimitsRequest's
 	TrafficTotalBytes int64                  `protobuf:"varint,3,opt,name=traffic_total_bytes,json=trafficTotalBytes,proto3" json:"traffic_total_bytes,omitempty"` // 0 = unlimited
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
@@ -2556,7 +2573,7 @@ const file_provisioner_v1_provisioner_proto_rawDesc = "" +
 	"\x04kind\x18\x10 \x01(\tR\x04kind\x12\x1f\n" +
 	"\vmax_clients\x18\x11 \x01(\x05R\n" +
 	"maxClients\x12'\n" +
-	"\x0frenames_clients\x18\x12 \x01(\bR\x0erenamesClients\"\xc1\x02\n" +
+	"\x0frenames_clients\x18\x12 \x01(\bR\x0erenamesClients\"\xee\x02\n" +
 	"\x13CreateClientRequest\x12'\n" +
 	"\x0fsubscription_id\x18\x01 \x01(\tR\x0esubscriptionId\x12\x1b\n" +
 	"\tserver_id\x18\x02 \x01(\tR\bserverId\x12\x14\n" +
@@ -2565,7 +2582,8 @@ const file_provisioner_v1_provisioner_proto_rawDesc = "" +
 	"\rtraffic_bytes\x18\x05 \x01(\x03R\ftrafficBytes\x120\n" +
 	"\x14candidate_server_ids\x18\x06 \x03(\tR\x12candidateServerIds\x12<\n" +
 	"\binbounds\x18\a \x03(\v2 .provisioner.v1.InboundSelectionR\binbounds\x12\x14\n" +
-	"\x05group\x18\b \x01(\tR\x05group\"O\n" +
+	"\x05group\x18\b \x01(\tR\x05group\x12+\n" +
+	"\x12start_on_first_use\x18\t \x01(\bR\x0fstartOnFirstUse\"O\n" +
 	"\x16SetClientGroupsRequest\x125\n" +
 	"\aclients\x18\x01 \x03(\v2\x1b.provisioner.v1.ClientGroupR\aclients\"L\n" +
 	"\vClientGroup\x12'\n" +

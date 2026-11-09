@@ -28,6 +28,7 @@ Sync calls: gRPC (internal network only). Async: each service's transactional ou
 | ticket.opened.v1 / customer_replied.v1 / replied.v1 / closed.v1 | core | notifier | Support (ids only; the bot fetches a message with GetTicketMessage and reports delivery) |
 | subscription.provisioned.v1 / extended.v1 / reminder.v1 `label` | core | notifier | The name a reseller gave the service (empty for customers), for the bot's texts |
 | subscription.provisioned.v1 `client_name`, `name_taken` | core | notifier | The config name the buyer chose, when the service got it; or the name chosen when a panel had it by delivery time, so the service got the automatic name (the bot says so). Both empty for an automatic name nobody chose (config names, additive) |
+| subscription.provisioned.v1 / extended.v1 `first_use_days` | core | notifier | The service waits for its first connection and then runs this many days (`expires_at` is 0 then); 0 or absent for any other service ([03-bot-ux.md](03-bot-ux.md), "Days from the first connection") |
 | payment.deposit_unmatched.v1 / deposit_claimed.v1 | payments, then core | notifier(staff alerts) | Phase 6a. USDT reached the store's TRON address but matched no automatic payment (`reason`: no_payment, already_paid, closed, ambiguous), so staff credit it by hand; or a manual USDT proof carries a transaction the watcher had seen, so staff check it before approving. Core passes both on to the bot |
 | license.changed.v1 | core | all | Entitlements updated (feature gating) |
 | license.order_settled.v1 | core (the vendor workers) | notifier | A license the owner's store sells by itself is settled: bought after the buyer's top-up landed (`status: done`) or refused and refunded (`status: refunded`). `{order_id, user_id, telegram_id, kind (new\|renew), tier, months, status, license_id, ends_at}`, no key inside: the bot fetches the key with `GetVendorLicenseKey`. Only on a store with `private_features` |
@@ -198,6 +199,16 @@ bot -> core.CreateOrder -> `order.created` -> payments creates intent -> user pa
   name unless a service took it meanwhile; when the panel refuses it (`ALREADY_EXISTS` above) the service gets the automatic name and
   is created again in the same run, and `subscription.provisioned.v1` carries `name_taken` (else `client_name` when the chosen name
   was used). A rename audits `subscription.rename` (before and after `client_email`; staff's with a reason).
+- provisioner and core, **days from the first connection** (built 2026-11-09; [03-bot-ux.md](03-bot-ux.md), "Days from the first
+  connection"): `CreateClient.start_on_first_use` makes the client with its `duration_days` starting at its first connection (3x-ui:
+  a negative `expiryTime`; Marzban: `on_hold` with `on_hold_expire_duration`; S-UI: `delayStart` with `resetDays`; Hiddify: no
+  `start_date`); an older provisioner ignores it and the client starts at once. `Client.expires_at`, `SetClientLimits.expires_at`
+  and `RecreateClient.expires_at` take a negative value for such a client: the seconds it runs from its first connection (whole
+  days, at most 36,500), as `Usage.expires_at` already reported. Core decides from what the provisioner reports, not from the
+  switch, so a client an earlier attempt made the other way is kept as it is. Core's `Subscription.first_use_days` (and
+  `first_use_days` in the dashboard's and the Mini App's services) is the days a waiting service will run, with `expires_at` 0 or
+  null; `subscriptions.first_use_days` and `orders.target_first_use_days` (core migration 00058) hold the wait and a renewal's
+  new wait.
 - provisioner, servers (milestone 6a, built; core's token only): `CreateClient.candidate_server_ids` (a plan's
   servers; empty = every enabled server; the healthy, enabled candidate with the least clients/weight is picked and
   reserved, so a retry stays on it; FAILED_PRECONDITION when none fits or no server exists), `ListServers` (settings,

@@ -43,6 +43,7 @@
   "services.expires": "تنتهي في {date}",
   "services.days_left": "المتبقي {n|# يوم|يوم واحد|يومان|# أيام|# يومًا|# يوم}",
   "services.expired": "منتهية",
+  "services.first_use": "{n|# يوم|يوم واحد|يومان|# أيام|# يومًا|# يوم} · من أول اتصال",
   "services.traffic": "{used} من {total}",
   "services.traffic_free": "المستهلك {used}",
   "services.renew": "تجديد",

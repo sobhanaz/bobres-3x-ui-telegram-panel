@@ -488,7 +488,7 @@ func subscriptionOn(t *testing.T, svc *Service, s *store.Store, tg int64, server
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.ActivateSubscription(ctx, s.Conn(), sub.ID, server, "x", link, nil, nil); err != nil {
+	if err := s.ActivateSubscription(ctx, s.Conn(), sub.ID, server, "x", link, nil, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	return sub

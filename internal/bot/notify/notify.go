@@ -153,10 +153,7 @@ func (n *Notifier) Handle(ctx context.Context, m eventbus.Message) error {
 			return nil // a service of a bulk purchase: its link comes in the bulk's one message (BulkReady)
 		}
 		lang := n.lang(ctx, e.TelegramID)
-		expires := n.cat.T(lang, "sub.no_expiry")
-		if e.ExpiresAt > 0 {
-			expires = i18n.Date(lang, time.Unix(e.ExpiresAt, 0))
-		}
+		expires := n.ends(lang, e.ExpiresAt, e.FirstUseDays)
 		traffic := n.cat.T(lang, "sub.unlimited")
 		if e.TrafficBytes > 0 {
 			traffic = i18n.Bytes(lang, e.TrafficBytes)
@@ -305,7 +302,8 @@ func (n *Notifier) Handle(ctx context.Context, m eventbus.Message) error {
 		if e.Type == "traffic_topup" {
 			key = "sub.topped_up"
 		}
-		text := n.cat.T(lang, key, "id", shortID(e.SubscriptionID), "expires", n.expires(lang, e.ExpiresAt), "traffic", n.traffic(lang, e.TrafficTotalBytes))
+		text := n.cat.T(lang, key, "id", shortID(e.SubscriptionID), "expires", n.ends(lang, e.ExpiresAt, e.FirstUseDays),
+			"traffic", n.traffic(lang, e.TrafficTotalBytes))
 		if e.Late { // the customer was told it is delayed (sub.delayed): sorry for the wait
 			text += "\n\n" + n.cat.T(lang, "sub.late")
 		}
@@ -1142,6 +1140,15 @@ func (n *Notifier) expires(lang string, unix int64) string {
 		return n.cat.T(lang, "sub.no_expiry")
 	}
 	return i18n.Date(lang, time.Unix(unix, 0))
+}
+
+// ends is a service's end in a delivery or renewal message: its date, never, or (while it waits for its first
+// connection, firstUseDays > 0) the days it will run from then.
+func (n *Notifier) ends(lang string, unix int64, firstUseDays int32) string {
+	if firstUseDays > 0 && unix <= 0 {
+		return n.cat.T(lang, "sub.first_use", "days", i18n.Number(lang, int64(firstUseDays)))
+	}
+	return n.expires(lang, unix)
 }
 
 func (n *Notifier) traffic(lang string, b int64) string {

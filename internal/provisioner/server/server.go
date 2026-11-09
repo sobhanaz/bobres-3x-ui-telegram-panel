@@ -338,7 +338,7 @@ func (s *Server) existingClient(ctx context.Context, cm *store.ClientMap) (*prov
 	if err != nil {
 		return nil, s.panelError("panel client", err)
 	}
-	return clientProto(cm, max(st.ExpiryMs, 0)/1000, st.TotalBytes), nil
+	return clientProto(cm, st.ExpiryMs/1000, st.TotalBytes), nil // negative: still waiting for its first connection
 }
 
 // pickAttempts is how many servers reserve tries for one client: a server
@@ -452,7 +452,10 @@ func (s *Server) createOnPanel(ctx context.Context, req *provisionerv1.CreateCli
 		return nil, err
 	}
 	var expiryMs int64
-	if d := req.GetDurationDays(); d > 0 {
+	switch d := req.GetDurationDays(); {
+	case d > 0 && req.GetStartOnFirstUse():
+		expiryMs = -d * dayMs // the panel sets the end at the first connection
+	case d > 0:
 		expiryMs = time.Now().Add(time.Duration(d) * 24 * time.Hour).UnixMilli()
 	}
 	group := req.GetGroup()
@@ -481,7 +484,7 @@ func (s *Server) createOnPanel(ctx context.Context, req *provisionerv1.CreateCli
 		// Ours, from an earlier attempt: adopt it with the limits it has, and in the
 		// bot group if that attempt (made before BOBRES grouped its clients) left it in none.
 		if st, err := a.Status(ctx, email); err == nil {
-			expiryMs = max(st.ExpiryMs, 0)
+			expiryMs = st.ExpiryMs // negative: it still waits for its first connection
 		}
 		s.ensureTagged(ctx, a, email, group)
 	} else if !fresh {
@@ -549,6 +552,18 @@ func (s *Server) releaseIfAbsent(ctx context.Context, a adapter.PanelAdapter, cm
 	}
 }
 
+// dayMs is a day in milliseconds, the unit of a panel's expiry.
+const dayMs = int64(24 * time.Hour / time.Millisecond)
+
+// maxWaitingDays bounds the days a client waiting for its first connection runs once it connects (as duration_days).
+const maxWaitingDays = 36500
+
+// validLimits checks absolute limits from core: an expiry in unix seconds, none (0), or a negative one, the seconds a
+// client waiting for its first connection runs from then (at most maxWaitingDays); a quota >= 0.
+func validLimits(expiresAt, traffic int64) bool {
+	return traffic >= 0 && expiresAt >= -maxWaitingDays*86400
+}
+
 func clientProto(cm *store.ClientMap, expiresAt, traffic int64) *provisionerv1.Client {
 	c := &provisionerv1.Client{
 		SubscriptionId: cm.SubscriptionID, ServerId: cm.ServerID, Email: cm.Email,
@@ -579,8 +594,8 @@ func (s *Server) RenewClient(ctx context.Context, req *provisionerv1.RenewClient
 // and enables it (renewals and traffic top-ups). Setting the same values
 // again changes nothing, so a retried order cannot add twice.
 func (s *Server) SetClientLimits(ctx context.Context, req *provisionerv1.SetClientLimitsRequest) (*provisionerv1.Client, error) {
-	if req.GetExpiresAt() < 0 || req.GetTrafficTotalBytes() < 0 {
-		return nil, status.Error(codes.InvalidArgument, "expires_at and traffic_total_bytes must be >= 0")
+	if !validLimits(req.GetExpiresAt(), req.GetTrafficTotalBytes()) {
+		return nil, status.Error(codes.InvalidArgument, "expires_at or traffic_total_bytes out of range")
 	}
 	cm, _, a, err := s.subscription(ctx, req.GetSubscriptionId())
 	if err != nil {
@@ -737,8 +752,8 @@ func (s *Server) GetUsage(ctx context.Context, req *provisionerv1.GetUsageReques
 // what limits it has. The panel's usage counter starts from zero. A panel that has the client is left
 // alone, so a retry or a second click changes nothing.
 func (s *Server) RecreateClient(ctx context.Context, req *provisionerv1.RecreateClientRequest) (*provisionerv1.Client, error) {
-	if req.GetExpiresAt() < 0 || req.GetTrafficTotalBytes() < 0 {
-		return nil, status.Error(codes.InvalidArgument, "expires_at and traffic_total_bytes must be >= 0")
+	if !validLimits(req.GetExpiresAt(), req.GetTrafficTotalBytes()) {
+		return nil, status.Error(codes.InvalidArgument, "expires_at or traffic_total_bytes out of range")
 	}
 	cm, sv, a, err := s.subscription(ctx, req.GetSubscriptionId())
 	if err != nil {

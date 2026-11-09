@@ -105,7 +105,7 @@ func (s *Server) miniServiceBody(r *http.Request, sub *store.Subscription, renam
 		label = *sub.Label
 	}
 	return map[string]any{
-		"id": sub.ID, "label": label, "status": sub.Status, "expires_at": expires,
+		"id": sub.ID, "label": label, "status": sub.Status, "expires_at": expires, "first_use_days": firstUseDays(sub),
 		"traffic_total": miniUnix(sub.TrafficTotal), "traffic_used": sub.TrafficUsed,
 		"link": sub.SubLink, "page_url": s.pageURL(r, sub),
 		"can_renew":   renewable,
@@ -474,4 +474,13 @@ func (s *Server) miniCheckPayment(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"intent_id": gi.ID, "status": gi.Status, "order_id": gi.OrderID, "provider": gi.Provider,
 		"failure_reason": gi.FailureReason})
+}
+
+// firstUseDays is a service's first_use_days in the Mini App: the days it runs once it first connects while it waits
+// for that connection (expires_at is null then), else null.
+func firstUseDays(sub *store.Subscription) any {
+	if sub.ExpiresAt != nil || sub.FirstUseDays == nil {
+		return nil
+	}
+	return *sub.FirstUseDays
 }

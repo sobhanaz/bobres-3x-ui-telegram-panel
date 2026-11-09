@@ -13,12 +13,13 @@ import (
 
 const subscriptionCols = `id, user_id, order_id, COALESCE(server_id::text, ''), client_email, sub_id, status,
 	expires_at, traffic_total_bytes, COALESCE(traffic_used_bytes, 0), last_synced_at, COALESCE(sub_link, ''), created_at,
-	notified_expiring_at, notified_low_traffic_at, notified_ended_at, label, page_token, note, panel_missing_since`
+	notified_expiring_at, notified_low_traffic_at, notified_ended_at, label, page_token, note, panel_missing_since,
+	first_use_days`
 
 func subscriptionDest(sc *Subscription) []any {
 	return []any{&sc.ID, &sc.UserID, &sc.OrderID, &sc.ServerID, &sc.ClientEmail, &sc.SubID, &sc.Status,
 		&sc.ExpiresAt, &sc.TrafficTotal, &sc.TrafficUsed, &sc.LastSyncedAt, &sc.SubLink, &sc.CreatedAt,
-		&sc.NotifiedExpiringAt, &sc.NotifiedLowTrafficAt, &sc.NotifiedEndedAt, &sc.Label, &sc.PageToken, &sc.Note, &sc.PanelMissingSince}
+		&sc.NotifiedExpiringAt, &sc.NotifiedLowTrafficAt, &sc.NotifiedEndedAt, &sc.Label, &sc.PageToken, &sc.Note, &sc.PanelMissingSince, &sc.FirstUseDays}
 }
 
 func scanSubscription(row pgx.Row) (*Subscription, error) {
@@ -247,13 +248,14 @@ func (s *Store) LastSubscriptionToggle(ctx context.Context, q querier, id string
 	return &t, nil
 }
 
-// ActivateSubscription records the provisioned panel client.
-func (s *Store) ActivateSubscription(ctx context.Context, q querier, id, serverID, xuiSubID, link string, expiresAt *time.Time, trafficTotal *int64) error {
+// ActivateSubscription records the provisioned panel client. firstUseDays is set (and expiresAt nil) when the client
+// waits for its first connection.
+func (s *Store) ActivateSubscription(ctx context.Context, q querier, id, serverID, xuiSubID, link string, expiresAt *time.Time, trafficTotal *int64, firstUseDays *int32) error {
 	tag, err := q.Exec(ctx, `
 		UPDATE core.subscriptions
 		SET status = 'active', server_id = $2::uuid, sub_id = NULLIF($3, ''), sub_link = NULLIF($4, ''),
-		    expires_at = $5, traffic_total_bytes = $6, last_synced_at = now(), updated_at = now()
-		WHERE id = $1`, id, serverID, xuiSubID, link, expiresAt, trafficTotal)
+		    expires_at = $5, traffic_total_bytes = $6, first_use_days = $7, last_synced_at = now(), updated_at = now()
+		WHERE id = $1`, id, serverID, xuiSubID, link, expiresAt, trafficTotal, firstUseDays)
 	if err != nil {
 		return fmt.Errorf("activate subscription: %w", err)
 	}
@@ -342,13 +344,14 @@ func (s *Store) LockSubscription(ctx context.Context, tx pgx.Tx, id string) (*Su
 }
 
 // ApplySubscriptionLimits records new limits after a renewal or top-up: the
-// subscription is active again and its reminders start over.
-func (s *Store) ApplySubscriptionLimits(ctx context.Context, q querier, id string, expiresAt *time.Time, trafficTotal *int64) error {
+// subscription is active again and its reminders start over. firstUseDays is
+// set (and expiresAt nil) for a service still waiting for its first connection.
+func (s *Store) ApplySubscriptionLimits(ctx context.Context, q querier, id string, expiresAt *time.Time, trafficTotal *int64, firstUseDays *int32) error {
 	tag, err := q.Exec(ctx, `
 		UPDATE core.subscriptions
-		SET status = 'active', expires_at = $2, traffic_total_bytes = $3,
+		SET status = 'active', expires_at = $2, traffic_total_bytes = $3, first_use_days = $4,
 		    notified_expiring_at = NULL, notified_low_traffic_at = NULL, notified_ended_at = NULL, updated_at = now()
-		WHERE id = $1`, id, expiresAt, trafficTotal)
+		WHERE id = $1`, id, expiresAt, trafficTotal, firstUseDays)
 	if err != nil {
 		return fmt.Errorf("apply subscription limits: %w", err)
 	}
@@ -395,6 +398,8 @@ type SubscriptionSync struct {
 	NotifiedEndedAt      *time.Time
 	// PanelMissingSince is when the panel was first seen to have no client for the service (nil: it has).
 	PanelMissingSince *time.Time
+	// FirstUseDays: still waiting for the first connection, to run this many days (nil: not waiting).
+	FirstUseDays *int32
 }
 
 // RecordSync stores a usage-sync result.
@@ -403,9 +408,9 @@ func (s *Store) RecordSync(ctx context.Context, q querier, id string, r Subscrip
 		UPDATE core.subscriptions
 		SET status = $2, traffic_used_bytes = $3, expires_at = $4, traffic_total_bytes = $5, last_synced_at = now(),
 		    notified_expiring_at = $6, notified_low_traffic_at = $7, notified_ended_at = $8, panel_missing_since = $9,
-		    updated_at = now()
+		    first_use_days = $10, updated_at = now()
 		WHERE id = $1`, id, r.Status, r.TrafficUsed, r.ExpiresAt, r.TrafficTotal,
-		r.NotifiedExpiringAt, r.NotifiedLowTrafficAt, r.NotifiedEndedAt, r.PanelMissingSince)
+		r.NotifiedExpiringAt, r.NotifiedLowTrafficAt, r.NotifiedEndedAt, r.PanelMissingSince, r.FirstUseDays)
 	if err != nil {
 		return fmt.Errorf("record sync: %w", err)
 	}

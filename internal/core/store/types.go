@@ -89,6 +89,9 @@ type Order struct {
 	TargetsSet         bool
 	TargetExpiresAt    *time.Time
 	TargetTrafficBytes *int64
+	// TargetFirstUseDays: the target of a renewal of a service still waiting for its first connection, the days it
+	// will then run (TargetExpiresAt is nil).
+	TargetFirstUseDays *int32
 	ExtendDays         *int32
 	ExtendBytes        *int64
 	CreatedBy          *string
@@ -186,6 +189,9 @@ type Subscription struct {
 	// PanelMissingSince is when core first saw that the panel has no client for the service any more (an
 	// operator deleted it there); nil while the panel has it. See UsageWorker.
 	PanelMissingSince *time.Time
+	// FirstUseDays: the service waits for its first connection and then runs this many days (ExpiresAt is nil until
+	// the panel sets the end then). nil for every other service.
+	FirstUseDays *int32
 }
 
 // Discount mirrors core.discount_codes: a percentage or a fixed amount.

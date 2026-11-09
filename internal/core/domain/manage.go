@@ -68,7 +68,7 @@ func (s *Service) ExtendSubscription(ctx context.Context, actor *store.User, p E
 		return nil, stateErr("the service is not delivered yet")
 	case sub.Status == "disabled" || sub.Status == "deleted":
 		return nil, stateErr("the service is %s", sub.Status)
-	case p.Days > 0 && sub.ExpiresAt == nil:
+	case p.Days > 0 && sub.ExpiresAt == nil && !isWaiting(sub): // a waiting service adds the days to its wait
 		return nil, stateErr("the service never expires")
 	case p.Bytes > 0 && sub.TrafficTotal == nil:
 		return nil, stateErr("the service's traffic is unlimited")
@@ -240,8 +240,11 @@ func (s *Service) RecreateSubscriptionClient(ctx context.Context, actor *store.U
 		return stateErr("the service is being delivered")
 	}
 	var expires, total int64
-	if sub.ExpiresAt != nil {
+	switch {
+	case sub.ExpiresAt != nil:
 		expires = sub.ExpiresAt.Unix()
+	case isWaiting(sub):
+		expires = waitingExpiry(*sub.FirstUseDays) // made again still waiting for its first connection
 	}
 	if sub.TrafficTotal != nil {
 		total = *sub.TrafficTotal

@@ -71,8 +71,12 @@ func (h *Handler) showRenewPlans(r *req, subID string) {
 		r.fail(err)
 		return
 	}
-	h.showPicker(r, state.Checkout{Type: "renew", SubscriptionID: subID}, ps,
-		r.labelled(s.GetLabel(), r.t("renew.pick", "id", shortID(subID))))
+	key := "renew.pick"
+	if waitsForFirstUse(s) { // its days have not started: the renewal adds to them
+		key = "renew.pick_waiting"
+	}
+	h.showPicker(r, state.Checkout{Type: "renew", SubscriptionID: subID, Waiting: waitsForFirstUse(s)}, ps,
+		r.labelled(s.GetLabel(), r.t(key, "id", shortID(subID))))
 }
 
 // showTopups handles "tup:<subscription id>": pick a traffic package.

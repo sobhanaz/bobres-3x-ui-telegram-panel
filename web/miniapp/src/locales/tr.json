@@ -43,6 +43,7 @@
   "services.expires": "Bitiş: {date}",
   "services.days_left": "{n} gün kaldı",
   "services.expired": "Sona erdi",
+  "services.first_use": "{n} gün · ilk bağlantıdan itibaren",
   "services.traffic": "{used} / {total}",
   "services.traffic_free": "{used} kullanıldı",
   "services.renew": "Yenile",

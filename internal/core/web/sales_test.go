@@ -96,7 +96,7 @@ func (p *fakeProv) record(op string) error {
 	p.ops = append(p.ops, op)
 	return nil
 }
-func (p *fakeProv) CreateClient(context.Context, string, string, int64, int64, []string, []store.PlanInbound, string) (domain.ProvisionedClient, error) {
+func (p *fakeProv) CreateClient(context.Context, string, string, int64, int64, []string, []store.PlanInbound, string, bool) (domain.ProvisionedClient, error) {
 	return domain.ProvisionedClient{}, errNotUsed
 }
 func (p *fakeProv) SetClientGroups(context.Context, []domain.ClientGroup) (int, error) {
@@ -232,7 +232,7 @@ func (f *fixture) order(u *store.User, p *store.Plan, status, subStatus string, 
 	}
 	if subStatus == "active" {
 		if err := f.st.ActivateSubscription(ctx, f.st.Conn(), sub.ID, buuid.MustV7().String(), "sub123", "https://sub.example/x",
-			&expires, &traffic); err != nil {
+			&expires, &traffic, nil); err != nil {
 			f.t.Fatal(err)
 		}
 		sub, _ = f.st.GetSubscription(ctx, f.st.Conn(), sub.ID)

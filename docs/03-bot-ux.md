@@ -317,6 +317,26 @@ have. Two settings, **off by default**: `config_names.customers` and `config_nam
   returns to the service.
 With the setting off nothing shows: no line, no button, and an old menu's button falls back to the automatic name.
 
+**Days from the first connection** (built 2026-11-09): a bought service's days (a 30-day plan's 30) can start when its config
+first connects instead of when it is made, so a customer who buys today and sets the app up next week loses nothing, and a
+reseller can hand a config out later. Two settings, **off by default**: `first_use.customers` (a customer's purchases) and
+`first_use.resellers` (a reseller's, one at a time or in bulk), in the dashboard's **Settings > Days from the first
+connection** and with `/set` in the bot. While the one of the buyer's role is on:
+- The service is made on the panel with a delayed start (`CreateClient.start_on_first_use`): 3x-ui gets a negative expiry, Marzban
+  an on-hold user, S-UI a delayed start and Hiddify a package without a start date. The panel sets the end at the first
+  connection. Until then the service is **active with no end date** and waits as long as it takes: it cannot expire and gets no
+  reminder about its end (traffic reminders still apply). Core holds the days (`subscriptions.first_use_days`), and the usage sync
+  takes the end the panel set once the config connected; from then on the service runs like any other.
+- The bot, the Mini App, the dashboard and the service's page show *30 days, from the first connection* where the end date goes,
+  and the delivery message says the days start at the first connection.
+- **Renewing** a service still waiting adds the plan's days to the wait (30 + 30 = 60 days from the first connection); a traffic
+  package keeps the wait, and so do days staff add from the dashboard (they are added to it). A config made again after it was
+  deleted on the panel (*Make the client again*) is made waiting again.
+- The **free trial starts at once**, as before, and so does anything that is not a purchase of a new service. Services made
+  before the switch was turned on keep their dates; turning it off again changes no service.
+- An operator who gives a running service a delayed start in a panel by hand does not change it in BOBRES: core keeps its own date
+  for a service that is not waiting.
+
 ## Admin in bot (every task is a button; the dashboard stays the full tool)
 `/admin` is the front door for owners and admins (it says when maintenance mode is on). Nobody has to remember a
 command: the old ones still work, and each usage text ends with "open /admin and use the buttons".

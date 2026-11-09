@@ -84,6 +84,9 @@ export interface Service {
   label: string
   status: string
   expires_at: number | null
+  /** the service waits for its config's first connection and then runs this many days (expires_at is null meanwhile);
+   * null for any other service (absent from an older core) */
+  first_use_days?: number | null
   traffic_total: number | null
   traffic_used: number
   link: string

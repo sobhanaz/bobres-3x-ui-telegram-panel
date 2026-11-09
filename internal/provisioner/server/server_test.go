@@ -434,7 +434,10 @@ func TestSetClientLimitsAndUsage(t *testing.T) {
 	if _, err := f.client.SetClientLimits(ctx, &provisionerv1.SetClientLimitsRequest{SubscriptionId: "00000000-0000-7000-8000-0000000000c1", ExpiresAt: exp}); status.Code(err) != codes.NotFound {
 		t.Fatalf("unprovisioned subscription: %v", err)
 	}
-	if _, err := f.client.SetClientLimits(ctx, &provisionerv1.SetClientLimitsRequest{SubscriptionId: sub1, ExpiresAt: -1}); status.Code(err) != codes.InvalidArgument {
-		t.Fatalf("negative expiry: %v", err)
+	if _, err := f.client.SetClientLimits(ctx, &provisionerv1.SetClientLimitsRequest{SubscriptionId: sub1, ExpiresAt: -(maxWaitingDays + 1) * 86400}); status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("too many days waiting for the first connection: %v", err)
+	}
+	if _, err := f.client.SetClientLimits(ctx, &provisionerv1.SetClientLimitsRequest{SubscriptionId: sub1, ExpiresAt: exp, TrafficTotalBytes: -1}); status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("negative quota: %v", err)
 	}
 }

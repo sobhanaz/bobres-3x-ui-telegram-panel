@@ -39,6 +39,8 @@ type fakeProvisioner struct {
 	groupErr    error
 	// recreated are the limits of the RecreateClient calls, in order.
 	recreated []limitsCall
+	// firstUse is what each CreateClient call asked: whether its days start at the first connection.
+	firstUse []bool
 	// Config names: panelNames are the names some panel has (CheckClientName says "taken", CreateClient refuses them);
 	// checkReason, when set, is CheckClientName's answer for any other name ("unchecked"), checkErr its error; renamed
 	// records RenameClient calls ("<sub>|<name>"), renameErr is returned from them.
@@ -168,7 +170,7 @@ func (f *fakeProvisioner) limitsFor(subscriptionID string) []limitsCall {
 	return append([]limitsCall(nil), f.limits[subscriptionID]...)
 }
 
-func (f *fakeProvisioner) CreateClient(_ context.Context, subscriptionID, email string, days, traffic int64, candidates []string, inbounds []store.PlanInbound, group string) (ProvisionedClient, error) {
+func (f *fakeProvisioner) CreateClient(_ context.Context, subscriptionID, email string, days, traffic int64, candidates []string, inbounds []store.PlanInbound, group string, firstUse bool) (ProvisionedClient, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.calls = append(f.calls, subscriptionID+"|"+email)
@@ -184,7 +186,11 @@ func (f *fakeProvisioner) CreateClient(_ context.Context, subscriptionID, email 
 		return ProvisionedClient{}, errors.New("panel unreachable")
 	}
 	exp := int64(0)
-	if days > 0 {
+	f.firstUse = append(f.firstUse, firstUse)
+	switch {
+	case days > 0 && firstUse:
+		exp = -days * 86400 // the panel waits for the first connection
+	case days > 0:
 		exp = time.Now().Add(time.Duration(days) * 24 * time.Hour).Unix()
 	}
 	return ProvisionedClient{ServerID: "00000000-0000-7000-8000-00000000c0de", XUISubID: "sub-" + subscriptionID[:8], ExpiresAt: exp}, nil

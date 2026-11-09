@@ -178,7 +178,7 @@ func TestBulkPurchaseRefusedForTheLimitSaysNothingAboutLicensing(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if err := f.st.ActivateSubscription(ctx, f.st.Conn(), sub.ID, "00000000-0000-7000-8000-000000000001", "x", "", &expires, nil); err != nil {
+		if err := f.st.ActivateSubscription(ctx, f.st.Conn(), sub.ID, "00000000-0000-7000-8000-000000000001", "x", "", &expires, nil, nil); err != nil {
 			t.Fatal(err)
 		}
 	}
