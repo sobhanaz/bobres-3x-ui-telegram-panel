@@ -2,7 +2,7 @@
 
 What has shipped, what is still open, and what was left out on purpose. Nothing here is promised for a date. The detailed, ordered list is [docs/ROADMAP.md](https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/blob/main/docs/ROADMAP.md), and each release's notes are in the [changelog](https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/blob/main/CHANGELOG.md).
 
-As of v0.24.0, 2026-11-09.
+As of v0.24.1, 2026-11-09.
 
 ## Shipped
 
@@ -31,6 +31,7 @@ As of v0.24.0, 2026-11-09.
 | v0.19.0 | 2026-10-29 | Cashback, reseller monthly targets and a daily wheel; Aqayepardakht and automatic TON payments |
 | v0.20.0 | 2026-10-29 | Messages and a weekly settlement reminder for resellers; bot and dashboard buttons for services the panel no longer has |
 | v0.21.0 | 2026-10-31 | S-UI and Hiddify panels; Arabic, Russian and Turkish (beta); new product announcements; the vendor's affiliate program and hosted-store tooling; a benchmark baseline and a faster wallet |
+| v0.24.1 | 2026-11-09 | The live USDT price from Nobitex, Tabdeal and Wallex (Tetherland's API is gone); the README explains restoring a backup and moving to a new server |
 | v0.24.0 | 2026-11-09 | Days from the first connection: a bought service's days can start when its config first connects (customers and resellers, off by default) |
 | v0.23.0 | 2026-11-08 | Undelivered orders: retry, move to another server or refund with a note, in the dashboard and the bot; late card receipts reach the owner; a top-up button in the reseller panel; `/start` keeps the welcome in view |
 | v0.22.1 | 2026-11-02 | The Settings > Config names card shows in the dashboard |

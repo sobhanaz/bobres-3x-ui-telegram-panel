@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/readme/hero.svg" alt="BOBRES: launch your own VPN store on Telegram, in one command. Live v0.24.0." width="100%">
+  <img src="docs/readme/hero.svg" alt="BOBRES: launch your own VPN store on Telegram, in one command. Live v0.24.1." width="100%">
 </p>
 
 <p align="center">
@@ -439,14 +439,18 @@ same server, S3 copies of the backups, Zarinpal, a different SSH port, hardening
 
 ### The `bobres` command
 
-Run `sudo bobres` for the management menu, or use any item as a command. The header is a live status board (services, license, HTTPS certificate, newest backup, dashboard address); each line of the menu is a numbered choice:
+Run `sudo bobres` for the management menu, or use any item as a command. The header is a live status board (services, license, HTTPS certificate, newest backup, dashboard address); each line of the menu is a numbered choice. This is the menu on a real store running v0.24.0:
+
+<p align="center">
+  <img src="docs/readme/cli-menu.webp" alt="sudo bobres on a real store running v0.24.0: the beaver banner with the version and links, then the BOBRES manager status board (store running, 9 of 9 services; pro license; automatic HTTPS, certificate expires in 70 days; newest backup 18 hours ago; the dashboard address) and the 21 numbered menu items." width="760">
+</p>
 
 <details>
-<summary><b>The menu (<code>sudo bobres</code>)</b></summary>
+<summary><b>The same menu as text (<code>sudo bobres</code>)</b></summary>
 
 ```text
-   n____n   BOBRES manager  bobres v0.24.0
-  ( o  o )  /opt/bobres  ·  shop.example.com  ·  version 0.24.0
+   n____n   BOBRES manager  bobres v0.24.1
+  ( o  o )  /opt/bobres  ·  shop.example.com  ·  version 0.24.1
    \_||_/   Store     running (9/9 services)
             License   Standard license, 214 days left
             HTTPS     auto, certificate expires in 79 days
@@ -519,6 +523,63 @@ dashboard, for the owner) checks the signature, backs up, pulls the pinned image
 back by itself** if the new version does not come up healthy. `sudo bobres update --check` only looks. Core and the bot
 always move together; a database migration is run by the update and is additive, so a rollback keeps your orders and
 credit. The stable channel is the default; `updates.channel` can be set to beta for pre-releases.
+
+#### Backups, restoring and moving to a new server
+
+The store backs itself up every day (at 03:30 in the store's time zone by default), encrypted with its **backup key**. The newest 7 backups stay in
+`/opt/bobres/backups`, each one is also sent to the owner on Telegram, and copies can go to S3-compatible storage.
+`sudo bobres backup` makes one now.
+
+**Your backup key.** The install shows it once, on its last card. To see it again, run `sudo bobres` and choose
+**11. Backup key**. Keep it somewhere off the server, such as a password manager. Without it no backup can be opened, and
+anyone who has it can read your backups.
+
+**Restore on the same server.** In the dashboard, use **System > Backups**: it makes a safety backup first and rolls back
+by itself if the restored store is not healthy. Or run:
+
+```sh
+sudo bobres restore /opt/bobres/backups/bobres-20261011T033000Z.bkp
+```
+
+It checks the whole file, shows when it was made and asks before it changes anything. It saves the current data first
+(`bobres-<now>-before-restore.bkp`), so a restore can itself be undone.
+
+**Move to a new server** (or rebuild this one):
+
+1. If the old server still runs, make a last backup there and stop the store. Then no order is lost, and the two
+   servers do not both answer the same bot:
+
+   ```sh
+   sudo bobres backup && sudo bobres stop
+   ```
+
+2. Point your domain's DNS record (`A`) to the new server's IP.
+3. Install BOBRES on the new server (see [Run it](#-run-it)) with the **same domain and the same bot token**.
+4. Copy the backup to it: the newest one from Telegram, or one from the old server's `/opt/bobres/backups`:
+
+   ```sh
+   scp bobres-20261011T033000Z.bkp root@NEW_SERVER_IP:/root/
+   ```
+
+5. On the new server, put the **old** server's backup key in a file. Paste it into `cat`, not on the command line, so that
+   it stays out of the shell history. Press Enter, then Ctrl-D:
+
+   ```sh
+   umask 077; cat > /root/old-backup-key.txt
+   ```
+
+6. Restore with that key, then delete the key file:
+
+   ```sh
+   sudo bobres restore /root/bobres-20261011T033000Z.bkp --key-file /root/old-backup-key.txt
+   rm /root/old-backup-key.txt
+   ```
+
+Everything comes back: customers, services, orders, wallets, resellers and settings. The backup carries the master
+keys, so 3x-ui panel tokens, payment gateway settings and staff two-factor keys keep working. On the same domain the
+license keeps working too, because the database carries the install id. From then on, new backups use the new server's
+own backup key: save it as well. Backups from S3, every error message and what to check afterwards are in
+[docs/runbooks/restore.md](docs/runbooks/restore.md).
 
 #### Uninstall
 
@@ -725,10 +786,10 @@ at `https://<domain>/admin`
 
 ### 🚦 Status
 
-**Latest release: v0.24.0 (2026-11-09)**: a bought service's days can start at its config's first connection instead of
-when it is made (one switch for customers, one for resellers, off until the owner turns them on); v0.23.0 brought the
-undelivered orders list, late card receipts that still reach the owner, and the welcome with the bottom menu only
-([CHANGELOG.md](CHANGELOG.md)).
+**Latest release: v0.24.1 (2026-11-09)**: the live USDT price is read from Nobitex, Tabdeal and Wallex, so it works
+again on servers where it had stopped (Tetherland's API is gone, and Wallex blocks some servers). v0.24.0 brought days from the first
+connection: a bought service's days can start when its config first connects (one switch for customers, one for
+resellers, off until the owner turns them on) ([CHANGELOG.md](CHANGELOG.md)).
 
 Phases 0 to 7 of the plan are built and tested in CI ([docs/PLAN.md](docs/PLAN.md) §10). The first public release, v0.1.0,
 came out on 2026-10-14, and 28 stable releases have followed. Each one is signed, built for amd64 and arm64, and verified by the
