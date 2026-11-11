@@ -173,7 +173,7 @@ func countsAsSale(o *store.Order, plan *store.Plan, buyer *store.User) bool {
 		return false
 	case plan == nil || plan.IsTrial || plan.IsTopup:
 		return false
-	case o.Type != OrderNew || o.Amount <= 0 || o.RefundedAt != nil:
+	case o.Type != OrderNew || o.Amount <= 0 || o.RefundedAt != nil || o.Internal: // an internal order is no sale (internal.go)
 		return false
 	}
 	return true

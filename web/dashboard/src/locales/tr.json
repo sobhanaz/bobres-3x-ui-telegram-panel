@@ -1097,6 +1097,16 @@
       "note_money": "Her para birimi ayrı sayılır: farklı para birimlerindeki tutarlar asla toplanmaz. Gelir, müşterilere ödenen siparişler için tahsil edilen tutardır; “iadelerden sonra kalan” bundan iadeleri düşer, bayilere veya davetler için yapılacak ödemelerden önce.",
       "note_churn": "Kaybedilen hizmetler şu anki duruma göre sayılır: bu rapordan sonra yenilenen bir hizmet sayıldığı dönemden çıkar, bu yüzden geçmiş bir dönemin sayısı sonradan azalabilir.",
       "made": "{brand} tarafından BOBRES ile hazırlandı."
+    },
+    "internal": {
+      "title": "İç siparişler",
+      "desc": "Sahip hesaplarının alımları: bu sayfadaki rakamlara dahil değildir.",
+      "off": "Ayarlar > Raporlar’daki anahtar kapalı, bu yüzden sahip hesaplarının yeni alımları yeniden sayılıyor. Burada yalnızca daha önce iç olarak işaretlenenler var.",
+      "none": "Bu aralıkta iç olarak işaretlenmiş bir sahip hesabı alımı yok.",
+      "orders": "Sahip hesaplarının alımları",
+      "line": "Sipariş: {n} · {amount}",
+      "refunded": "İade edilen: {n} · {amount}",
+      "accounts": "Hesaba göre: sipariş ve tutar"
     }
   },
   "discount": {
@@ -1835,8 +1845,8 @@
         "desc": "Müşterilerin yeni müşteri getirmesine yardımcı araçlar."
       },
       "reports": {
-        "title": "Satış özeti",
-        "desc": "Telegram’da günde bir kez, dünkü satışları içeren bir mesaj."
+        "title": "Raporlar",
+        "desc": "Telegram’daki günlük satış özeti ve sahip hesaplarının alımlarının sayılıp sayılmayacağı."
       },
       "cashback": {
         "title": "Cashback",
@@ -2096,6 +2106,10 @@
         "daily_summary_time": {
           "label": "Gönderilme saati",
           "help": "Günün saati, 24 saatlik (örneğin 09:00), mağazanın saat diliminde: Genel kartındaki saat dilimi, yoksa BOBRES_TIMEZONE, o da yoksa Tahran. Sunucu o saatte kapalıysa özet, geri geldiği anda aynı gün içinde gönderilir; kaçırılan günler telafi edilmez."
+        },
+        "exclude_owner_orders": {
+          "label": "Sahip hesaplarının alımları gelire ve raporlara sayılmaz",
+          "help": "Açıkken, bir sahip hesabının bundan sonra satın aldığı, yüklediği ve geri aldığı her şey «iç» olarak işaretlenir: gelirde, tüm raporlarda ve grafiklerde, genel bakışta, Telegram’daki günlük özette, cashback’te, günlük çarkta, ödül kodlarında, davet ödüllerinde ve bayilerin aylık hedeflerinde sayılmaz; Raporlar sayfasındaki «İç siparişler» kartında ve günlük özetin ayrı bir satırında ayrıca gösterilir. Yalnızca sahip hesapları sayılır (yöneticiler, destek ve bayiler değil). Hiçbir şey silinmez veya değişmez, önceki alımlar sayılmaya devam eder: bunu açıp kapatmak geçmişi yeniden yazmaz. Sahip hesaplarının önceki alımlarını da iç saymak için aşağıdaki düğmeleri kullanın."
         }
       },
       "cashback": {
@@ -2236,6 +2250,20 @@
       "default_aria": "{lang} varsayılan dil olsun",
       "enable_aria": "Müşteriler {lang} seçebilir",
       "beta_note": "Arapça, Rusça ve Türkçe beta aşamasındadır: makine çevirisidir ve güvenmeden önce anadili konuşan biri tarafından gözden geçirilmelidir."
+    },
+    "internal": {
+      "title": "Sahip hesaplarının önceki alımları",
+      "help": "Yukarıdaki anahtar yalnızca sahip hesaplarının bundan sonra aldıklarını işaretler. Bu düğmeler daha önce aldıkları için aynısını yapar veya geri alır. Yalnızca bir işaret değişir: hiçbir sipariş, ödeme, bakiye veya defter tutarına dokunulmaz. Onaylamadan önce kaç satırın taşınacağını görürsünüz.",
+      "count": "Sahip hesaplarının önceki alımlarını iç say",
+      "undo": "Sahip hesaplarının alımlarını raporlara geri koy",
+      "confirm_title": "Önceki alımlar iç sayılsın mı?",
+      "confirm": "Sahip hesaplarının {orders} siparişi ve {entries} defter kaydı iç olarak işaretlenecek. Aralarındaki alım ve iadeler: {amounts}. Gelirden ve tüm raporlardan çıkarlar. Hiçbir şey silinmez, geri koyabilirsiniz.",
+      "none": "Sayılacak bir şey yok: sahip hesaplarının tüm sipariş ve defter kayıtları zaten iç.",
+      "counted": "Tamam: {orders} sipariş ve {entries} defter kaydı artık iç ({amounts}).",
+      "undo_title": "Alımlar raporlara geri konsun mu?",
+      "undo_confirm": "Sahip hesaplarının oluşturulurken işaretlenenler dahil tüm iç sipariş ve defter kayıtları gelire ve raporlara geri döner.",
+      "undone": "Tamam: {orders} sipariş ve {entries} defter kaydı raporlarda yeniden sayılıyor ({amounts}).",
+      "undone_none": "Geri konacak bir şey yok: sahip hesaplarının iç satırı yok."
     }
   },
   "staff": {
@@ -2391,7 +2419,9 @@
       },
       "reports": {
         "reset": "Raporlar sıfırdan başlatıldı",
-        "reset_clear": "Raporlar yeniden her şeyi sayıyor"
+        "reset_clear": "Raporlar yeniden her şeyi sayıyor",
+        "internal_backfill": "Sahip hesaplarının önceki alımları iç sayıldı",
+        "internal_undo": "Sahip hesaplarının alımları raporlara geri konuldu"
       },
       "plan_group": {
         "upsert": "Paket grubu kaydedildi",

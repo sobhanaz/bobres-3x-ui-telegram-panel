@@ -1097,6 +1097,16 @@
       "note_money": "Every currency is counted on its own: amounts in different currencies are never added together. Revenue is what customers were charged for paid orders; \"kept after refunds\" takes refunds off it, before any payout to resellers or for invitations.",
       "note_churn": "Services lost are counted as of now: a service that is renewed after this report leaves the period it was counted in, so a past period's number can shrink later.",
       "made": "Prepared by {brand} with BOBRES."
+    },
+    "internal": {
+      "title": "Internal orders",
+      "desc": "Purchases by owner accounts: left out of the figures on this page.",
+      "off": "The switch in Settings > Reports is off, so new purchases of owner accounts count again. Only the ones already marked internal are listed here.",
+      "none": "No purchase by an owner account was marked internal in this range.",
+      "orders": "Purchases by owner accounts",
+      "line": "Orders: {n} · {amount}",
+      "refunded": "Refunded: {n} · {amount}",
+      "accounts": "By account: orders and amount"
     }
   },
   "discount": {
@@ -1835,8 +1845,8 @@
         "desc": "Tools that help customers bring in more customers."
       },
       "reports": {
-        "title": "Sales summary",
-        "desc": "A message in Telegram with yesterday's sales, once a day."
+        "title": "Reports",
+        "desc": "The daily sales summary in Telegram, and whether purchases by owner accounts count."
       },
       "cashback": {
         "title": "Cashback",
@@ -2096,6 +2106,10 @@
         "daily_summary_time": {
           "label": "Time it is sent",
           "help": "Time of day, 24-hour (for example 09:00), in the store's time zone: the time zone of the General card, else BOBRES_TIMEZONE, else Tehran. If the server was down at that time, the summary is sent as soon as it is back, the same day; days that were missed are not made up."
+        },
+        "exclude_owner_orders": {
+          "label": "Purchases by owner accounts are not counted in revenue and reports",
+          "help": "When on, what an owner account buys, tops up and is refunded from now on is marked internal: it is left out of revenue, every report and chart, the Overview, the daily summary in Telegram, cashback, the daily wheel, reward codes, invite rewards and the resellers' monthly targets, and shown on its own in the Internal orders card of the Reports page and in a separate line of the daily summary. Only owner accounts count (not admins, support or resellers). Nothing is deleted or changed, and what was bought before keeps counting: turning this on or off never rewrites history. Use the buttons below to count the owner accounts' earlier purchases as internal too."
         }
       },
       "cashback": {
@@ -2236,6 +2250,20 @@
       "default_aria": "Make {lang} the default",
       "enable_aria": "Customers can pick {lang}",
       "beta_note": "Arabic, Russian and Turkish are in beta: they are machine-translated, and a native speaker should review them before you rely on them."
+    },
+    "internal": {
+      "title": "Earlier purchases of the owner accounts",
+      "help": "The switch above marks only what owner accounts buy from now on. These buttons do the same for what they bought before, or take it back. Only a mark changes: no order, payment, balance or ledger amount is touched. You see how many rows would move before you confirm.",
+      "count": "Count the owner accounts' earlier purchases as internal",
+      "undo": "Put the owner accounts' purchases back in the reports",
+      "confirm_title": "Count the earlier purchases as internal?",
+      "confirm": "{orders} orders and {entries} ledger entries of the owner accounts will be marked internal. Purchases and refunds among them: {amounts}. They leave revenue and every report. Nothing is deleted, and you can put them back.",
+      "none": "Nothing to count: every order and ledger entry of the owner accounts is already internal.",
+      "counted": "Done: {orders} orders and {entries} ledger entries are internal now ({amounts}).",
+      "undo_title": "Put the purchases back in the reports?",
+      "undo_confirm": "Every internal order and ledger entry of the owner accounts, including the ones marked when they were made, goes back into revenue and the reports.",
+      "undone": "Done: {orders} orders and {entries} ledger entries count in the reports again ({amounts}).",
+      "undone_none": "Nothing to put back: the owner accounts have no internal rows."
     }
   },
   "staff": {
@@ -2391,7 +2419,9 @@
       },
       "reports": {
         "reset": "Reports started from zero",
-        "reset_clear": "Reports count everything again"
+        "reset_clear": "Reports count everything again",
+        "internal_backfill": "Owner accounts' earlier purchases counted as internal",
+        "internal_undo": "Owner accounts' purchases put back in the reports"
       },
       "plan_group": {
         "upsert": "Plan group saved",

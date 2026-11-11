@@ -1039,6 +1039,7 @@
   "ledger.target_bonus": "Aylık hedef primi",
   "ledger.wheel_prize": "Şans çarkı ödülü",
   "report.daily_cashback": "Verilen cashback: {n} · {amount}",
+  "report.daily_internal": "Sahip hesaplarının alımları, yukarıda sayılmadı: {n} · {amounts}",
   "setting.group.cashback": "Cashback",
   "setting.cashback.enabled.label": "Cashback",
   "setting.cashback.enabled.help": "Sipariş ödenip teslim edildikten sonra siparişin maliyetinin bir kısmı müşterinin cüzdanına yatırılır; sipariş iade edilirse geri alınır. Varsayılan olarak kapalıdır. Aşağıdaki yüzde de ayarlanmalıdır.",
@@ -1209,5 +1210,7 @@
   "wallet.refund_note": "📝 Mağazadan not: {note}",
   "wallet.commission_reversed": "↩️ Müşterilerinizden birinin siparişi, hizmeti teslim edilmeden iade edildi; bu yüzden ondan kazandığınız komisyon geri alındı: <b>{amount}</b>.\nBakiye: {balance}",
   "sub.late": "🙏 Her zamankinden uzun sürdüğü için özür dileriz: sunucularımızdan biri yanıt vermiyordu.",
-  "ledger.commission_reversal": "Komisyon geri alındı (iade)"
+  "ledger.commission_reversal": "Komisyon geri alındı (iade)",
+  "setting.reports.exclude_owner_orders.label": "Sahip hesapları raporların dışında",
+  "setting.reports.exclude_owner_orders.help": "Açık: sahip hesabının bundan sonra aldığı, yüklediği ve geri aldığı her şey gelirde, raporlarda, günlük özette, cashback’te, çarkta ve ödüllerde sayılmaz, ayrıca gösterilir (önceki alımlar değişmez; panel onları da sayabilir). Varsayılan olarak kapalı."
 }

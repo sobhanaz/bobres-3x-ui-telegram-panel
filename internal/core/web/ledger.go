@@ -23,12 +23,13 @@ type ledgerJSON struct {
 	RefType      string     `json:"ref_type"`
 	RefID        string     `json:"ref_id"`
 	CreatedAt    int64      `json:"created_at"`
+	Internal     bool       `json:"internal"` // an owner account's entry, left out of the reports
 }
 
 func ledgerOf(e *store.LedgerRow) ledgerJSON {
 	out := ledgerJSON{ID: e.ID, User: briefOf(e.UserID, e.TelegramID, e.Username),
 		Amount: money{e.Amount, e.Currency}, BalanceAfter: money{e.BalanceAfter, e.Currency}, Kind: e.Kind,
-		CreatedAt: e.CreatedAt.Unix()}
+		CreatedAt: e.CreatedAt.Unix(), Internal: e.Internal}
 	if e.RefType != nil {
 		out.RefType = *e.RefType
 	}
@@ -88,6 +89,10 @@ func (s *Server) listLedger(w http.ResponseWriter, r *http.Request) {
 var ledgerColumns = []string{"time_utc", "telegram_id", "username", "kind", "amount", "currency", "balance_after", "ref_type", "ref_id",
 	"entry_id", "time_local", "tz"}
 
+// ledgerInternal is the column added after them (and after time_jalali in a Jalali file): true for an owner account's entry that the reports
+// leave out, so a spreadsheet can filter it.
+const ledgerInternal = "internal"
+
 const timeJalali = "time_jalali"
 
 // exportLedger: GET /api/v1/ledger.csv with the same filters, newest first,
@@ -109,6 +114,7 @@ func (s *Server) exportLedger(w http.ResponseWriter, r *http.Request) {
 	if clk.jalali {
 		header = append(header, timeJalali)
 	}
+	header = append(header, ledgerInternal)
 	s.streamCSV(w, r, csvExport{
 		name:   exportFileName("ledger", clk, f.From, f.To, s.now()),
 		action: "export.ledger",
@@ -130,6 +136,7 @@ func (s *Server) exportLedger(w http.ResponseWriter, r *http.Request) {
 				if clk.jalali {
 					cells = append(cells, clk.jalaliTime(e.CreatedAt))
 				}
+				cells = append(cells, strconv.FormatBool(e.Internal))
 				return row(cells...)
 			})
 		},

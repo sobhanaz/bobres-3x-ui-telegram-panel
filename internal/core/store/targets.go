@@ -41,11 +41,11 @@ func (s *Store) InsertResellerSale(ctx context.Context, q querier, orderID, user
 	return tag.RowsAffected() == 1, nil
 }
 
-// CountResellerSales is the sales of a reseller in a month that count: the orders that were not refunded.
+// CountResellerSales is the sales of a reseller in a month that count: the orders that were not refunded and are not internal (internal.go).
 func (s *Store) CountResellerSales(ctx context.Context, q querier, userID, period string) (int64, error) {
 	var n int64
 	err := q.QueryRow(ctx, `SELECT count(*) FROM core.reseller_sales r JOIN core.orders o ON o.id = r.order_id
-		WHERE r.user_id = $1 AND r.period = $2 AND o.refunded_at IS NULL`, userID, period).Scan(&n)
+		WHERE r.user_id = $1 AND r.period = $2 AND o.refunded_at IS NULL AND NOT o.internal`, userID, period).Scan(&n)
 	if err != nil {
 		return 0, fmt.Errorf("count reseller sales: %w", err)
 	}

@@ -732,7 +732,7 @@ func (n *Notifier) dailySummary(lang string, e events.DailySummaryEvent) string 
 	if d, err := time.Parse("2006-01-02", e.Date); err == nil {
 		date = i18n.CalendarDay(lang, d.Year(), d.Month(), d.Day())
 	}
-	if len(e.Currencies) == 0 && e.NewCustomers == 0 && e.Trials == 0 {
+	if len(e.Currencies) == 0 && e.NewCustomers == 0 && e.Trials == 0 && len(e.Internal) == 0 {
 		return n.cat.T(lang, "report.daily_none", "date", date)
 	}
 	t := func(key string, args ...any) string { return n.cat.T(lang, key, args...) }
@@ -769,6 +769,16 @@ func (n *Notifier) dailySummary(lang string, e events.DailySummaryEvent) string 
 		}
 	}
 	out = append(out, "", t("report.daily_new_customers", "n", num(e.NewCustomers)), t("report.daily_trials", "n", num(e.Trials)))
+	if len(e.Internal) > 0 {
+		// What owner accounts bought: left out of everything above, said once in one line (a currency's amount is never added to another's).
+		var count int64
+		amounts := make([]string, 0, len(e.Internal))
+		for _, in := range e.Internal {
+			count += in.Count
+			amounts = append(amounts, money(in.Amount, in.Currency))
+		}
+		out = append(out, "", t("report.daily_internal", "n", num(count), "amounts", strings.Join(amounts, ", ")))
+	}
 	if e.Zone != "" {
 		out = append(out, "", t("report.daily_zone", "zone", html.EscapeString(e.Zone)))
 	}

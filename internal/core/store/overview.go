@@ -38,7 +38,7 @@ func (s *Store) OverviewStats(ctx context.Context, q querier, now time.Time) (*O
 		(SELECT count(*) FROM core.subscriptions WHERE panel_missing_since IS NOT NULL AND status IN `+livePanelStatuses+`),
 		(SELECT count(*) FROM core.orders WHERE status = 'provision_failed'),
 		(SELECT count(*) FROM core.orders WHERE status IN ('paid', 'provisioning', 'active', 'provision_failed')
-			AND updated_at >= $1 AND updated_at >= $3 AND amount > 0)`, day, week, sinceOrZero).
+			AND updated_at >= $1 AND updated_at >= $3 AND amount > 0 AND NOT internal)`, day, week, sinceOrZero).
 		Scan(&o.UsersTotal, &o.UsersNew24h, &o.UsersNew7d, &o.ServicesActive, &o.ServicesExpiring, &o.ServicesEnded,
 			&o.ServicesPanelMissing, &o.ProvisionFailed, &o.OrdersPaid24h)
 	if err != nil {
@@ -46,7 +46,7 @@ func (s *Store) OverviewStats(ctx context.Context, q querier, now time.Time) (*O
 	}
 	// Revenue is every sale (VPN orders, licenses, digital accounts), from the moment the owner started the reports from zero.
 	rows, err := q.Query(ctx, `SELECT currency, -sum(amount) FILTER (WHERE created_at >= $1), -sum(amount)
-		FROM core.ledger_entries WHERE kind IN `+purchaseKinds+` AND created_at >= $2 AND created_at >= $3 GROUP BY currency`, day, month, sinceOrZero)
+		FROM core.ledger_entries WHERE kind IN `+purchaseKinds+` AND NOT internal AND created_at >= $2 AND created_at >= $3 GROUP BY currency`, day, month, sinceOrZero)
 	if err != nil {
 		return nil, fmt.Errorf("overview revenue: %w", err)
 	}

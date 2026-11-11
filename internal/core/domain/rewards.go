@@ -111,7 +111,7 @@ func givesReward(o *store.Order, plan *store.Plan, buyer *store.User) bool {
 		return false
 	case o.Type != "new" && o.Type != "renew":
 		return false
-	case o.Amount <= 0 || o.BulkID != nil:
+	case o.Amount <= 0 || o.BulkID != nil || o.Internal: // an owner account's purchase earns nothing (internal.go)
 		return false
 	case buyer == nil || isReseller(buyer):
 		return false

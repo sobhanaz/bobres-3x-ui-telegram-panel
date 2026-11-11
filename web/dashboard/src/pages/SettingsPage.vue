@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import Button from 'primevue/button'
 import Message from 'primevue/message'
 import Skeleton from 'primevue/skeleton'
+import InternalOrdersActions from '../components/settings/InternalOrdersActions.vue'
 import JoinChatsCard from '../components/settings/JoinChatsCard.vue'
 import SecurityCard from '../components/settings/SecurityCard.vue'
 import MetricsCard from '../components/settings/MetricsCard.vue'
@@ -109,7 +110,10 @@ function saved(r: SettingsReply) {
   <div v-else-if="reply" class="cards">
     <template v-for="g in groups" :key="g">
       <JoinChatsCard v-if="g === JOIN" class="wide" />
-      <SettingsCard v-else :group="g" :items="byGroup[g]" :class="{ wide: wide.includes(g) }" @saved="saved" />
+      <SettingsCard v-else :group="g" :items="byGroup[g]" :class="{ wide: wide.includes(g) }" @saved="saved">
+        <!-- under the switch that marks owner accounts' purchases internal: count their earlier ones too, or undo it -->
+        <template v-if="g === 'reports'" #extra><InternalOrdersActions /></template>
+      </SettingsCard>
       <!-- /metrics for Prometheus: its token is write-only, so it is not a setting of the card above -->
       <MetricsCard v-if="g === MONITOR" class="wide" />
       <WheelReportCard v-if="g === 'wheel' && auth.can('reports.read')" class="wide" :refresh-key="saves" />

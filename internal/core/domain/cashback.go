@@ -140,6 +140,8 @@ func (c CashbackConfig) earns(o *store.Order, plan *store.Plan, buyer *store.Use
 		return false
 	case plan == nil || plan.IsTrial:
 		return false
+	case o.Internal: // an owner account's purchase is out of the reports and earns nothing (internal.go)
+		return false
 	case o.Currency != WalletCurrency || o.Amount <= 0 || o.Amount < c.MinOrder || o.RefundedAt != nil:
 		return false
 	case o.Type == OrderNew:

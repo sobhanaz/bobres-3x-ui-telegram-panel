@@ -92,6 +92,10 @@ func rangeOf(col string) string {
 		AND ` + col + ` >= COALESCE(NULLIF(current_setting('bobres.reports_since', true), '')::timestamptz, '-infinity'::timestamptz)`
 }
 
+// notInternalOrderEvent keeps an event of core's own log (order.paid.v1, payment.rejected.v1) out of a report when it is about an internal
+// order: the events carry the order's id, and the internal orders are few, so the subquery is read once. An event with no order is kept.
+const notInternalOrderEvent = `COALESCE(o.payload->>'order_id', '') NOT IN (SELECT i.id::text FROM core.orders i WHERE i.internal)`
+
 // ReportsSinceKey is the setting that holds the instant (RFC 3339, UTC) the reports and the overview count from. The owner sets it with
 // "start from zero" when the sales so far were tests; nothing is deleted, the orders, payments, wallets and the ledger stay as they are.
 const ReportsSinceKey = "reports.since"
@@ -258,7 +262,7 @@ func (s *Store) SalesSummary(ctx context.Context, q ReportQuery) (*SalesData, er
 				count(*) FILTER (WHERE e.kind = 'license_purchase'), COALESCE(sum(-e.amount) FILTER (WHERE e.kind = 'license_purchase'), 0)::bigint,
 				count(*) FILTER (WHERE e.kind = 'supplier_purchase'), COALESCE(sum(-e.amount) FILTER (WHERE e.kind = 'supplier_purchase'), 0)::bigint
 			FROM core.ledger_entries e LEFT JOIN core.orders o ON e.ref_type = 'order' AND o.id = e.ref_id
-			WHERE e.kind IN `+purchaseKinds+` AND `+rangeOf("e.created_at")+`
+			WHERE e.kind IN `+purchaseKinds+` AND NOT e.internal AND `+rangeOf("e.created_at")+`
 			GROUP BY 1, 2`, args, func(r pgx.Rows) error {
 			var b, cur string
 			var o, rev, newO, ren, tt int64
@@ -278,8 +282,8 @@ func (s *Store) SalesSummary(ctx context.Context, q ReportQuery) (*SalesData, er
 		if err := each(ctx, tx, `
 			SELECT `+bucketOf("e.created_at")+`, count(*)
 			FROM core.ledger_entries e
-			WHERE e.kind = 'purchase' AND `+rangeOf("e.created_at")+`
-				AND NOT EXISTS (SELECT 1 FROM core.ledger_entries p WHERE p.user_id = e.user_id AND p.kind = 'purchase'
+			WHERE e.kind = 'purchase' AND NOT e.internal AND `+rangeOf("e.created_at")+`
+				AND NOT EXISTS (SELECT 1 FROM core.ledger_entries p WHERE p.user_id = e.user_id AND p.kind = 'purchase' AND NOT p.internal
 					AND (p.created_at, p.id) < (e.created_at, e.id))
 			GROUP BY 1`, args, func(r pgx.Rows) error {
 			var b string
@@ -295,7 +299,7 @@ func (s *Store) SalesSummary(ctx context.Context, q ReportQuery) (*SalesData, er
 		// Free trials: one trial_grant entry per user, ever.
 		if err := each(ctx, tx, `
 			SELECT `+bucketOf("e.created_at")+`, count(*)
-			FROM core.ledger_entries e WHERE e.kind = 'trial_grant' AND `+rangeOf("e.created_at")+` GROUP BY 1`, args, func(r pgx.Rows) error {
+			FROM core.ledger_entries e WHERE e.kind = 'trial_grant' AND NOT e.internal AND `+rangeOf("e.created_at")+` GROUP BY 1`, args, func(r pgx.Rows) error {
 			var b string
 			var n int64
 			if err := r.Scan(&b, &n); err != nil {
@@ -329,21 +333,21 @@ func (s *Store) SalesSummary(ctx context.Context, q ReportQuery) (*SalesData, er
 			SELECT b, currency, count(*), sum(rest)::bigint FROM (
 				SELECT `+bucketOf("e.created_at")+` AS b, e.currency,
 					e.amount - COALESCE((SELECT sum(-p.amount) FROM core.ledger_entries p WHERE p.user_id = e.user_id
-						AND p.currency = e.currency AND p.kind = 'purchase' AND p.created_at = e.created_at), 0) AS rest
-				FROM core.ledger_entries e WHERE e.kind = 'topup' AND `+rangeOf("e.created_at")+`) t
+						AND p.currency = e.currency AND p.kind = 'purchase' AND NOT p.internal AND p.created_at = e.created_at), 0) AS rest
+				FROM core.ledger_entries e WHERE e.kind = 'topup' AND NOT e.internal AND `+rangeOf("e.created_at")+`) t
 			WHERE rest > 0 GROUP BY 1, 2`, func(c *ReportCell) *ReportFlow { return &c.Topups }); err != nil {
 			return reportErr("report topups", err)
 		}
 		if err := flow(`
 			SELECT `+bucketOf("e.created_at")+`, e.currency, count(*), COALESCE(sum(e.amount), 0)::bigint
-			FROM core.ledger_entries e WHERE e.kind IN `+refundKinds+` AND `+rangeOf("e.created_at")+` GROUP BY 1, 2`,
+			FROM core.ledger_entries e WHERE e.kind IN `+refundKinds+` AND NOT e.internal AND `+rangeOf("e.created_at")+` GROUP BY 1, 2`,
 			func(c *ReportCell) *ReportFlow { return &c.Refunds }); err != nil {
 			return reportErr("report refunds", err)
 		}
 		// Cashback paid: the credits and, taken off, the reversals that refunds made.
 		if err := flow(`
 			SELECT `+bucketOf("e.created_at")+`, e.currency, count(*) FILTER (WHERE e.kind = 'cashback'), COALESCE(sum(e.amount), 0)::bigint
-			FROM core.ledger_entries e WHERE e.kind IN ('cashback', 'cashback_reversal') AND `+rangeOf("e.created_at")+` GROUP BY 1, 2`,
+			FROM core.ledger_entries e WHERE e.kind IN ('cashback', 'cashback_reversal') AND NOT e.internal AND `+rangeOf("e.created_at")+` GROUP BY 1, 2`,
 			func(c *ReportCell) *ReportFlow { return &c.Cashback }); err != nil {
 			return reportErr("report cashback", err)
 		}
@@ -355,7 +359,7 @@ func (s *Store) SalesSummary(ctx context.Context, q ReportQuery) (*SalesData, er
 				CASE WHEN COALESCE(o.payload->>'provider', '') <> '' THEN o.payload->>'provider' = ANY($5::text[])
 					ELSE NOT (COALESCE(o.payload->>'reason', '') = ANY($6::text[])) END AS by_staff,
 				count(*), COALESCE(sum((o.payload->>'amount')::bigint), 0)::bigint
-			FROM core.outbox_core o WHERE o.topic = 'payment.rejected.v1' AND o.payload->>'currency' IS NOT NULL AND `+rangeOf("o.created_at")+`
+			FROM core.outbox_core o WHERE o.topic = 'payment.rejected.v1' AND o.payload->>'currency' IS NOT NULL AND `+notInternalOrderEvent+` AND `+rangeOf("o.created_at")+`
 			GROUP BY 1, 2, 3`, []any{q.From, q.To, q.TZ, q.Group, ManualProviders, GatewayFailureReasons}, func(r pgx.Rows) error {
 			var b, cur string
 			var staff bool
@@ -378,7 +382,7 @@ func (s *Store) SalesSummary(ctx context.Context, q ReportQuery) (*SalesData, er
 		// paid: it is a refund, not a cancellation.
 		if err := flow(`
 			SELECT `+bucketOf("o.updated_at")+`, o.currency, count(*), COALESCE(sum(o.amount), 0)::bigint
-			FROM core.orders o WHERE o.status IN ('cancelled', 'expired') AND o.refunded_at IS NULL AND `+rangeOf("o.updated_at")+` GROUP BY 1, 2`,
+			FROM core.orders o WHERE o.status IN ('cancelled', 'expired') AND o.refunded_at IS NULL AND NOT o.internal AND `+rangeOf("o.updated_at")+` GROUP BY 1, 2`,
 			func(c *ReportCell) *ReportFlow { return &c.Cancelled }); err != nil {
 			return reportErr("report cancelled", err)
 		}
@@ -411,7 +415,7 @@ func churnServiceSQL() string {
 	FROM core.subscriptions s
 	JOIN core.orders o ON o.id = s.order_id
 	JOIN core.plans p ON p.id = o.plan_id
-	WHERE ` + churnEnded + ` AND s.expires_at <= $5::timestamptz AND ` + rangeOf("s.expires_at") + `
+	WHERE ` + churnEnded + ` AND NOT o.internal AND s.expires_at <= $5::timestamptz AND ` + rangeOf("s.expires_at") + `
 	GROUP BY 1`
 }
 
@@ -429,7 +433,7 @@ func churnCustomerSQL() string {
 		FROM core.subscriptions s
 		JOIN core.orders o ON o.id = s.order_id
 		JOIN core.plans p ON p.id = o.plan_id
-		WHERE s.status NOT IN ('pending', 'disabled', 'deleted') AND NOT p.is_trial
+		WHERE s.status NOT IN ('pending', 'disabled', 'deleted') AND NOT p.is_trial AND NOT o.internal
 			AND s.user_id IN (SELECT c.user_id FROM core.subscriptions c WHERE c.expires_at IS NOT NULL
 				AND c.status NOT IN ('pending', 'disabled', 'deleted') AND c.expires_at <= $5::timestamptz AND ` + rangeOf("c.expires_at") + `)
 		GROUP BY s.user_id) m
@@ -519,7 +523,7 @@ func (s *Store) SalesByMethod(ctx context.Context, q ReportQuery) ([]MethodRow, 
 		total := map[string]*MethodRow{}
 		if err := each(ctx, tx, `
 			SELECT e.currency, count(*), COALESCE(sum(-e.amount), 0)::bigint
-			FROM core.ledger_entries e WHERE e.kind IN `+purchaseKinds+` AND `+rangeOf("e.created_at")+` GROUP BY 1`, args, func(r pgx.Rows) error {
+			FROM core.ledger_entries e WHERE e.kind IN `+purchaseKinds+` AND NOT e.internal AND `+rangeOf("e.created_at")+` GROUP BY 1`, args, func(r pgx.Rows) error {
 			var m MethodRow
 			if err := r.Scan(&m.Currency, &m.Orders, &m.Revenue); err != nil {
 				return err
@@ -532,7 +536,7 @@ func (s *Store) SalesByMethod(ctx context.Context, q ReportQuery) ([]MethodRow, 
 		if err := each(ctx, tx, `
 			SELECT COALESCE(o.payload->>'source', ''), COALESCE(o.payload->>'provider', ''), o.payload->>'currency', count(*), COALESCE(sum((o.payload->>'amount')::bigint), 0)::bigint
 			FROM core.outbox_core o
-			WHERE o.topic = 'order.paid.v1' AND (o.payload->>'amount')::bigint > 0 AND `+rangeOf("o.created_at")+`
+			WHERE o.topic = 'order.paid.v1' AND (o.payload->>'amount')::bigint > 0 AND `+notInternalOrderEvent+` AND `+rangeOf("o.created_at")+`
 			GROUP BY 1, 2, 3`, args, func(r pgx.Rows) error {
 			var m MethodRow
 			if err := r.Scan(&m.Method, &m.Provider, &m.Currency, &m.Orders, &m.Revenue); err != nil {
@@ -552,7 +556,7 @@ func (s *Store) SalesByMethod(ctx context.Context, q ReportQuery) ([]MethodRow, 
 		// Licenses and digital accounts are always paid from the wallet and publish no order.paid event: they are wallet sales.
 		if err := each(ctx, tx, `
 			SELECT e.currency, count(*), COALESCE(sum(-e.amount), 0)::bigint
-			FROM core.ledger_entries e WHERE e.kind IN ('license_purchase', 'supplier_purchase') AND `+rangeOf("e.created_at")+` GROUP BY 1`, args, func(r pgx.Rows) error {
+			FROM core.ledger_entries e WHERE e.kind IN ('license_purchase', 'supplier_purchase') AND NOT e.internal AND `+rangeOf("e.created_at")+` GROUP BY 1`, args, func(r pgx.Rows) error {
 			var m MethodRow
 			if err := r.Scan(&m.Currency, &m.Orders, &m.Revenue); err != nil {
 				return err
@@ -620,7 +624,7 @@ func (s *Store) TopPlans(ctx context.Context, q ReportQuery, perCurrency int) ([
 				FROM core.ledger_entries e
 				JOIN core.orders o ON e.ref_type = 'order' AND o.id = e.ref_id
 				JOIN core.plans p ON p.id = o.plan_id
-				WHERE e.kind = 'purchase' AND `+rangeOf("e.created_at")+`
+				WHERE e.kind = 'purchase' AND NOT e.internal AND `+rangeOf("e.created_at")+`
 				GROUP BY o.plan_id, p.name_i18n, e.currency) t
 			WHERE rank <= $4::int
 			ORDER BY currency, revenue DESC, orders DESC, plan_id`, args, func(r pgx.Rows) error {
@@ -663,7 +667,7 @@ func (s *Store) PlanSeries(ctx context.Context, q ReportQuery) ([]PlanBucketRow,
 			FROM core.ledger_entries e
 			JOIN core.orders o ON e.ref_type = 'order' AND o.id = e.ref_id
 			JOIN core.plans p ON p.id = o.plan_id
-			WHERE e.kind = 'purchase' AND `+rangeOf("e.created_at")+`
+			WHERE e.kind = 'purchase' AND NOT e.internal AND `+rangeOf("e.created_at")+`
 			GROUP BY 1, o.plan_id, p.name_i18n, e.currency
 			ORDER BY 1, e.currency, o.plan_id`, args, func(r pgx.Rows) error {
 			var row PlanBucketRow
@@ -703,7 +707,7 @@ func (s *Store) SalesHours(ctx context.Context, q ReportQuery) ([]HourRow, error
 			SELECT extract(isodow FROM e.created_at AT TIME ZONE $3::text)::int, extract(hour FROM e.created_at AT TIME ZONE $3::text)::int,
 				e.currency, count(*), COALESCE(sum(-e.amount), 0)::bigint
 			FROM core.ledger_entries e
-			WHERE e.kind IN `+purchaseKinds+` AND `+rangeOf("e.created_at")+`
+			WHERE e.kind IN `+purchaseKinds+` AND NOT e.internal AND `+rangeOf("e.created_at")+`
 			GROUP BY 1, 2, 3
 			ORDER BY 3, 1, 2`, args, func(r pgx.Rows) error {
 			var h HourRow
@@ -740,6 +744,9 @@ type PaidOrderRow struct {
 	ListAmount   int64
 	ListCurrency string
 	Rate         int64
+	// Internal: an owner account's purchase (internal.go). The report leaves it out of its figures; the export lists it, flagged, so a
+	// spreadsheet can filter it.
+	Internal bool
 }
 
 // paidOrdersSQL is the export's query. How an order was paid is one index
@@ -752,11 +759,11 @@ func paidOrdersSQL() string {
 	local := `to_char(e.created_at AT TIME ZONE $3::text, 'YYYY-MM-DD HH24:MI:SS')`
 	return `
 	SELECT created_at, local, order_id, type, telegram_id, username, name_i18n, currency, amount, method, refunded, provider,
-		list_amount, list_currency, rate FROM (
+		list_amount, list_currency, rate, internal FROM (
 		SELECT e.created_at, e.id AS eid, ` + local + ` AS local, e.ref_id::text AS order_id, o.type AS type,
 			u.telegram_id, COALESCE(u.username, '') AS username, p.name_i18n, e.currency, -e.amount AS amount, COALESCE(ev.method, '') AS method,
 			COALESCE(o.refund_amount, 0) AS refunded, COALESCE(ev.provider, '') AS provider,
-			COALESCE(o.list_amount, 0) AS list_amount, COALESCE(o.list_currency, '') AS list_currency, COALESCE(o.rate, 0) AS rate
+			COALESCE(o.list_amount, 0) AS list_amount, COALESCE(o.list_currency, '') AS list_currency, COALESCE(o.rate, 0) AS rate, e.internal
 		FROM core.ledger_entries e
 		JOIN core.orders o ON e.ref_type = 'order' AND o.id = e.ref_id
 		JOIN core.users u ON u.id = e.user_id
@@ -771,7 +778,7 @@ func paidOrdersSQL() string {
 			jsonb_build_object('en', 'BOBRES license (' || v.tier || ', ' || v.months || ' months)',
 				'fa', 'لایسنس BOBRES (' || CASE v.tier WHEN 'standard' THEN 'استاندارد' WHEN 'pro' THEN 'حرفه' || chr(8204) || 'ای' ELSE v.tier END || '، ' || v.months || ' ماه)'),
 			e.currency, -e.amount, 'wallet', CASE WHEN v.status = 'refunded' THEN v.amount ELSE 0 END, '',
-			COALESCE(v.list_amount, 0), COALESCE(v.list_currency, ''), COALESCE(v.rate, 0)
+			COALESCE(v.list_amount, 0), COALESCE(v.list_currency, ''), COALESCE(v.rate, 0), e.internal
 		FROM core.ledger_entries e
 		JOIN core.vendor_orders v ON e.ref_type = 'vendor_order' AND v.id = e.ref_id
 		JOIN core.users u ON u.id = e.user_id
@@ -783,7 +790,7 @@ func paidOrdersSQL() string {
 			jsonb_build_object(
 				'en', COALESCE(NULLIF(sp.title_i18n->>'en', ''), sp.name, so.product_id) || ' x ' || so.quantity,
 				'fa', COALESCE(NULLIF(sp.title_i18n->>'fa', ''), NULLIF(sp.title_i18n->>'en', ''), sp.name, so.product_id) || ' × ' || so.quantity),
-			e.currency, -e.amount, 'wallet', CASE WHEN so.status = 'refunded' THEN so.amount ELSE 0 END, '', 0::bigint, ''::text, 0::bigint
+			e.currency, -e.amount, 'wallet', CASE WHEN so.status = 'refunded' THEN so.amount ELSE 0 END, '', 0::bigint, ''::text, 0::bigint, e.internal
 		FROM core.ledger_entries e
 		JOIN core.supplier_orders so ON e.ref_type = 'supplier_order' AND so.id = e.ref_id
 		JOIN core.users u ON u.id = e.user_id
@@ -813,7 +820,7 @@ func (s *Store) EachPaidOrder(ctx context.Context, q ReportQuery, max int, fn fu
 			}
 			var r PaidOrderRow
 			if err := rows.Scan(&r.PaidAt, &r.PaidLocal, &r.OrderID, &r.Type, &r.TelegramID, &r.Username, &r.PlanName,
-				&r.Currency, &r.Amount, &r.Method, &r.Refunded, &r.Provider, &r.ListAmount, &r.ListCurrency, &r.Rate); err != nil {
+				&r.Currency, &r.Amount, &r.Method, &r.Refunded, &r.Provider, &r.ListAmount, &r.ListCurrency, &r.Rate, &r.Internal); err != nil {
 				return err
 			}
 			if err := fn(r); err != nil {

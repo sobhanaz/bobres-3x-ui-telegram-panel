@@ -45,6 +45,8 @@ import (
 const (
 	SettingDailySummary     = "reports.daily_summary"
 	SettingDailySummaryTime = "reports.daily_summary_time"
+	// SettingExcludeOwnerOrders stamps what owner accounts buy internal, out of the reports (store.ExcludeOwnerOrdersKey, internal.go).
+	SettingExcludeOwnerOrders = store.ExcludeOwnerOrdersKey
 	// DefaultDailySummaryTime is HH:MM in the store's time zone.
 	DefaultDailySummaryTime = "09:00"
 )
@@ -236,6 +238,20 @@ func (d *DailySummary) queue(ctx context.Context, day time.Time, zone string, no
 	ev, err := summaryEvent(date, zone, rep)
 	if err != nil {
 		return err
+	}
+	// What owner accounts bought that day is not in the figures above (it is internal): it is one separate line, only when there was any.
+	dayRng, err := NewReportRange(ReportRequest{From: date, To: date, Group: GroupDay, TZ: zone}, zone, now)
+	if err != nil {
+		return err
+	}
+	internal, err := d.s.InternalOrders(ctx, dayRng)
+	if err != nil {
+		return err
+	}
+	for _, c := range internal.Currencies {
+		if c.Orders > 0 {
+			ev.Internal = append(ev.Internal, events.DailySummaryInternal{Currency: c.Currency, Count: c.Orders, Amount: c.Amount})
+		}
 	}
 	var (
 		queued   int

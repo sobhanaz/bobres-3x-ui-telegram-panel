@@ -19,6 +19,9 @@ type InviterRow struct {
 // joined through their invite link (the same count as ReferralStats), most
 // first. A tie goes to whoever joined the bot first. Only customers with at
 // least one invited user have a row, and at most limit rows are returned.
+// While the owner's switch (reports.exclude_owner_orders) is on, an invited
+// account that is an owner's does not count: the owner's own test accounts
+// lift nobody on the board.
 //
 // It is one statement: the invites are counted over the partial index
 // users_referred_by_idx and joined to their inviters, so it costs one pass
@@ -30,7 +33,9 @@ func (s *Store) TopInviters(ctx context.Context, q querier, limit int) ([]Invite
 	}
 	rows, err := q.Query(ctx, `
 		SELECT u.id, u.telegram_id, COALESCE(u.username, ''), i.invited
-		FROM (SELECT referred_by, count(*) AS invited FROM core.users WHERE referred_by IS NOT NULL
+		FROM (SELECT referred_by, count(*) AS invited FROM core.users
+		      WHERE referred_by IS NOT NULL AND NOT (role = 'owner' AND COALESCE((SELECT s.value #>> '{}' = 'true' FROM core.settings s
+		        WHERE s.key = '`+ExcludeOwnerOrdersKey+`'), false))
 		      GROUP BY referred_by) i
 		JOIN core.users u ON u.id = i.referred_by
 		WHERE u.status = 'active' AND u.role = 'user'

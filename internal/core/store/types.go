@@ -113,7 +113,10 @@ type Order struct {
 	ClientName *string
 	// ServerID is the server staff chose for an undelivered new service (MoveOrder): the worker offers the provisioner
 	// that server instead of the plan's. nil = the plan's servers.
-	ServerID  *string
+	ServerID *string
+	// Internal: the order was made by an owner account while reports.exclude_owner_orders was on, so it is out of revenue, the reports and
+	// the growth rewards (internal.go). Stamped once when the order is created; flipping the switch later does not change it.
+	Internal  bool
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
@@ -158,6 +161,9 @@ type LedgerEntry struct {
 	IdempotencyKey string
 	BalanceAfter   int64
 	CreatedAt      time.Time
+	// Internal: the entry is out of revenue and the reports (internal.go). It is decided when the entry is written, inside its transaction,
+	// and read back here; a caller does not set it.
+	Internal bool
 }
 
 // Subscription mirrors core.subscriptions. ServerID is "" until provisioned.

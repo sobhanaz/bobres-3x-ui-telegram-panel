@@ -136,6 +136,8 @@ var SettingSpecs = []SettingSpec{
 		Help: "true = every day at the time below, the bot messages yesterday's sales (revenue per currency, paid orders, refunds, top-ups, new customers, free trials) to every owner and admin; off by default"},
 	{Key: SettingDailySummaryTime, Group: "reports", Kind: KindTime, Perm: permSettings, Default: DefaultDailySummaryTime,
 		Help: "time of day (HH:MM, 24-hour) in the store's time zone at which the daily sales summary is sent"},
+	{Key: SettingExcludeOwnerOrders, Group: "reports", Kind: KindBool, Perm: permSettings, Default: "false",
+		Help: "true = what an owner account buys, tops up and is refunded from now on is marked internal: it is left out of revenue and every report, the overview, the daily summary, cashback, the daily wheel, reward codes, invite rewards and the resellers' monthly targets, and shown on its own in the Reports page's Internal orders card; earlier purchases are not changed (the dashboard has buttons to count them). false = owner accounts' purchases count like anyone's (default)"},
 	{Key: SettingPlanLayout, Group: "shop", Kind: KindEnum, Perm: permSettings, Default: PlanLayoutTable, Options: []string{PlanLayoutTable, PlanLayoutList},
 		Help: "how the bot lists plans: table = each plan is a row of two buttons (its name and its price) under a header row; list = one button per plan"},
 	{Key: SettingVendorEnabled, Group: "shop", Kind: KindBool, Perm: permSettings, Default: "false",

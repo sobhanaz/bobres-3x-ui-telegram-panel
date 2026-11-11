@@ -250,7 +250,7 @@ func idPart(q string) string {
 const orderColsO = `o.id, o.user_id, o.plan_id, o.type, o.status, o.amount, o.currency, o.idempotency_key, o.created_at, o.updated_at,
 	o.subscription_id, o.discount_code, o.discount_amount, o.targets_set, o.target_expires_at, o.target_traffic_bytes,
 	o.extend_days, o.extend_bytes, o.created_by, o.refunded_at, o.refund_amount, o.label, o.bulk_id, o.bulk_index,
-	o.list_amount, o.list_currency, o.rate, o.client_name, o.server_id, o.target_first_use_days`
+	o.list_amount, o.list_currency, o.rate, o.client_name, o.server_id, o.target_first_use_days, o.internal`
 
 // OrderFilter narrows the orders list. Query matches a Telegram id, part of a
 // username or part of an order id. Oldest lists the oldest first (the
@@ -398,13 +398,13 @@ const ledgerWhere = `
 		  AND ($4::timestamptz IS NULL OR l.created_at >= $4)
 		  AND ($5::timestamptz IS NULL OR l.created_at < $5)`
 
-const ledgerColsL = `l.id, l.user_id, l.currency, l.amount, l.kind, l.ref_type, l.ref_id, l.idempotency_key, l.balance_after, l.created_at`
+const ledgerColsL = `l.id, l.user_id, l.currency, l.amount, l.kind, l.ref_type, l.ref_id, l.idempotency_key, l.balance_after, l.created_at, l.internal`
 
 func scanLedgerRow(rows pgx.Rows, extra ...any) (LedgerRow, error) {
 	var r LedgerRow
 	e := &r.LedgerEntry
 	dest := append([]any{&e.ID, &e.UserID, &e.Currency, &e.Amount, &e.Kind, &e.RefType, &e.RefID,
-		&e.IdempotencyKey, &e.BalanceAfter, &e.CreatedAt, &r.TelegramID, &r.Username}, extra...)
+		&e.IdempotencyKey, &e.BalanceAfter, &e.CreatedAt, &e.Internal, &r.TelegramID, &r.Username}, extra...)
 	return r, rows.Scan(dest...)
 }
 

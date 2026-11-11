@@ -595,6 +595,14 @@ type DailySummaryCurrency struct {
 	Cashback DailySummaryFlow `json:"cashback"`
 }
 
+// DailySummaryInternal is what owner accounts bought that day in one currency, which the figures above leave out (the purchases marked
+// internal, docs/14-reports.md): Count purchases, Amount their money.
+type DailySummaryInternal struct {
+	Currency string `json:"currency"`
+	Count    int64  `json:"count"`
+	Amount   int64  `json:"amount"`
+}
+
 // DailySummaryEvent: yesterday's sales (one store-local day) for one staff
 // member who holds reports.read and has a Telegram account. Core writes one
 // event for each such member in the same transaction that claims the day, so a
@@ -615,4 +623,7 @@ type DailySummaryEvent struct {
 	NewCustomers int64                  `json:"new_customers"`
 	Trials       int64                  `json:"trials"`
 	Currencies   []DailySummaryCurrency `json:"currencies,omitempty"`
+	// Internal is the day's purchases by owner accounts, one entry for each currency; the bot says it in one separate line, only when there
+	// were any. They are not in Currencies. Absent in an event from before they were told apart.
+	Internal []DailySummaryInternal `json:"internal,omitempty"`
 }
