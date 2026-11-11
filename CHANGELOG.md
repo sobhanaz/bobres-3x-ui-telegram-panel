@@ -8,6 +8,15 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+### Updating
+- One database migration, additive, in core: 00059 (`orders.internal` and `ledger_entries.internal`, both `false` for every existing row, each with a partial index; the ledger's append-only trigger now lets the `internal` flag alone change, so the dashboard can mark and unmark the owner accounts' earlier rows). Its Down drops both columns and restores the strict trigger. The bot and core update together (the daily summary event gains an optional field; the update does that).
+
+### Added
+- **Owner accounts' purchases kept out of revenue and reports.** Owners buy from their own store to try it, and those purchases inflated revenue, the top plans, the cashback and the rewards. A new setting, **Settings > Reports > Purchases by owner accounts are not counted in revenue and reports** (`reports.exclude_owner_orders`, **off by default**), marks everything an owner account (role `owner` only) buys, tops up and is refunded from then on as *internal*: a VPN service (new, renewal, traffic top-up, bulk), a wallet top-up, a license, a digital account. The mark is stored on the row when it is made, so turning the switch on or off never rewrites history, and a refund carries the mark of what it gives back.
+  - Internal rows leave revenue and every report (paid orders, refunds, top-ups, new customers, trials, churn, top plans, plan series, the busiest hours, how orders were paid), the Overview, the daily summary in Telegram, the summary file, cashback, the daily wheel's paid-order count, reward codes, invite rewards (and a reseller's commission on them) and the resellers' monthly targets; while the switch is on, an owner's own accounts do not lift anyone on the Top users board. No order, payment, balance or ledger row is changed.
+  - They are shown on their own: an **Internal orders** card on the Reports page (the count and amount per currency, what refunds gave back, and each account), a last `internal` column in `orders.csv` and `ledger.csv`, and one separate line in the daily summary, only on a day when there were any.
+  - Two buttons under the switch (owner and admin): **Count the owner accounts' earlier purchases as internal** shows how many orders and ledger entries and how much money would move, then asks for a confirmation; the second puts them back. Only the mark changes. Both are audited (`reports.internal_backfill`, `reports.internal_undo`, with the counts) and safe to repeat. API: `GET /api/v1/reports/internal`, `POST /api/v1/reports/internal/backfill` (`{"dry_run": true}` for the preview) and `POST /api/v1/reports/internal/undo`. Texts in Persian, English, Arabic, Russian and Turkish; see [docs/14-reports.md](docs/14-reports.md#internal-orders).
+
 ## [0.24.1] — 2026-11-09
 
 **The live USDT price works again on servers where it had stopped, and the README shows how to restore a backup or move to a new server.** No migration; only the bot changes (the update does that).

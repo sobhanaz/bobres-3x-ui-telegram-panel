@@ -174,9 +174,50 @@ again** takes the cutoff away. `GET /reports/since` (anyone who reads reports) t
 `DELETE /reports/reset` change it (`reports.reset` and `reports.reset_clear` in the audit log). Churn counts services by their expiry and are not
 cut. A customer who bought before the start and buys again after it is not a new customer of the new count.
 
+## Internal orders
+
+An owner often buys from their own store to try it. The setting `reports.exclude_owner_orders` (Settings > Reports, **off by default**, "Purchases
+by owner accounts are not counted in revenue and reports") keeps those purchases out of the numbers without hiding that they happened.
+
+- **What is stamped.** While the switch is on, every order, purchase, top-up, refund and other wallet entry that a user whose role is **`owner`**
+  makes is written with `internal = true`: VPN services (new, renewal, traffic top-up, and bulk), wallet top-ups, BOBRES licenses and digital
+  accounts. Only the owner role counts (not admin, support or reseller). An owner buying "for a customer" is the buyer, so it is internal too. The
+  decision is one expression in the statement that writes the row (`internalOf` in `internal/core/store/internal.go`), so it is taken inside the
+  same transaction as the row, from the setting and the role as they are at that moment.
+- **The stamp stays on the row.** `core.orders.internal` and `core.ledger_entries.internal` (migration core 00059, additive, `false` for every
+  existing row). Turning the switch on or off changes only what is written from then on: it never rewrites history, and an owner's purchase made
+  while it was off keeps counting. What gives something back carries the flag of what it gives back, whatever the switch says when it is made: an
+  order's purchase, refund, cashback and cashback reversal take the order's flag, a license's or a digital account's refund the purchase's. So an
+  internal purchase's refund is internal and a customer's is not, and revenue and refunds always agree.
+- **What leaves.** Every aggregate adds `NOT internal`: the summary and everything in it (revenue, paid orders and their types, licenses, digital
+  accounts, refunds, wallet top-ups, cashback, new customers, free trials, cancelled orders and churn), top plans, plan series, hours, how orders were
+  paid (the `order.paid.v1` events of internal orders are left out as well, so nothing is listed as "unknown"), the Overview's revenue and paid orders
+  of 24 hours, the paid-orders gauge of `/metrics`, the daily summary and the summary CSV. A payment rejected for an internal order is left out of the
+  "rejected" and "failed" lines; one with no order cannot be told and stays. **Not changed:** every order, payment, wallet balance and ledger row, and
+  the operational lists (Orders, Wallet and ledger, the undelivered orders), which show internal rows with a flag.
+- **What an internal purchase earns nothing from.** Cashback is not credited; the daily wheel does not count the order as a paid order; no reward code
+  is issued; the buyer's inviter is not rewarded (and a reseller who invited the buyer is paid no commission); the resellers' monthly targets do not
+  count it. While the switch is on, an invited account that is an owner's also does not count towards the **Top users** board of the inviter.
+- **Shown separately.** (1) The Reports page has an **Internal orders** card (`reports.read`) for the range: the number of purchases and their amount
+  per currency, what refunds gave back, and a line per account. It shows when the switch is on, or when the range holds internal purchases, and says
+  when the switch is off. (2) `orders.csv` lists internal orders too, with a last column `internal` (`true`/`false`) so a spreadsheet can filter
+  them, and `ledger.csv` has the same last column; the summary and its totals never include them, so the rows of `orders.csv` add up to the report only
+  when you filter `internal` out. (3) The daily summary gets one more line, "Owner accounts' purchases, not counted above: n . amounts", only on a day
+  when there were any (each currency's amount on its own, never added).
+- **Earlier purchases (Settings > Reports, `settings.write`).** Two buttons under the switch. **Count the owner accounts' earlier purchases as
+  internal** first asks for a dry run (`POST /api/v1/reports/internal/backfill` `{"dry_run": true}`): how many orders and ledger entries would move and
+  how much money (purchases and refunds, per currency); then the dashboard asks for a confirmation, and `{"dry_run": false}` sets `internal = true` on
+  every order and ledger entry of the users whose role is `owner` now (audited as `reports.internal_backfill` with the counts). The second button
+  (`POST /api/v1/reports/internal/undo`, audited as `reports.internal_undo`) sets it back to `false` on all of them, including the rows that were stamped
+  when they were made. Both are idempotent: a second call finds nothing to change and writes no audit entry. Only the flag is written (the ledger's
+  append-only trigger allows nothing else), so no amount, status, time or balance changes, and `orders.updated_at` stays.
+- **Limits.** The role is read as it is now: an account that was an owner and was demoted keeps the rows stamped while it was one, and a backfill does
+  not touch an account that is no longer an owner. A payment rejected with no order, and the order-less events, cannot be attributed to an owner and are
+  still counted. `reports.since` (start from zero) and this switch are independent.
+
 ## What each number means
 
-All of these read `core.ledger_entries` (append-only), `core.orders` and `core.outbox_core`. A time is the row's
+All of these read `core.ledger_entries` (append-only), `core.orders` and `core.outbox_core`, and leave out the rows marked **internal** (see above). A time is the row's
 `created_at` (an order has no "paid at" of its own, so a payment is dated by its ledger entry), except where it says
 `updated_at`.
 
@@ -237,7 +278,7 @@ switch for staff who may change settings (`GET /api/v1/reports/daily-summary`, `
   999%", so a day after almost nothing does not read "up 500000000%". Then paid orders (new,
   renewals, traffic packages), refunds (count and amount), net after refunds, wallet top-ups and, **only when there are
   some**, the cashback given, payments staff rejected and failed or expired gateway payments. Then the people (new customers, free trials)
-  and the time zone the day was read in. A currency that did nothing that day (not even a refund, a top-up or a
+  and the time zone the day was read in. When owner accounts bought something that day (it is not in the figures: see [Internal orders](#internal-orders)), one separate line says how many purchases and how much, each currency on its own. A currency that did nothing that day (not even a refund, a top-up or a
   failed payment) is left out. A day with nothing at all to report (no sale, refund, top-up, rejected or failed
   payment, new customer or trial) is **one line**, "No sales on 13 Oct 2026.", so the owner sees the job is alive. The
   message is in each person's own language, Persian digits and the Jalali date in Persian, and money as the bot shows it
@@ -331,7 +372,10 @@ All under `/api/v1/reports`, `GET`, session cookie, permission `reports.read`. Q
 | `/plan-series` | `{from, to, group, calendar, tz, series: [{plan_id, name: {fa, en}, currency, orders, revenue, points: [{date, orders, revenue}]}]}`: what each plan sold in each bucket of the report, per currency (takes `group` and `calendar` like the summary, and its buckets are the summary's: a Jalali week or month is cut the same way, `date` is the bucket's Gregorian start). Only the buckets where a plan sold are listed. A currency's best 20 plans come one by one (the order and the totals of `/plans`) and the rest together as one row with `plan_id: ""` and no name, so a bucket's rows add up to its revenue (when every purchase has its order and plan, as `/plans` assumes). `[]` when nothing was sold. |
 | `/hours` | `{from, to, tz, hours: [{weekday, hour, currency, orders, revenue}]}`: paid orders by ISO weekday (1 Monday to 7 Sunday) and hour of the local day (0 to 23, the wall clock in `tz`), per currency, only where something was sold. It reads the same purchase entries as the revenue. |
 | `/summary.csv` | The summary as a file (`...-jalali.csv` when `calendar=jalali`, with the Jalali days in its name). |
-| `/orders.csv` | Every order paid in the range, as a file. |
+| `/orders.csv` | Every order paid in the range, as a file (internal orders included, flagged in the last column). |
+| `/internal` | The Internal orders card: `{from, to, tz, enabled, orders, currencies: [{currency, orders, amount, refunds, refunds_amount}], accounts: [{user, orders, currencies}]}`: the internal purchases of the range, what refunds gave back of them, and each owner account's share. `enabled` is whether the switch is on now. |
+
+`POST /internal/backfill` `{"dry_run": bool}` and `POST /internal/undo` need `settings.write` instead (owner and admin): they answer `{dry_run, orders, ledger_entries, currencies}`, what was (or with `dry_run` would be) moved.
 
 `ledger.csv` (`ledger.read`), `audit.csv` (`audit.read`) and the two gift code files (`discounts.write`, see the Gift codes
 page) follow the same rules and take the same `tz` and `calendar` (see below).
@@ -412,10 +456,10 @@ Columns, in order:
 - `orders.csv`: `paid_at_utc`, `paid_at_local`, `order_id`, `type`, `telegram_id`, `username`, `plan_fa`, `plan_en`,
   `amount`, `currency`, `paid_with` (wallet, manual, gateway, or empty), `refunded_amount`, `provider` (the provider
   that took the payment, empty for wallet, trial and free orders and for orders paid before it was recorded), `tz`, and
-  `paid_at_jalali` in a Jalali file, then, at the very end, `list_amount`, `list_currency` and `rate`: for a plan priced in USDT that was paid from the Toman wallet (and for a license), the USDT price it was listed at, its currency and the Toman per USDT it was charged at (`amount` and `currency` are what was charged, so such an order is revenue in Toman and appears under Toman in every number and in Top plans); empty for every other order; oldest first. What the orders cost adds up to the report's revenue: a license has `type` `license` and a digital account `type` `digital` (its name and quantity in `plan_fa` and `plan_en`), both paid with the wallet.
+  `paid_at_jalali` in a Jalali file, then, at the very end, `list_amount`, `list_currency` and `rate`: for a plan priced in USDT that was paid from the Toman wallet (and for a license), the USDT price it was listed at, its currency and the Toman per USDT it was charged at (`amount` and `currency` are what was charged, so such an order is revenue in Toman and appears under Toman in every number and in Top plans); empty for every other order, then `internal` (`true` for a purchase by an owner account: the report leaves it out of its figures, the file lists it flagged); oldest first. What the orders cost adds up to the report's revenue (internal rows left out): a license has `type` `license` and a digital account `type` `digital` (its name and quantity in `plan_fa` and `plan_en`), both paid with the wallet.
 - `ledger.csv` (newest first, the ledger page's filters, `?user=`, `kind`, `currency`, `from`, `to`): `time_utc`,
   `telegram_id`, `username`, `kind`, `amount` (signed: a purchase is negative), `currency`, `balance_after`, `ref_type`,
-  `ref_id`, `entry_id`, `time_local`, `tz`, and `time_jalali` in a Jalali file.
+  `ref_id`, `entry_id`, `time_local`, `tz`, and `time_jalali` in a Jalali file, then, at the very end, `internal` (`true` for an entry the reports leave out).
 - `gift-codes.csv` (newest first, the Gift codes page's `status` and `q` filters; the file name is `gift-codes-all-to-<day>.csv`): `created_utc`,
   `code_last4`, `kind` (`custom` or `generated`), `amount`, `currency`, `max_redemptions`, `per_customer_limit`, `redeemed`,
   `status` (`active`, `disabled`, `expired`, `used_up`), `expires_utc`, `last_redeemed_utc`, `note`, `created_by_telegram_id`,

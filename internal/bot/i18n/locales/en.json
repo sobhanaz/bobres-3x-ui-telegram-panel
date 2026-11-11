@@ -1210,5 +1210,7 @@
   "wallet.refund_note": "📝 Note from the store: {note}",
   "wallet.commission_reversed": "↩️ An order of one of your customers was refunded before its service could be delivered, so the commission you earned on it was taken back: <b>{amount}</b>.\nBalance: {balance}",
   "sub.late": "🙏 Sorry this took longer than usual: one of our servers was not answering.",
-  "ledger.commission_reversal": "Commission taken back (refund)"
+  "ledger.commission_reversal": "Commission taken back (refund)",
+  "setting.reports.exclude_owner_orders.label": "Owner accounts out of reports",
+  "setting.reports.exclude_owner_orders.help": "On: what an owner account buys, tops up and is refunded from now on is left out of revenue, the reports, the daily summary, cashback, the wheel and the rewards, and shown on its own (earlier purchases are not changed; the dashboard can count them too). Off by default."
 }

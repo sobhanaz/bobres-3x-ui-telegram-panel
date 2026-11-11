@@ -42,6 +42,10 @@ Commissions and referral rewards are not subtracted from net. Churn is read as o
 
 If the sales so far were tests, the **owner** can press **Start from zero** at the top of the Reports page (it asks first). From that moment the reports, the CSV files, the daily summary and the Overview's revenue count only what is sold next, and the page says "Counting from ...". **Nothing is deleted**: orders, payments, wallets and the ledger stay as they are, so wallet balances are still right. **Count everything again** brings the earlier sales back. Admins can see the start but not change it, and every change is in the audit log. Services lost (churn) are not cut by it.
 
+## Internal orders
+
+Owners often buy from their own store to try it. In **Settings > Reports**, **Purchases by owner accounts are not counted in revenue and reports** (off by default) marks what an owner account buys, tops up and is refunded from then on as *internal*: it leaves revenue, every report and chart, the Overview, the daily summary, cashback, the daily wheel, reward codes, invite rewards and the resellers' monthly targets. It is shown on its own in the **Internal orders** card of the Reports page (the count and amount per currency, and each account), in a last `internal` column of the paid-orders and ledger files, and as one separate line of the daily summary. Switching it on or off never changes the past. Two buttons under it count the owner accounts' earlier purchases as internal (it first shows how many rows and how much would move, then asks) or put them back; only a mark changes, nothing is deleted.
+
 ## Charts and the professional report
 
 The default view has cards per currency, then charts one currency at a time: revenue and what was kept after refunds, revenue by plan, paid orders by type, how orders were paid, top plans, a heatmap of when customers pay, and new customers, trials and lost services. Each chart has a legend, a tooltip, keyboard keys and **Show as table**.

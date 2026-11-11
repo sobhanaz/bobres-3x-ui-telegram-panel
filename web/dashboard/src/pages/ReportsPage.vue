@@ -12,6 +12,7 @@ import SelectButton from 'primevue/selectbutton'
 import Skeleton from 'primevue/skeleton'
 import { BarChart, DonutChart, Heatmap, LineChart, Sparkline } from '../components/charts'
 import DateField from '../components/reports/DateField.vue'
+import InternalOrdersCard from '../components/reports/InternalOrdersCard.vue'
 import ReportsStart from '../components/reports/ReportsStart.vue'
 import { api, query } from '../api'
 import { DATE_MAX, DATE_MIN, digits, formatInput, todayIn, weekdayName } from '../calendar'
@@ -19,6 +20,7 @@ import { fieldId } from '../settings'
 import { useAuth } from '../stores/auth'
 import { errorText } from '../errors'
 import { isolate, localDate, money, moneyCompact, num, percent, planName, type Lang } from '../format'
+import { showCard, type InternalReport } from '../internalOrders'
 import {
   byCurrency,
   calendars,
@@ -108,6 +110,8 @@ const methods = ref<ReportMethod[]>([])
 // shows everything else and leaves those charts out.
 const planSeries = ref<PlanSeriesAnswer | null>(null)
 const hours = ref<HoursAnswer | null>(null)
+// What owner accounts bought in the range (left out of every figure here): its own card, when there is anything to say.
+const internal = ref<InternalReport | null>(null)
 const loading = ref(false)
 const failure = reactive({ text: '', detail: '' })
 let seq = 0
@@ -124,11 +128,12 @@ async function load() {
     const s = await api<ReportSummary>('GET', '/reports/summary' + query(reportParams(sel)))
     const pin = query({ from: s.from, to: s.to, tz: s.tz })
     const series = query({ from: s.from, to: s.to, tz: s.tz, group: s.group, ...(s.calendar === 'jalali' ? { calendar: 'jalali' } : {}) })
-    const [p, m, ps, hs] = await Promise.all([
+    const [p, m, ps, hs, ir] = await Promise.all([
       api<{ plans: ReportPlan[] }>('GET', '/reports/plans' + pin),
       api<{ methods: ReportMethod[] }>('GET', '/reports/methods' + pin),
       api<PlanSeriesAnswer>('GET', '/reports/plan-series' + series).catch(() => null),
       api<HoursAnswer>('GET', '/reports/hours' + pin).catch(() => null),
+      api<InternalReport>('GET', '/reports/internal' + pin).catch(() => null),
     ])
     if (mine !== seq) return
     summary.value = s
@@ -136,13 +141,14 @@ async function load() {
     methods.value = m.methods
     planSeries.value = ps
     hours.value = hs
+    internal.value = ir
   } catch (e) {
     if (mine !== seq) return
     const r = errorText(e, t)
     failure.text = r.text
     failure.detail = r.detail
     summary.value = null // numbers of another range must not stay under this one's title
-    planSeries.value = hours.value = null
+    planSeries.value = hours.value = internal.value = null
   } finally {
     if (mine === seq) loading.value = false
   }
@@ -429,7 +435,11 @@ const sparkLabel = (what: string, values: number[]) => t('reports.spark.' + tren
   </div>
 
   <template v-if="summary">
-    <p v-if="!hasData(summary)" class="app-muted empty">{{ t('reports.empty') }}</p>
+    <template v-if="!hasData(summary)">
+      <p class="app-muted empty">{{ t('reports.empty') }}</p>
+      <!-- owner accounts' purchases are left out of every figure: with nothing else sold, they are still worth a card -->
+      <InternalOrdersCard v-if="showCard(internal)" :report="internal" />
+    </template>
     <template v-else>
       <SelectButton
         v-model="view"
@@ -516,6 +526,7 @@ const sparkLabel = (what: string, values: number[]) => t('reports.spark.' + tren
               <div class="line at-risk">{{ t('reports.churn.at_risk') }}: {{ num(summary.totals.at_risk, lang) }}</div>
             </template>
           </Card>
+          <InternalOrdersCard v-if="showCard(internal)" :report="internal" />
         </div>
 
         <Card v-if="currencies.length" class="block charts-card">

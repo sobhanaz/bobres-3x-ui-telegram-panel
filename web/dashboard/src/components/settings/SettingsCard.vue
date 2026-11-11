@@ -201,6 +201,8 @@ async function send(values: Record<string, string>) {
             @touch="touch(item.key)"
           />
         </div>
+        <!-- what a group adds under its fields (the Reports card's actions on the owner accounts' earlier purchases) -->
+        <slot name="extra" />
         <Message v-if="error" severity="error" :closable="false" class="error">
           {{ error }}
           <div v-if="detail" class="app-ltr detail">{{ detail }}</div>
