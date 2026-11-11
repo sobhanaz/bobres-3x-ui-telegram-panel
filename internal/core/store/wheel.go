@@ -105,11 +105,11 @@ func (s *Store) WheelDays(ctx context.Context, q querier, from, to string) ([]Wh
 }
 
 // CountPaidOrders is how many orders a customer has paid for and kept: they cost something after any discount, are past payment (paid, being
-// delivered, delivered or failed to deliver) and were not refunded. It is what the wheel asks of a customer before they may spin.
+// delivered, delivered or failed to deliver) and were not refunded. An owner account's internal order does not count (internal.go). It is what the wheel asks of a customer before they may spin.
 func (s *Store) CountPaidOrders(ctx context.Context, q querier, userID string) (int64, error) {
 	var n int64
 	err := q.QueryRow(ctx, `SELECT count(*) FROM core.orders
-		WHERE user_id = $1 AND amount > 0 AND refunded_at IS NULL AND status IN ('paid', 'provisioning', 'active', 'provision_failed')`, userID).Scan(&n)
+		WHERE user_id = $1 AND amount > 0 AND refunded_at IS NULL AND NOT internal AND status IN ('paid', 'provisioning', 'active', 'provision_failed')`, userID).Scan(&n)
 	if err != nil {
 		return 0, fmt.Errorf("count paid orders: %w", err)
 	}

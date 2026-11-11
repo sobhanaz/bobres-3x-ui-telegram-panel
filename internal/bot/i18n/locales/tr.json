@@ -1039,6 +1039,7 @@
   "ledger.target_bonus": "Aylık hedef primi",
   "ledger.wheel_prize": "Şans çarkı ödülü",
   "report.daily_cashback": "Verilen cashback: {n} · {amount}",
+  "report.daily_internal": "Sahip hesaplarının alımları, yukarıda sayılmadı: {n} · {amounts}",
   "setting.group.cashback": "Cashback",
   "setting.cashback.enabled.label": "Cashback",
   "setting.cashback.enabled.help": "Sipariş ödenip teslim edildikten sonra siparişin maliyetinin bir kısmı müşterinin cüzdanına yatırılır; sipariş iade edilirse geri alınır. Varsayılan olarak kapalıdır. Aşağıdaki yüzde de ayarlanmalıdır.",

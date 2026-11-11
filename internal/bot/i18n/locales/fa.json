@@ -1039,6 +1039,7 @@
   "ledger.target_bonus": "پاداش هدف ماهانه",
   "ledger.wheel_prize": "جایزهٔ گردونهٔ شانس",
   "report.daily_cashback": "کش‌بک پرداخت‌شده: {n} · {amount}",
+  "report.daily_internal": "خرید حساب‌های مالک، در بالا شمرده نشده: {n} · {amounts}",
   "setting.group.cashback": "کش‌بک",
   "setting.cashback.enabled.label": "کش‌بک",
   "setting.cashback.enabled.help": "پس از پرداخت و تحویل سفارش، درصدی از مبلغ آن به کیف پول مشتری برمی‌گردد و اگر سفارش بازپرداخت شود کسر می‌شود. به‌طور پیش‌فرض خاموش است. درصد را هم باید تنظیم کنید.",

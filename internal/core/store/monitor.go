@@ -431,7 +431,7 @@ func (s *Store) PaidOrderCounts(ctx context.Context, q querier, now time.Time) (
 	var p PaidOrders
 	err := q.QueryRow(ctx, `SELECT
 		count(*) FILTER (WHERE created_at >= $1), count(*) FILTER (WHERE created_at >= $2), count(*)
-		FROM core.ledger_entries WHERE kind IN `+purchaseKinds+` AND created_at >= $3 AND created_at <= $4`,
+		FROM core.ledger_entries WHERE kind IN `+purchaseKinds+` AND NOT internal AND created_at >= $3 AND created_at <= $4`,
 		now.Add(-time.Hour), now.Add(-24*time.Hour), now.Add(-7*24*time.Hour), now).Scan(&p.Hour, &p.Day, &p.Week)
 	if err != nil {
 		return nil, fmt.Errorf("paid orders: %w", err)

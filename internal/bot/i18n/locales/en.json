@@ -1039,6 +1039,7 @@
   "ledger.target_bonus": "Monthly target bonus",
   "ledger.wheel_prize": "Wheel of fortune prize",
   "report.daily_cashback": "Cashback given: {n} · {amount}",
+  "report.daily_internal": "Owner accounts' purchases, not counted above: {n} · {amounts}",
   "setting.group.cashback": "Cashback",
   "setting.cashback.enabled.label": "Cashback",
   "setting.cashback.enabled.help": "A share of what an order cost is credited to the customer's wallet once the order is paid and delivered, and taken back if the order is refunded. Off by default. The percent below must be set too.",

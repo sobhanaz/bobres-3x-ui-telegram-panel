@@ -472,6 +472,10 @@ const ordersJalali = "paid_at_jalali"
 // charged. Empty for every other order.
 var ordersListColumns = []string{"list_amount", "list_currency", "rate"}
 
+// ordersInternal is the very last column: true for a purchase by an owner account, which the reports leave out of their figures but the file
+// lists, so a spreadsheet can filter it (docs/14-reports.md, "Internal orders").
+const ordersInternal = "internal"
+
 // exportReportOrders: GET /api/v1/reports/orders.csv, every order paid in the
 // range, oldest first, at most maxCSVRows of them. The file starts with the
 // first row. A failure before it is an error answer; one after it ends the
@@ -497,6 +501,7 @@ func (s *Server) exportReportOrders(w http.ResponseWriter, r *http.Request) {
 		header = append(header, ordersJalali)
 	}
 	header = append(header, ordersListColumns...)
+	header = append(header, ordersInternal)
 	ctx, cancel := context.WithTimeout(r.Context(), s.exportWindow())
 	defer cancel()
 	more, err := s.cfg.Domain.EachPaidOrder(ctx, rng, maxCSVRows, func(o store.PaidOrderRow) error {
@@ -524,6 +529,7 @@ func (s *Server) exportReportOrders(w http.ResponseWriter, r *http.Request) {
 		} else {
 			cells = append(cells, "", "", "")
 		}
+		cells = append(cells, strconv.FormatBool(o.Internal))
 		return f.data(cells...)
 	})
 	switch {

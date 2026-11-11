@@ -31,12 +31,12 @@ var (
 // ledgerKeyConstraint is the UNIQUE constraint on ledger_entries.idempotency_key.
 const ledgerKeyConstraint = "ledger_entries_idempotency_key_key"
 
-const ledgerCols = `id, user_id, currency, amount, kind, ref_type, ref_id, idempotency_key, balance_after, created_at`
+const ledgerCols = `id, user_id, currency, amount, kind, ref_type, ref_id, idempotency_key, balance_after, created_at, internal`
 
 func scanLedger(row pgx.Row) (*LedgerEntry, error) {
 	var e LedgerEntry
 	err := row.Scan(&e.ID, &e.UserID, &e.Currency, &e.Amount, &e.Kind,
-		&e.RefType, &e.RefID, &e.IdempotencyKey, &e.BalanceAfter, &e.CreatedAt)
+		&e.RefType, &e.RefID, &e.IdempotencyKey, &e.BalanceAfter, &e.CreatedAt, &e.Internal)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -155,11 +155,11 @@ func move(ctx context.Context, tx pgx.Tx, e *LedgerEntry, delta int64) (*Wallet,
 func insertLedger(ctx context.Context, tx pgx.Tx, e *LedgerEntry) error {
 	err := tx.QueryRow(ctx, `
 		INSERT INTO core.ledger_entries
-			(id, user_id, currency, amount, kind, ref_type, ref_id, idempotency_key, balance_after)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-		RETURNING id, created_at`,
+			(id, user_id, currency, amount, kind, ref_type, ref_id, idempotency_key, balance_after, internal)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, `+ledgerInternal+`)
+		RETURNING id, created_at, internal`,
 		buuid.MustV7(), e.UserID, e.Currency, e.Amount, e.Kind,
-		e.RefType, e.RefID, e.IdempotencyKey, e.BalanceAfter).Scan(&e.ID, &e.CreatedAt)
+		e.RefType, e.RefID, e.IdempotencyKey, e.BalanceAfter).Scan(&e.ID, &e.CreatedAt, &e.Internal)
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == ledgerKeyConstraint {

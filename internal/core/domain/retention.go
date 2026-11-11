@@ -319,7 +319,8 @@ func (s *Service) orderPaidEffects(ctx context.Context, tx pgx.Tx, o *store.Orde
 			return &DiscountError{"already_used"}
 		}
 	}
-	if o.Amount <= 0 || source == events.PaidTrial || source == events.PaidFree {
+	// An owner account's purchase (internal: out of the reports) pays nobody, neither a commission nor a referral reward.
+	if o.Amount <= 0 || o.Internal || source == events.PaidTrial || source == events.PaidFree {
 		return nil
 	}
 	buyer, err := s.st.GetUser(ctx, tx, o.UserID)

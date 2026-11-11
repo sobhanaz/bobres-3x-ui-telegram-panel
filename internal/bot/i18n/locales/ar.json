@@ -1039,6 +1039,7 @@
   "ledger.target_bonus": "مكافأة الهدف الشهري",
   "ledger.wheel_prize": "جائزة عجلة الحظ",
   "report.daily_cashback": "الكاش باك الممنوح: {n} · {amount}",
+  "report.daily_internal": "مشتريات حسابات المالك، غير محتسبة أعلاه: {n} · {amounts}",
   "setting.group.cashback": "الكاش باك",
   "setting.cashback.enabled.label": "الكاش باك",
   "setting.cashback.enabled.help": "تُضاف حصة مما كلّفه الطلب إلى محفظة العميل بعد دفع الطلب وتسليمه، وتُسترد إذا رُدّ مبلغ الطلب. متوقف افتراضيًا. يجب ضبط النسبة أدناه أيضًا.",

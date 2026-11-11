@@ -1039,6 +1039,7 @@
   "ledger.target_bonus": "Бонус за месячную цель",
   "ledger.wheel_prize": "Приз колеса фортуны",
   "report.daily_cashback": "Выдан кешбэк: {n} · {amount}",
+  "report.daily_internal": "Покупки аккаунтов владельца, не учтены выше: {n} · {amounts}",
   "setting.group.cashback": "Кешбэк",
   "setting.cashback.enabled.label": "Кешбэк",
   "setting.cashback.enabled.help": "Доля стоимости заказа зачисляется на кошелёк клиента после оплаты и выдачи заказа и забирается обратно, если заказ возвращён. По умолчанию выключено. Процент ниже тоже должен быть задан.",
