@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/readme/hero.svg" alt="BOBRES: launch your own VPN store on Telegram, in one command. Live v0.24.1." width="100%">
+  <img src="docs/readme/hero.svg" alt="BOBRES: launch your own VPN store on Telegram, in one command. Live v0.25.0." width="100%">
 </p>
 
 <p align="center">
@@ -449,8 +449,8 @@ Run `sudo bobres` for the management menu, or use any item as a command. The hea
 <summary><b>The same menu as text (<code>sudo bobres</code>)</b></summary>
 
 ```text
-   n____n   BOBRES manager  bobres v0.24.1
-  ( o  o )  /opt/bobres  ·  shop.example.com  ·  version 0.24.1
+   n____n   BOBRES manager  bobres v0.25.0
+  ( o  o )  /opt/bobres  ·  shop.example.com  ·  version 0.25.0
    \_||_/   Store     running (9/9 services)
             License   Standard license, 214 days left
             HTTPS     auto, certificate expires in 79 days
@@ -786,8 +786,9 @@ at `https://<domain>/admin`
 
 ### 🚦 Status
 
-**Latest release: v0.24.1 (2026-11-09)**: the live USDT price is read from Nobitex, Tabdeal and Wallex, so it works
-again on servers where it had stopped (Tetherland's API is gone, and Wallex blocks some servers). v0.24.0 brought days from the first
+**Latest release: v0.25.0 (2026-11-11)**: purchases by owner accounts can be kept out of revenue and reports (one switch, off
+until the owner turns it on) and are shown on their own, in an Internal orders card, a CSV column and a line in the daily summary.
+v0.24.1 made the live USDT price work again on servers where it had stopped, and v0.24.0 brought days from the first
 connection: a bought service's days can start when its config first connects (one switch for customers, one for
 resellers, off until the owner turns them on) ([CHANGELOG.md](CHANGELOG.md)).
 
