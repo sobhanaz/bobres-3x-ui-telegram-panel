@@ -46,6 +46,8 @@ type orderJSON struct {
 	Seller *orderSeller `json:"seller"`
 	// ServerID is the server staff chose for an undelivered new service (Deliver on another server); null: the plan's.
 	ServerID *string `json:"server_id"`
+	// Internal: an owner account's order, left out of revenue and the reports (docs/14-reports.md, "Internal orders").
+	Internal bool `json:"internal"`
 }
 
 // orderSeller is the reseller who sold an order.
@@ -65,7 +67,7 @@ func orderOf(o *store.OrderRow) orderJSON {
 		ID: o.ID, User: briefOf(o.UserID, o.TelegramID, o.Username), Plan: planRef{o.PlanID, o.PlanName},
 		Type: o.Type, Status: o.Status, Amount: money{o.Amount, o.Currency}, SubscriptionID: o.SubscriptionID,
 		CreatedAt: o.CreatedAt.Unix(), UpdatedAt: o.UpdatedAt.Unix(), Attempts: o.Attempts, LastError: o.LastError,
-		NextAttemptAt: unix(o.NextAttemptAt), Staff: o.CreatedByName, Label: o.Label, ServerID: o.ServerID,
+		NextAttemptAt: unix(o.NextAttemptAt), Staff: o.CreatedByName, Label: o.Label, ServerID: o.ServerID, Internal: o.Internal,
 	}
 	if o.SellerKind != "" {
 		out.Seller = &orderSeller{Kind: o.SellerKind, User: briefOf(o.SellerID, o.SellerTelegramID, o.SellerUsername)}

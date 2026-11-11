@@ -24,7 +24,7 @@ func TestReportsOrdersCSVKeepsTheListPrice(t *testing.T) {
 		calendar string
 		cols     int
 		first    int // the index of list_amount
-	}{{"", 17, 14}, {"&calendar=jalali", 18, 15}} {
+	}{{"", 18, 14}, {"&calendar=jalali", 19, 15}} {
 		code, _, body := b.get("/api/v1/reports/orders.csv" + reportQuery + c.calendar)
 		if code != 200 {
 			t.Fatalf("orders.csv%s: %d %s", c.calendar, code, body)

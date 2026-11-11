@@ -43,13 +43,13 @@ var csvKinds = []struct {
 	{
 		"orders", "/api/v1/reports/orders.csv" + reportQuery,
 		[]string{"paid_at_utc", "paid_at_local", "order_id", "type", "telegram_id", "username", "plan_fa", "plan_en", "amount", "currency",
-			"paid_with", "refunded_amount", "provider", "tz", "list_amount", "list_currency", "rate"},
+			"paid_with", "refunded_amount", "provider", "tz", "list_amount", "list_currency", "rate", "internal"},
 		[]string{"telegram_id", "amount", "refunded_amount", "list_amount", "rate"},
 	},
 	{
 		"ledger", "/api/v1/ledger.csv",
 		[]string{"time_utc", "telegram_id", "username", "kind", "amount", "currency", "balance_after", "ref_type", "ref_id", "entry_id",
-			"time_local", "tz"},
+			"time_local", "tz", "internal"},
 		[]string{"telegram_id", "amount", "balance_after"},
 	},
 	{
@@ -190,7 +190,7 @@ func TestCSVDatesFollowOneRule(t *testing.T) {
 		rows := parseCSV(t, body)
 		want := csvKinds[1].header
 		if c.wantJalali != "" { // after tz, before the list price columns that close every orders file
-			want = append(append(append([]string{}, want[:14]...), "paid_at_jalali"), want[14:]...)
+			want = append(append(append([]string{}, want[:14]...), "paid_at_jalali"), want[14:]...) // the internal flag stays the last column
 		}
 		if !reflect.DeepEqual(rows[0], want) {
 			t.Fatalf("orders%s header %v", c.calendar, rows[0])
@@ -243,7 +243,7 @@ func TestLedgerAndAuditWriteTheirDatesLikeTheReports(t *testing.T) {
 	// ledger, newest first: the first row of the newest, the last row of the oldest (o1 at 20:29:00Z on 31 Oct)
 	_, _, body := b.get("/api/v1/ledger.csv?calendar=jalali")
 	rows := parseCSV(t, body)
-	if len(rows) != ledgerSeeded+1 || rows[0][12] != "time_jalali" || len(rows[0]) != 13 {
+	if len(rows) != ledgerSeeded+1 || rows[0][12] != "time_jalali" || rows[0][13] != "internal" || len(rows[0]) != 14 {
 		t.Fatalf("Jalali ledger header: %v", rows[0])
 	}
 	oldest := rows[len(rows)-1]
@@ -254,7 +254,7 @@ func TestLedgerAndAuditWriteTheirDatesLikeTheReports(t *testing.T) {
 	_, _, body = b.get("/api/v1/ledger.csv?tz=America/New_York")
 	rows = parseCSV(t, body)
 	oldest = rows[len(rows)-1]
-	if len(rows[0]) != 12 || oldest[0] != "2026-10-31T20:29:00Z" || oldest[10] != "2026-10-31 16:29:00" || oldest[11] != "America/New_York" {
+	if len(rows[0]) != 13 || oldest[0] != "2026-10-31T20:29:00Z" || oldest[10] != "2026-10-31 16:29:00" || oldest[11] != "America/New_York" {
 		t.Errorf("New York ledger: %v", oldest)
 	}
 	// audit: every row's local time is its UTC time on the store's clocks, and the Jalali day is that local day's
