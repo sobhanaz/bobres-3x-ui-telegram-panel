@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"html"
 	"math"
 	"regexp"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	corev1 "github.com/sobhanaz/bobres-3x-ui-telegram-panel/gen/proto/core/v1"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/bot/i18n"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/bot/settings"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/bot/tg"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/eventbus"
@@ -503,5 +505,43 @@ func TestDailySummaryThatWaitedTooLongIsDropped(t *testing.T) {
 		if got := tgf.take(); (len(got) == 1) != c.sent {
 			t.Errorf("%s: delivered %v, want %v", c.what, len(got) == 1, c.sent)
 		}
+	}
+}
+
+// What owner accounts bought is one separate line, in every language, only when there was any; a day with only such purchases is not the "no sales"
+// line; the amounts of different currencies are listed, never added.
+func TestDailySummaryTellsOwnerPurchasesInOneLine(t *testing.T) {
+	n := summaryNotifier(t)
+	sales := []events.DailySummaryCurrency{{Currency: "IRT", Revenue: 1000, Orders: 1, NewOrders: 1, Net: 1000}}
+	plain := n.dailySummary("en", events.DailySummaryEvent{Date: "2026-10-13", NewCustomers: 1, Currencies: sales})
+	if strings.Contains(plain, "Owner accounts") {
+		t.Errorf("a line about owner accounts on a day without any:\n%s", plain)
+	}
+	e := events.DailySummaryEvent{Date: "2026-10-13", NewCustomers: 1, Currencies: sales,
+		Internal: []events.DailySummaryInternal{{Currency: "IRT", Count: 2, Amount: 6000}, {Currency: "USDT", Count: 1, Amount: 5_000_000}}}
+	amounts := func(lang string) string {
+		return html.EscapeString(i18n.Money(lang, 6000, "IRT")) + ", " + html.EscapeString(i18n.Money(lang, 5_000_000, "USDT"))
+	}
+	got := n.dailySummary("en", e)
+	if want := "Owner accounts' purchases, not counted above: 3 · " + amounts("en"); !strings.Contains(got, "\n\n"+want) {
+		t.Errorf("the line %q:\n%s", want, got)
+	}
+	if strings.Count(got, "Owner accounts") != 1 {
+		t.Errorf("more than one line:\n%s", got)
+	}
+	if !strings.Contains(got, "Revenue: <b>1,000 Toman</b>") {
+		t.Errorf("the figures changed:\n%s", got)
+	}
+	for _, lang := range []string{"fa", "ar", "ru", "tr"} {
+		text := n.dailySummary(lang, e)
+		want := n.cat.T(lang, "report.daily_internal", "n", i18n.Number(lang, 3), "amounts", amounts(lang))
+		if !strings.Contains(text, want) || strings.Contains(want, "{") {
+			t.Errorf("%s: no line about owner accounts (%q):\n%s", lang, want, text)
+		}
+	}
+	// A day with only such purchases still says so (and is not "no sales on that day").
+	only := n.dailySummary("en", events.DailySummaryEvent{Date: "2026-10-13", Internal: []events.DailySummaryInternal{{Currency: "IRT", Count: 1, Amount: 100}}})
+	if strings.Contains(only, "No sales on") || !strings.Contains(only, "No sales.") || !strings.Contains(only, "Owner accounts' purchases") {
+		t.Errorf("only owner purchases:\n%s", only)
 	}
 }
