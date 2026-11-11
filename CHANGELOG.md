@@ -8,6 +8,10 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+## [0.25.0] — 2026-11-11
+
+**Owner accounts' purchases can be kept out of revenue and reports and shown on their own.** Off until the owner turns it on. One additive migration (core 00059); the bot and core update together (the update does that).
+
 ### Updating
 - One database migration, additive, in core: 00059 (`orders.internal` and `ledger_entries.internal`, both `false` for every existing row, each with a partial index; the ledger's append-only trigger now lets the `internal` flag alone change, so the dashboard can mark and unmark the owner accounts' earlier rows). Its Down drops both columns and restores the strict trigger. The bot and core update together (the daily summary event gains an optional field; the update does that).
 
