@@ -69,6 +69,18 @@ type fakeTG struct {
 	// shown: each chat's message sent or edited last (what the user looks at
 	// after a tap, even when it edited an older message).
 	shown map[int64]*msg
+
+	// copies are the messages copied into chats from a channel (CopyMessage), in order; copyErr makes the copies from one channel fail.
+	copies  []copied
+	copyErr map[string]error
+}
+
+// copied is a message copied into a chat.
+type copied struct {
+	chat int64
+	from string
+	id   int64
+	kb   *tg.Keyboard
 }
 
 type precheckAnswer struct {
@@ -255,6 +267,39 @@ func (f *fakeTG) SendPhoto(_ context.Context, chat int64, p tg.Photo, caption st
 
 func (f *fakeTG) SendDocument(_ context.Context, chat int64, fileID, caption string, kb *tg.Keyboard) (*tg.Message, error) {
 	return f.add(chat, &msg{text: caption, kb: kb, document: true, fileID: fileID}), nil
+}
+
+func (f *fakeTG) CopyMessage(_ context.Context, chat int64, from string, id int64, kb *tg.Keyboard) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if err := f.copyErr[from]; err != nil {
+		return err
+	}
+	f.copies = append(f.copies, copied{chat, from, id, kb})
+	return nil
+}
+
+// failCopies makes the copies from a channel fail with err (nil: work again).
+func (f *fakeTG) failCopies(from string, err error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.copyErr == nil {
+		f.copyErr = map[string]error{}
+	}
+	f.copyErr[from] = err
+}
+
+// copiedTo are the messages copied into a chat.
+func (f *fakeTG) copiedTo(chat int64) []copied {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var out []copied
+	for _, c := range f.copies {
+		if c.chat == chat {
+			out = append(out, c)
+		}
+	}
+	return out
 }
 
 func (f *fakeTG) EditMessageText(_ context.Context, chat int64, id int, text string, kb *tg.Keyboard) error {

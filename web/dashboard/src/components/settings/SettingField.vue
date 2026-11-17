@@ -6,6 +6,8 @@ import Select from 'primevue/select'
 import ToggleSwitch from 'primevue/toggleswitch'
 import PrizesEditor from './PrizesEditor.vue'
 import TiersEditor from './TiersEditor.vue'
+import ChannelCardsEditor from './ChannelCardsEditor.vue'
+import TutorialPicker from './TutorialPicker.vue'
 import LanguagesEditor from './LanguagesEditor.vue'
 import Button from 'primevue/button'
 import Message from 'primevue/message'
@@ -118,7 +120,7 @@ async function runCheck() {
 </script>
 
 <template>
-  <div class="field" :class="{ 'is-bool': item.kind === 'bool' }">
+  <div class="field" :class="{ 'is-bool': item.kind === 'bool', 'is-rows': item.key === 'bot.channel_cards' }">
     <div v-if="item.kind === 'bool'" class="bool-row">
       <label :id="labelId" :for="id" class="label">
         {{ label }}
@@ -211,6 +213,26 @@ async function runCheck() {
         @update:model-value="set"
         @touch="emit('touch')"
       />
+      <ChannelCardsEditor
+        v-else-if="item.key === 'bot.channel_cards'"
+        :model-value="modelValue"
+        :input-id="id"
+        :invalid="!!problem || !!serverError"
+        :locked="locked"
+        :described-by="describedBy"
+        @update:model-value="set"
+        @touch="emit('touch')"
+      />
+      <TutorialPicker
+        v-else-if="item.key === 'delivery.tutorial'"
+        :model-value="modelValue"
+        :input-id="id"
+        :invalid="!!problem || !!serverError"
+        :locked="locked"
+        :described-by="describedBy"
+        @update:model-value="set"
+        @touch="emit('touch')"
+      />
       <div v-else class="control">
         <InputText
           :id="id"
@@ -272,6 +294,10 @@ async function runCheck() {
 .lock {
   font-size: 0.8rem;
   color: var(--p-text-muted-color);
+}
+/* a list of rows takes every column of a wide card */
+.is-rows {
+  grid-column: 1 / -1;
 }
 .bool-row {
   display: flex;

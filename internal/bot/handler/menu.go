@@ -128,6 +128,7 @@ func (h *Handler) showHome(r *req) {
 	}
 	// Buy and Free trial come first, each on a row of its own, as in the bottom menu.
 	kb := (&tg.Keyboard{}).Row(r.button("btn.buy", "buy")).Row(r.button("btn.trial", "trial"))
+	h.cardRows(r, kb) // the owner's channels, each on a row of its own under them
 	if url := h.miniAppURL(); url != "" {
 		kb.Row(r.webAppButton("btn.store", url)) // opens the app at once: an inline button gives it the sign-in data
 	}
@@ -215,6 +216,13 @@ func (h *Handler) mainMenu(r *req) (m *tg.Menu, labels map[string]string) {
 	m = &tg.Menu{IsPersistent: true, Resize: true, Placeholder: r.t("menu.placeholder")}
 	// Buy and Free trial first, each on a row of its own, then the Store item.
 	m.Row(item("btn.buy")).Row(item("btn.trial"))
+	for _, c := range h.channelCards() { // the owner's channels, each on a row of its own under them: a tap runs the card's action
+		text := c.Text(r.lang)
+		if _, taken := labels[text]; !taken {
+			labels[text] = cardData(c.ID)
+		}
+		m.Row(tg.MenuButton{Text: text, Style: tg.StylePrimary})
+	}
 	if h.miniAppURL() != "" {
 		// A tap sends the label as text and onStore answers with the button that
 		// opens the app: a reply keyboard button could not give the app its sign-in data.

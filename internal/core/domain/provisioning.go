@@ -366,6 +366,7 @@ func (w *ProvisionWorker) succeed(ctx context.Context, job *provisionJob, c Prov
 			SubscriptionID: job.sub.ID, OrderID: job.order.ID, UserID: job.user.ID, TelegramID: job.user.TelegramID,
 			SubscriptionLink: links.SubscriptionLink, ExpiresAt: max(c.ExpiresAt, 0), TrafficBytes: traffic, Label: derefStr(job.sub.Label),
 			BulkID: bulkID, Late: w.late(job), FirstUseDays: deref32(firstUseDays),
+			Trial: job.plan.IsTrial, Reseller: job.user.Role == "reseller",
 		}
 		if chosen := derefStr(job.order.ClientName); chosen != "" {
 			if job.sub.ClientEmail == chosen {

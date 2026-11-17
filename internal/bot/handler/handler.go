@@ -21,6 +21,7 @@ import (
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/bot/settings"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/bot/state"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/bot/tg"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/channelcards"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/loginwire"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -35,6 +36,7 @@ type Telegram interface {
 	AnswerCallback(ctx context.Context, callbackID, text string, alert bool) error
 	SendPhoto(ctx context.Context, chatID int64, p tg.Photo, caption string, kb *tg.Keyboard) (*tg.Message, error)
 	SendDocument(ctx context.Context, chatID int64, fileID, caption string, kb *tg.Keyboard) (*tg.Message, error)
+	CopyMessage(ctx context.Context, chatID int64, fromChat string, messageID int64, kb *tg.Keyboard) error
 	SendInvoice(ctx context.Context, chatID int64, inv tg.Invoice) (*tg.Message, error)
 	AnswerPreCheckoutQuery(ctx context.Context, queryID string, ok bool, errMsg string) error
 	GetChat(ctx context.Context, chat string) (*tg.Chat, error)
@@ -128,6 +130,10 @@ type Handler struct {
 	// the menus show only while they are true (false until the first refresh).
 	helpFAQ       atomic.Bool
 	helpTutorials atomic.Bool
+	// cards are the channel buttons of the menu from the last refresh (the setting bot.channel_cards, channelcards.go): nil before the first
+	// refresh and while the owner has none. cardsBad is the setting's text when it could not be read, so that it is said once.
+	cards    atomic.Pointer[[]channelcards.Card]
+	cardsBad string
 
 	// approvals is core's LoginApprovalService, where the taps on Approve and Deny go (loginapproval.go); nil until SetLoginApprovals.
 	approvals corev1.LoginApprovalServiceClient
@@ -193,6 +199,7 @@ func (h *Handler) RefreshSettings(ctx context.Context) error {
 	h.joinExtras.Store(&extras)
 	h.helpFAQ.Store(s.GetHelpFaq())
 	h.helpTutorials.Store(s.GetHelpTutorials())
+	h.refreshCards(m[channelcards.Setting])
 	dropped := map[string]bool{}
 	for _, k := range h.cat.SetOverrides(m) {
 		dropped[k] = true
@@ -652,6 +659,8 @@ func (h *Handler) dispatch(r *req, data string) {
 		h.onFAQ(r, rest)
 	case "tut": // the Tutorials menu
 		h.onTutorials(r, rest)
+	case "chc": // a channel button of the menu (channelcards.go)
+		h.onChannelCard(r, rest)
 	case "dash":
 		if !r.isTeam() {
 			r.toast, r.alert = r.t("admin.forbidden"), true

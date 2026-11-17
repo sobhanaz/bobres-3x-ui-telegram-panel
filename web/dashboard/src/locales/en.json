@@ -1750,6 +1750,7 @@
       "required": "Enter a channel or group, or remove this row.",
       "duplicate": "This channel or group is already in the list.",
       "tme_link": "A link that starts with https://t.me/",
+      "tme_post": "A link to a post in a Telegram channel, like https://t.me/yourchannel/12.",
       "link_required": "A private channel (numeric id) needs an invite link.",
       "https": "A full address that starts with https://",
       "trc20": "A TRC20 address starts with T and has 34 characters.",
@@ -1771,6 +1772,12 @@
       "prizes": "Each prize needs a whole amount of Toman (at least 1) and a weight from 1 to 1,000,000.",
       "prizes_dup": "Two prizes have the same amount.",
       "prizes_many": "At most 12 prizes.",
+      "cards": "The channel buttons could not be read. Remove them and add them again.",
+      "cards_many": "At most 6 channel buttons.",
+      "cards_label": "Each button needs a text on one line, up to 40 characters, in Persian or English.",
+      "cards_post": "Each button needs the link of the first post of its channel, like https://t.me/yourchannel/2. In Telegram, open the post and choose Copy Link.",
+      "cards_channel": "The channel link must look like https://t.me/yourchannel. For a private channel, give its invite link (https://t.me/+…): the post of a private channel always needs it.",
+      "cards_dup": "Two buttons use the same post.",
       "percent": "A percent from 0.01 to 20, for example 2.5.",
       "langs": "Use the language codes fa, en, ar, ru and tr, each once.",
       "langs_empty": "Choose at least one language."
@@ -1877,6 +1884,16 @@
         "title": "Days from the first connection",
         "desc": "Start a bought service's days when its config first connects, not when it is made.",
         "note": "A new service waits, active and with no end date, until its config connects for the first time, however long that takes: it cannot expire meanwhile. Then its days (for example 30) start. The free trial still starts at once. Renewing a service that is still waiting adds its days to the wait. Services made before keep their dates. Works on 3x-ui, Marzban, S-UI and Hiddify servers. Off until you turn it on."
+      },
+      "channels": {
+        "title": "Channel buttons",
+        "desc": "Add your channels to the bot's menu. A customer who taps one sees the channel's first post, with a button to open the channel.",
+        "note": "Each button gets a full row in the bot's main menu and on its home screen, under Buy and Free trial, in the order of the list below. When a customer taps it, the bot copies the post you linked into their chat, with a View channel button under it. Telegram lets a bot copy only a post it can read, so add the bot to each of these channels as an administrator, and leave Restrict saving content off in them. Up to 6 buttons."
+      },
+      "delivery": {
+        "title": "After a purchase",
+        "desc": "What the bot sends after it delivers a new service.",
+        "note": "After the service itself, the bot sends one direct config (the first of the service's configs), then the tutorial video, then the tutorial. Renewals and services bought by resellers get none of it. Leave the video link or the tutorial empty and that part is not sent."
       }
     },
     "field": {
@@ -1894,6 +1911,10 @@
         "plan_layout": {
           "label": "Plan list layout",
           "help": "How the bot lists plans when a customer buys or renews. A table puts each plan on a row of two buttons, its name and its price, under a header row. A list has one button per plan, with the name and the price together."
+        },
+        "channel_cards": {
+          "label": "Buttons",
+          "help": "Write each button's text in Persian and English: a customer sees their own language, else English, else Persian. For the post, open the channel's first post in Telegram, tap it (right-click on a computer) and choose Copy Link. A private channel also needs its invite link."
         }
       },
       "bulk": {
@@ -2221,6 +2242,24 @@
           "label": "Resellers' services start at the first connection",
           "help": "On: the days of a service a reseller buys for a customer, one at a time or in bulk, start when its config first connects."
         }
+      },
+      "delivery": {
+        "bundle": {
+          "label": "Send a direct config, a video and a tutorial",
+          "help": "After a new service is delivered, the bot also sends one direct config, then the tutorial video, then the tutorial. Turned off, only the service itself is sent."
+        },
+        "bundle_trial": {
+          "label": "Also for the free trial",
+          "help": "On: the free trial service gets the direct config, the video and the tutorial too, like a purchase."
+        },
+        "video_post": {
+          "label": "Tutorial video (link to a post)",
+          "help": "The link of the post with the tutorial video in your Telegram channel. In Telegram, open the post, tap it (right-click on a computer) and choose Copy Link. The bot copies that post into the customer's chat, so the video plays there: add the bot to that channel as an administrator, and leave Restrict saving content off. Empty means no video."
+        },
+        "tutorial": {
+          "label": "Tutorial",
+          "help": "One of the tutorials you wrote under Branding & texts → Help content. The bot sends its text and link buttons after the video. Only tutorials that are switched on are listed. None means no tutorial."
+        }
       }
     },
     "payments_moved": "Payment methods and their details:",
@@ -2244,6 +2283,27 @@
       "add": "Add a prize",
       "max": "The wheel holds at most {n} prize. | The wheel holds at most {n} prizes.",
       "sorted": "Prizes are saved in order of amount."
+    },
+    "channel_cards": {
+      "empty": "No channel button yet. Add one to show a channel in the bot's menu.",
+      "row": "Button {n}",
+      "label_fa": "Button text (Persian)",
+      "label_en": "Button text (English)",
+      "channel": "Channel link",
+      "post": "Link of the channel's first post",
+      "post_hint": "In Telegram, open the post and choose Copy Link. A private channel also needs its invite link in Channel link.",
+      "move_up": "Move up: button {n}",
+      "move_down": "Move down: button {n}",
+      "remove": "Remove button {n}",
+      "add": "Add a button",
+      "max": "The menu holds at most {n} channel button. | The menu holds at most {n} channel buttons.",
+      "order": "Buttons come in the menu in this order."
+    },
+    "tutorial": {
+      "none": "None",
+      "unavailable": "Tutorial not available",
+      "saved": "Saved tutorial",
+      "load_failed": "The list of tutorials could not be loaded, so only the saved choice is shown. Reload the page to try again."
     },
     "langs": {
       "default": "Default",

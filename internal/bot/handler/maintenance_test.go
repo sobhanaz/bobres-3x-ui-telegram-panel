@@ -312,6 +312,7 @@ func gatedCases() []gatedCase {
 		"wallet", "wtop", "wamt:100000", "wpay:c:100000:n1", "wcustom", "wusdt", "wusa:10", "wpu:x:10:n1", "wusc", "whist", "gift", "cds", "cds:2", "trial", "store",
 		"top", "top:2", "ap", "renew", "wh", "wh:spin", "aff",
 		"faq", "faq:p:2", "faq:q:1:f1", "tut", "tut:p:2", "tut:v:1:t1", // the FAQ under Support and the tutorials (help.go)
+		"chc:0a1b2c3d", // a channel button of the menu (channelcards.go)
 		"support", "support:m", "tk:n:payment", "tk:n:other", "tk:r:t1", "tk:c:t1", "tk:l", "tk:v:t1",
 		"dash", "adm", "adm:pend", "adm:find", "rs", "rs:buy", "rs:subs:1", "rs:st:1", "rs:link", "rs:p:p1", "rs:pfx", "rs:pfy:ab", "fl", "fr:n1",
 		"jn", "nope", "x",

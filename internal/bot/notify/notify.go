@@ -15,6 +15,7 @@ import (
 	"html"
 	"log/slog"
 	"math"
+	"net/url"
 	"regexp"
 	"strings"
 	"sync"
@@ -26,6 +27,7 @@ import (
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/bot/tg"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/eventbus"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/events"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/tglink"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -34,6 +36,7 @@ import (
 type Telegram interface {
 	SendMessage(ctx context.Context, chatID int64, text string, kb *tg.Keyboard) (*tg.Message, error)
 	SendPhoto(ctx context.Context, chatID int64, p tg.Photo, caption string, kb *tg.Keyboard) (*tg.Message, error)
+	CopyMessage(ctx context.Context, chatID int64, fromChat string, messageID int64, kb *tg.Keyboard) error
 }
 
 // Notifier handles core feed events.
@@ -182,6 +185,7 @@ func (n *Notifier) Handle(ctx context.Context, m eventbus.Message) error {
 			return err
 		}
 		n.sendQR(ctx, lang, e, links)
+		n.sendBundle(ctx, lang, e, links)
 		return nil
 
 	case events.PaymentRejected:
@@ -1275,6 +1279,98 @@ func (n *Notifier) sendQR(ctx context.Context, lang string, e events.Subscriptio
 	if _, err := n.tg.SendPhoto(ctx, e.TelegramID, tg.Photo{Data: links.GetQrPng(), Name: "subscription.png"}, n.cat.T(lang, "sub.qr_caption"), nil); err != nil && !tg.IsBlocked(err) {
 		n.log.Warn("send QR failed", "err", err)
 	}
+}
+
+// The settings of what a delivered service brings with it (core's delivery.*): a direct config, a tutorial video and a tutorial.
+const (
+	setDeliveryBundle      = "delivery.bundle"
+	setDeliveryBundleTrial = "delivery.bundle_trial"
+	setDeliveryVideo       = "delivery.video_post"
+	setDeliveryTutorial    = "delivery.tutorial"
+)
+
+// sendBundle follows the ready message and the QR code of a new service with what helps a customer connect: one direct config (the first of
+// the service's configs, in a code span to tap and copy), the tutorial video (a post of the owner's channel, copied into the chat) and the
+// tutorial of the Tutorials section that the owner picked. It goes to a customer who bought a service, and to one who took the free test while
+// the store wants it (delivery.bundle_trial); never to a reseller, and never when the owner has switched it off. Each part is best effort,
+// logged and left out when it fails: the link is already with the customer, and the event must not come back to send it again.
+func (n *Notifier) sendBundle(ctx context.Context, lang string, e events.SubscriptionProvisionedEvent, links *corev1.SubscriptionLinks) {
+	if e.Reseller || !n.set.Bool(setDeliveryBundle, true) || (e.Trial && !n.set.Bool(setDeliveryBundleTrial, true)) {
+		return
+	}
+	n.sendDirectConfig(ctx, lang, e, links)
+	n.sendTutorialVideo(ctx, e)
+	n.sendTutorial(ctx, lang, e)
+}
+
+// sendDirectConfig sends the first of the service's configs, for an app that wants a config and not a subscription link.
+func (n *Notifier) sendDirectConfig(ctx context.Context, lang string, e events.SubscriptionProvisionedEvent, links *corev1.SubscriptionLinks) {
+	configs := links.GetConfigLinks()
+	if len(configs) == 0 {
+		return
+	}
+	text := n.cat.T(lang, "sub.config_direct", "config", html.EscapeString(configs[0]))
+	if i18n.TextLength(text) > i18n.MaxMessage { // more than a message takes: the subscription link has every config
+		n.log.Warn("direct config too long to send", "subscription", e.SubscriptionID)
+		return
+	}
+	if err := n.send(ctx, e.TelegramID, text, nil); err != nil {
+		n.log.Warn("direct config not sent", "subscription", e.SubscriptionID, "err", err)
+	}
+}
+
+// sendTutorialVideo copies the owner's video post into the chat, so that it plays there.
+func (n *Notifier) sendTutorialVideo(ctx context.Context, e events.SubscriptionProvisionedEvent) {
+	raw := strings.TrimSpace(n.set.Get(setDeliveryVideo))
+	if raw == "" {
+		return
+	}
+	post, err := tglink.ParsePost(raw)
+	if err != nil {
+		n.log.Warn("tutorial video link is not a post link", "value", raw)
+		return
+	}
+	if err := n.tg.CopyMessage(ctx, e.TelegramID, post.Chat, post.ID, nil); err != nil && !tg.IsForbidden(err) {
+		n.log.Warn("tutorial video not sent", "subscription", e.SubscriptionID, "post", post.URL(), "err", err)
+	}
+}
+
+// sendTutorial sends the tutorial the owner picked (delivery.tutorial) as the Tutorials section shows it: its text, and a button for each link.
+// One that is gone or switched off is left out.
+func (n *Notifier) sendTutorial(ctx context.Context, lang string, e events.SubscriptionProvisionedEvent) {
+	id := strings.TrimSpace(n.set.Get(setDeliveryTutorial))
+	if id == "" {
+		return
+	}
+	entry, err := n.core.GetHelpEntry(ctx, &corev1.GetHelpEntryRequest{UserId: e.UserID, Id: id, Language: lang})
+	if err != nil {
+		if c := status.Code(err); c != codes.NotFound && c != codes.InvalidArgument && c != codes.Unimplemented {
+			n.log.Warn("tutorial not read", "tutorial", id, "err", err)
+		}
+		return
+	}
+	var kb *tg.Keyboard
+	for _, b := range entry.GetButtons() {
+		if httpsLink(b.GetUrl()) && b.GetLabel() != "" {
+			if kb == nil {
+				kb = &tg.Keyboard{}
+			}
+			kb.Row(tg.Link(b.GetLabel(), b.GetUrl()))
+		}
+	}
+	text := "<b>" + html.EscapeString(entry.GetTitle()) + "</b>\n\n" + entry.GetBody()
+	if i18n.TextLength(text) > i18n.MaxMessage { // core's checks keep an entry from this: rows written by hand only
+		text = truncateRunes(i18n.StripHTML(text), 2000)
+	}
+	if err := n.send(ctx, e.TelegramID, text, kb); err != nil {
+		n.log.Warn("tutorial not sent", "subscription", e.SubscriptionID, "tutorial", id, "err", err)
+	}
+}
+
+// httpsLink reports whether s is a https:// address a URL button can carry.
+func httpsLink(s string) bool {
+	u, err := url.Parse(s)
+	return err == nil && u.Scheme == "https" && u.Host != "" && u.User == nil
 }
 
 // pageLink adds the customer's language to a page address, as the bot's

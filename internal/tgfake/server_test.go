@@ -89,6 +89,33 @@ func TestReplyKeyboardIsRecorded(t *testing.T) {
 	}
 }
 
+// A copied post is recorded with the channel and number it came from and the buttons put under it.
+func TestCopyMessageIsRecorded(t *testing.T) {
+	f := New()
+	srv := httptest.NewServer(f.Handler())
+	defer srv.Close()
+	c := tg.New("1:x", tg.WithAPIRoot(srv.URL))
+	kb := (&tg.Keyboard{}).Row(tg.Link("View channel", "https://t.me/some_channel"))
+	if err := c.CopyMessage(context.Background(), 7, "@some_channel", 12, kb); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.CopyMessage(context.Background(), 8, "-1001234567890", 45, nil); err != nil {
+		t.Fatal(err)
+	}
+	sent := f.Sent()
+	if len(sent) != 2 || sent[0].Method != "copyMessage" || sent[0].ChatID != 7 || sent[0].FromChat != "@some_channel" || sent[0].FromMessageID != 12 ||
+		sent[0].Text != "[copy of @some_channel/12]" || !strings.Contains(string(sent[0].Markup), "https://t.me/some_channel") {
+		t.Fatalf("the first copy: %+v", sent)
+	}
+	if sent[1].ChatID != 8 || sent[1].FromChat != "-1001234567890" || sent[1].FromMessageID != 45 || len(sent[1].Markup) != 0 {
+		t.Fatalf("the second copy: %+v", sent[1])
+	}
+	f.FailChat(7, Failure{Code: 403, Description: "Forbidden: bot was blocked by the user"})
+	if err := c.CopyMessage(context.Background(), 7, "@some_channel", 12, nil); !tg.IsForbidden(err) {
+		t.Errorf("a copy to a chat that fails: %v", err)
+	}
+}
+
 func TestHelperEndpointsAndAuth(t *testing.T) {
 	f := New()
 	srv := httptest.NewServer(f.Handler())

@@ -117,9 +117,196 @@ export function chancePercent(fraction: number, lang: Lang): string {
   return new Intl.NumberFormat(numberLocale(lang), { style: 'percent', maximumFractionDigits: 2 }).format(fraction)
 }
 
+const tmeName = /^[A-Za-z][A-Za-z0-9_]{4,31}$/
+const tmeInvite = /^[A-Za-z0-9_-]{5,64}$/
+// The first parts of a t.me path that Telegram uses for something other than the name of a channel: core refuses them as a name too.
+const tmeReserved = [
+  'joinchat', 'addstickers', 'addemoji', 'addtheme', 'addlist', 'share', 'proxy', 'socks', 'login', 'confirmphone', 'setlanguage', 'invoice', 'giftcode', 'boost',
+]
+const tmeNameOK = (s: string) => tmeName.test(s) && !tmeReserved.includes(s.toLowerCase())
+// What may follow https://t.me (telegram.me too, in any case): a path, then maybe a query or a fragment. A port, a user name, a backslash or another
+// host never match (core lets an empty port by, which no link has); a space or a control character is refused before this.
+const tmeURL = /^https:\/\/(?:t|telegram)\.me((?:\/[^?#]*)?)(?:[?#].*)?$/i
+const controlBytes = /[\u0000-\u001f\u007f]/
+// White space as Go counts it (unicode.IsSpace), which core trims, refuses and gathers by: the NEL is one and the BOM is not (for JS's \s and trim() it is the other way).
+const goSpace = '\\t\\n\\v\\f\\r \\u0085\\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000'
+const spaceRuns = new RegExp(`[${goSpace}]+`)
+const spaceEnds = new RegExp(`^[${goSpace}]+|[${goSpace}]+$`, 'g')
+const hasSpace = new RegExp(`[${goSpace}]`)
+const trimmed = (s: string) => s.replace(spaceEnds, '')
+
+/** tmeSegments reads a https://t.me/… link as the parts of its path, without a query or a fragment, which Telegram's own links carry now and then
+ * (?single); null for anything else about the address. Core reads it the same way. */
+function tmeSegments(raw: string): string[] | null {
+  const v = trimmed(raw)
+  if (v === '' || hasSpace.test(v) || controlBytes.test(v)) return null
+  const m = tmeURL.exec(v)
+  if (!m || /#.*%(?![0-9A-Fa-f]{2})/.test(v)) return null // core's reader also refuses a fragment with a broken % escape
+  const path = m[1].replace(/^\/+|\/+$/g, '')
+  return path === '' ? [] : path.split('/')
+}
+
+/** tmeNumber is the number of a post as it is written without leading zeros: whole, from 1 to the most Telegram gives out (32 bits); null otherwise. */
+function tmeNumber(s: string): string | null {
+  if (!/^[0-9]{1,10}$/.test(s)) return null
+  const n = Number(s)
+  return n >= 1 && n <= 2_147_483_647 ? String(n) : null
+}
+
+/** A post of a Telegram channel: its link as it is stored, and the link of its channel where the post says it (a public channel's; the invite link
+ * of a private one only the owner has, so it is ""). */
+export interface TmePost {
+  link: string
+  channel: string
+}
+
+/** parseTmePost reads the link of a post: https://t.me/<name>/<n> (name: 5 to 32 letters, digits and _, starting with a letter, none of Telegram's own
+ * paths such as joinchat) for a public channel,
+ * https://t.me/c/<digits>/<n> for a private one. The web preview's form (t.me/s/<name>/<n>) and telegram.me are taken too and come back as
+ * https://t.me/…; null for anything else. */
+export function parseTmePost(raw: string): TmePost | null {
+  let segs = tmeSegments(raw)
+  if (!segs) return null
+  if (segs.length === 3 && segs[0] === 's') segs = segs.slice(1)
+  if (segs.length === 2) {
+    const n = tmeNumber(segs[1])
+    if (!tmeNameOK(segs[0]) || n === null) return null
+    return { link: `https://t.me/${segs[0]}/${n}`, channel: `https://t.me/${segs[0]}` }
+  }
+  if (segs.length === 3) {
+    const n = tmeNumber(segs[2])
+    if (segs[0] !== 'c' || !/^[0-9]{1,13}$/.test(segs[1]) || n === null) return null
+    return { link: `https://t.me/c/${segs[1]}/${n}`, channel: '' }
+  }
+  return null
+}
+
+/** tmePostLink is a post's link made canonical, or null when it is not a post's link (the setting delivery.video_post takes the same). */
+export function tmePostLink(raw: string): string | null {
+  return parseTmePost(raw)?.link ?? null
+}
+
+/** tmeChannelLink reads the link of a channel and returns it as it is stored: https://t.me/<name>, or an invite link (https://t.me/+<token>,
+ * https://t.me/joinchat/<token>, the token 5 to 64 letters, digits, _ and -); null for anything else. */
+export function tmeChannelLink(raw: string): string | null {
+  const segs = tmeSegments(raw)
+  if (!segs) return null
+  if (segs.length === 1 && tmeNameOK(segs[0])) return 'https://t.me/' + segs[0]
+  if (segs.length === 1 && segs[0].startsWith('+') && tmeInvite.test(segs[0].slice(1))) return 'https://t.me/' + segs[0]
+  if (segs.length === 2 && segs[0] === 'joinchat' && tmeInvite.test(segs[1])) return 'https://t.me/joinchat/' + segs[1]
+  return null
+}
+
+/** A channel button of the bot's menu (setting bot.channel_cards): its text by language, the link of the channel's first post, which the bot copies into
+ * the customer's chat when the button is tapped, and the link of the channel, which a View channel button under that copy opens. */
+export interface ChannelCard {
+  /** the text by language: one line of MAX_CARD_LABEL characters at most; at least one language, a language with no text is left out */
+  label: Partial<Record<Lang, string>>
+  /** the link behind View channel when the owner gave one ("" when the post's own public channel is meant: it is not stored) */
+  channel: string
+  /** https://t.me/<name>/<n>, or https://t.me/c/<digits>/<n> for a private channel */
+  post: string
+}
+
+/** Limits core checks again. */
+export const MAX_CHANNEL_CARDS = 6
+export const MAX_CARD_LABEL = 40
+
+const cardKeys = ['label', 'channel', 'post']
+const cardControl = /[\u0000-\u001f\u007f-\u009f]/
+const textOrNone = (x: unknown) => x === undefined || x === null || typeof x === 'string'
+
+/** parseChannelCards reads the list the setting bot.channel_cards holds, by core's rules: at most MAX_CHANNEL_CARDS buttons, each with a text (one line,
+ * MAX_CARD_LABEL characters at most, in one language at least; blank ones are left out), the link of a post, and the link of a channel where the post is
+ * a private channel's; no post twice. The order is kept (it is the order of the buttons); the texts are gathered into single spaces and the links
+ * made canonical. A code names what is wrong. */
+export function parseChannelCards(raw: string): { cards: ChannelCard[] } | { code: 'cards' | 'cards_many' | 'cards_label' | 'cards_post' | 'cards_channel' | 'cards_dup' } {
+  const s = raw.trim()
+  if (s === '') return { cards: [] }
+  let v: unknown
+  try {
+    v = JSON.parse(s)
+  } catch {
+    return { code: 'cards' }
+  }
+  if (v === null) return { cards: [] }
+  if (!Array.isArray(v)) return { code: 'cards' }
+  // Every row has its shape checked before they are counted, as core does.
+  const rows: Record<string, unknown>[] = []
+  for (const row of v) {
+    if (row === null) {
+      rows.push({}) // core reads null as an empty row, which then lacks a text
+      continue
+    }
+    if (typeof row !== 'object' || Array.isArray(row)) return { code: 'cards' }
+    const r = row as Record<string, unknown>
+    if (Object.keys(r).some((k) => !cardKeys.includes(k)) || !textOrNone(r.channel) || !textOrNone(r.post)) return { code: 'cards' }
+    const label = r.label
+    if (label !== undefined && label !== null) {
+      if (typeof label !== 'object' || Array.isArray(label) || Object.values(label).some((x) => !textOrNone(x))) return { code: 'cards' }
+    }
+    rows.push(r)
+  }
+  if (rows.length > MAX_CHANNEL_CARDS) return { code: 'cards_many' }
+  const cards: ChannelCard[] = []
+  const posts = new Set<string>()
+  for (const r of rows) {
+    const given = (r.label ?? {}) as Record<string, unknown>
+    if (Object.keys(given).some((k) => !isLang(k))) return { code: 'cards' }
+    const label: ChannelCard['label'] = {}
+    for (const l of LANGS) {
+      const text = given[l]
+      if (typeof text !== 'string') continue
+      if (cardControl.test(text)) return { code: 'cards_label' }
+      const one = text.split(spaceRuns).filter(Boolean).join(' ')
+      if ([...one].length > MAX_CARD_LABEL) return { code: 'cards_label' }
+      if (one !== '') label[l] = one
+    }
+    if (!Object.keys(label).length) return { code: 'cards_label' }
+    const post = parseTmePost(typeof r.post === 'string' ? r.post : '')
+    if (!post) return { code: 'cards_post' }
+    let channel = ''
+    const own = typeof r.channel === 'string' ? r.channel : ''
+    if (trimmed(own) !== '') {
+      const c = tmeChannelLink(own)
+      if (c === null) return { code: 'cards_channel' }
+      channel = c
+    } else if (post.channel === '') {
+      return { code: 'cards_channel' } // a private channel's post: only an invite link says where the channel is
+    }
+    if (posts.has(post.link)) return { code: 'cards_dup' }
+    posts.add(post.link)
+    cards.push({ label, channel, post: post.link })
+  }
+  return { cards }
+}
+
+/** formatChannelCards writes the list the way core stores it: compact JSON in the order given (label with fa, en, ar, ru, tr in that order, then channel,
+ * then post), "" for none. A channel link that the post already says (the public channel of a public post) is left out. */
+export function formatChannelCards(cards: ChannelCard[]): string {
+  if (!cards.length) return ''
+  return JSON.stringify(
+    cards.map((c) => {
+      const label: ChannelCard['label'] = {}
+      for (const l of LANGS) if (c.label[l]) label[l] = c.label[l]
+      const implied = parseTmePost(c.post)?.channel ?? ''
+      return c.channel !== '' && c.channel !== implied ? { label, channel: c.channel, post: c.post } : { label, post: c.post }
+    }),
+  )
+}
+
+/** normalizeChannelCards is a list as it will be stored when it is valid, else as typed (for validate to refuse). */
+export function normalizeChannelCards(raw: string): string {
+  const p = parseChannelCards(raw)
+  return 'cards' in p ? formatChannelCards(p.cards) : raw.trim()
+}
+
 /** Groups core may still list that are edited on another page: the
  * payment details are on the Payment gateways page. */
 export const movedGroups = ['payments']
+
+/** Groups whose card always takes the page's full width: their field is a list of rows (the channel buttons), too cramped in half a page. */
+export const fullWidthGroups = ['channels']
 
 /** effective is what the bot uses: the stored value, or the default. */
 export function effective(item: SettingItem): string {
@@ -180,7 +367,16 @@ export function normalize(item: SettingItem, raw: string): string {
   if (item.kind === 'int') return asciiNumber(s)
   if (item.kind === 'channel') return normalizeChannel(s)
   if (item.kind === 'time') return normalizeTime(s)
-  if (item.kind === 'list') return item.key === 'wheel.prizes' ? normalizePrizes(s) : normalizeTiers(s)
+  if (item.kind === 'list') {
+    switch (item.key) {
+      case 'wheel.prizes':
+        return normalizePrizes(s)
+      case 'bot.channel_cards':
+        return normalizeChannelCards(s)
+      default:
+        return normalizeTiers(s)
+    }
+  }
   if (item.kind === 'langs') {
     const p = parseLangs(s)
     return 'langs' in p ? p.langs.join(',') : s
@@ -190,6 +386,7 @@ export function normalize(item: SettingItem, raw: string): string {
     return bp === null ? s : String(bp / 100)
   }
   if (item.key === 'payments.card_number') return latinDigits(s).replace(/^ir/i, 'IR')
+  if (item.key === 'delivery.video_post') return tmePostLink(s) ?? s
   return s
 }
 
@@ -257,11 +454,12 @@ export function validate(item: SettingItem, value: string, others: Record<string
       return channelName.test(value) || channelId.test(value) ? null : { code: 'channel' }
     case 'url':
       if (item.key === 'join.link') return /^https:\/\/t\.me\/[^\s/]/.test(value) && httpsURL(value) ? null : { code: 'tme_link' }
+      if (item.key === 'delivery.video_post') return tmePostLink(value) !== null ? null : { code: 'tme_post' }
       return httpsURL(value) ? null : { code: 'https' }
     case 'text':
       return validateText(item.key, value)
     case 'list': {
-      const p = item.key === 'wheel.prizes' ? parsePrizes(value) : parseTiers(value)
+      const p = parseList(item.key, value)
       return 'code' in p ? { code: p.code } : null
     }
     case 'langs': {
@@ -270,6 +468,18 @@ export function validate(item: SettingItem, value: string, others: Record<string
     }
   }
   return null
+}
+
+/** parseList reads the value of a list setting by its key: the prizes of the wheel, the channel buttons, else the tiers of the targets. */
+function parseList(key: string, value: string) {
+  switch (key) {
+    case 'wheel.prizes':
+      return parsePrizes(value)
+    case 'bot.channel_cards':
+      return parseChannelCards(value)
+    default:
+      return parseTiers(value)
+  }
 }
 
 function validateText(key: string, value: string): Problem | null {
@@ -463,13 +673,16 @@ export function example(item: SettingItem, channel = ''): string {
       return '0x…'
     case 'payments.zarinpal_link':
       return 'https://zarinp.al/…'
+    case 'delivery.video_post':
+      return 'https://t.me/yourchannel/12'
   }
   return item.default
 }
 
 /** wideGroups picks the cards that take the page's full width on a
- * two-column page: those with many fields, and the last card of a run with
- * an odd count (so it does not sit next to an empty column). */
+ * two-column page: those with many fields, those of fullWidthGroups, and the
+ * last card of a run with an odd count (so it does not sit next to an empty
+ * column). */
 export function wideGroups(groups: { group: string; count: number }[]): string[] {
   const wide: string[] = []
   let run: string[] = []
@@ -478,7 +691,7 @@ export function wideGroups(groups: { group: string; count: number }[]): string[]
     run = []
   }
   for (const g of groups) {
-    if (g.count >= 6) {
+    if (g.count >= 6 || fullWidthGroups.includes(g.group)) {
       close()
       wide.push(g.group)
     } else {

@@ -56,6 +56,9 @@ type Sent struct {
 	FileName   string `json:"file_name,omitempty"`
 	FileSize   int64  `json:"file_size,omitempty"`
 	FileSHA256 string `json:"file_sha256,omitempty"`
+	// A copied message (copyMessage): the channel it came from (@name, or the number of a private one) and its number there. Text says so.
+	FromChat      string `json:"from_chat,omitempty"`
+	FromMessageID int64  `json:"from_message_id,omitempty"`
 }
 
 // ProfileCall is a call that sets the bot's own profile (setMyCommands,
@@ -554,6 +557,14 @@ func str(v any) string {
 	return s
 }
 
+// chatName is a chat as a call names it: an @username as it is, a number as digits.
+func chatName(v any) string {
+	if s, ok := v.(string); ok {
+		return s
+	}
+	return strconv.FormatInt(num(v), 10)
+}
+
 func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 	parts := strings.SplitN(strings.TrimPrefix(r.URL.Path, "/"), "/", 2)
 	if len(parts) != 2 || !strings.HasPrefix(parts[0], "bot") || parts[0] == "bot" {
@@ -630,6 +641,26 @@ func (s *Server) api(w http.ResponseWriter, r *http.Request) {
 			m.Document = &tg.Document{FileID: "fake-document-" + strconv.Itoa(id), FileName: file.name}
 		}
 		reply(w, m)
+	case "copyMessage":
+		if f := s.failure(num(p["chat_id"])); f != nil {
+			failWith(w, *f)
+			return
+		}
+		var markup json.RawMessage
+		switch m := p["reply_markup"].(type) {
+		case string:
+			markup = json.RawMessage(m)
+		case map[string]any:
+			markup, _ = json.Marshal(m)
+		}
+		from := chatName(p["from_chat_id"])
+		s.mu.Lock()
+		id := s.nextMsg
+		s.nextMsg++
+		s.sent = append(s.sent, Sent{Method: parts[1], ChatID: num(p["chat_id"]), MessageID: id, Markup: markup,
+			Text: "[copy of " + from + "/" + strconv.FormatInt(num(p["message_id"]), 10) + "]", FromChat: from, FromMessageID: num(p["message_id"])})
+		s.mu.Unlock()
+		reply(w, map[string]int{"message_id": id})
 	case "sendInvoice":
 		var stars int64
 		if prices, ok := p["prices"].([]any); ok && len(prices) == 1 {
