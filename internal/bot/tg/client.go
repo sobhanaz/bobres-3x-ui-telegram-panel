@@ -45,6 +45,13 @@ func IsBlocked(err error) bool {
 		strings.Contains(d, "user is deactivated")
 }
 
+// IsForbidden reports a 403: the user blocked the bot or their account is gone. Unlike IsBlocked it leaves "chat not found" alone, which a call
+// that names a second chat (CopyMessage's source) also gets when that chat is the one Telegram cannot find.
+func IsForbidden(err error) bool {
+	var ae *APIError
+	return errors.As(err, &ae) && ae.Code == http.StatusForbidden
+}
+
 // IsNotModified reports an edit that changed nothing (harmless).
 func IsNotModified(err error) bool {
 	var ae *APIError
@@ -519,6 +526,17 @@ func (c *Client) SendChatMessage(ctx context.Context, chat string, text string, 
 		return nil, err
 	}
 	return &m, nil
+}
+
+// CopyMessage copies a message of another chat into chatID, without a link to the original: a post of a public channel (fromChat is its
+// @username) or of a private one the bot is in (its -100… id). kb is the inline keyboard under the copy, in place of the original's buttons (nil:
+// none). Telegram refuses a message the bot cannot read, one that was deleted and a service message.
+func (c *Client) CopyMessage(ctx context.Context, chatID int64, fromChat string, messageID int64, kb *Keyboard) error {
+	body := map[string]any{"chat_id": chatID, "from_chat_id": chatRef(fromChat), "message_id": messageID}
+	if kb != nil {
+		body["reply_markup"] = kb
+	}
+	return c.call(ctx, "copyMessage", jsonBody(body), nil)
 }
 
 // SendMenu sends an HTML-formatted message carrying the bottom menu (a reply

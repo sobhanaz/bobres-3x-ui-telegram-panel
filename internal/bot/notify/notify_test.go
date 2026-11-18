@@ -46,6 +46,45 @@ type fakeTG struct {
 	mu   sync.Mutex
 	sent []sentText
 	fail map[int64]error
+	// copies are the messages copied into chats from a channel (CopyMessage), in order; copyErr is what a copy fails with.
+	copies  []copied
+	copyErr error
+	// order is what went out, in order: "msg" for a message, "copy" for a copied post.
+	order []string
+}
+
+// copied is a message copied into a chat.
+type copied struct {
+	chat int64
+	from string
+	id   int64
+}
+
+func (f *fakeTG) CopyMessage(_ context.Context, chatID int64, from string, id int64, _ *tg.Keyboard) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.copyErr != nil {
+		return f.copyErr
+	}
+	f.copies = append(f.copies, copied{chatID, from, id})
+	f.order = append(f.order, "copy")
+	return nil
+}
+
+func (f *fakeTG) takeOrder() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := f.order
+	f.order = nil
+	return out
+}
+
+func (f *fakeTG) takeCopies() []copied {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := f.copies
+	f.copies = nil
+	return out
 }
 
 func (f *fakeTG) SendMessage(_ context.Context, chatID int64, text string, kb *tg.Keyboard) (*tg.Message, error) {
@@ -55,6 +94,7 @@ func (f *fakeTG) SendMessage(_ context.Context, chatID int64, text string, kb *t
 		return nil, err
 	}
 	f.sent = append(f.sent, sentText{chatID, text, kb})
+	f.order = append(f.order, "msg")
 	return &tg.Message{MessageID: len(f.sent)}, nil
 }
 

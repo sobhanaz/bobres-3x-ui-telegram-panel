@@ -50,6 +50,44 @@ rest follow in their order.
     off: setting `bulk.enabled`; the bottom menu has it too, since the welcome comes without the home screen)
 (+ Reseller panel button when role = reseller; + Admin button when role = admin)
 
+## Channel buttons
+
+The owner's channels can be buttons of the menu: each on a row of its own right under Buy service and Free trial, on the home screen and in the
+bottom menu alike, blue like the other main buttons (setting `bot.channel_cards`, dashboard **Settings > Channel buttons**, at most 6). A button has
+its text by language (the customer's own, else English, else Persian, else any the owner wrote), the link of a **post** of the channel
+(`https://t.me/<channel>/<number>`, or `https://t.me/c/<number>/<n>` for a private channel; in Telegram: open the post, Copy Link) and, for a
+private channel, the channel's invite link (`https://t.me/+...`); a public channel's own link is taken from its post. The list is code in
+`internal/channelcards`, which core checks when it is saved and the bot reads at every settings refresh; the links are read by `internal/tglink`.
+
+A tap shows a **copy of that post**, the way the owner wrote it (the bot calls `copyMessage`, so the picture, the text and its formatting arrive, with
+no "forwarded from" line), and one button under it, **📢 View channel**, that opens the channel. The copy comes as a new message: the screen the tap
+came from stays. The post is read from the channel at the tap, so an edit in the channel shows at once. Telegram lets a bot copy only a post it can
+read: **add the bot to every channel used here as an administrator** (a private channel's post can be copied no other way; for a public channel
+Telegram may refuse a bot that is not in it). A channel with **Restrict saving content** switched on cannot have its posts copied at all: switch it off
+for the channels used here. When the post cannot be copied (the bot cannot read the channel, the post was deleted) the customer still
+gets the button's name in bold with View channel under it, never nothing, and staff also get a line telling them to add the bot and look at the post link
+(`channels.copy_failed`). A customer who blocked the bot is told nothing.
+
+Callback data is `chc:<id>`, the id being eight hex digits made from the post's link, so it stays when the list is reordered; a menu sent before the
+owner removed or changed a button answers "this menu is old" for it and shows the home screen. The bottom menu is rebuilt from the list, so every
+customer gets the new menu at the next thing they do. The bot's admin menu leaves the list to the dashboard.
+
+## What a delivered service brings
+
+The delivery message (the ready text with the subscription link, and an Open page button) is followed by the QR code and by what helps a customer
+connect, each a message of its own and in this order (the bot's notifier, `internal/bot/notify`):
+1. **A direct config**: the first of the service's configs (as the panel lists them), in a code span to tap and copy, for apps that want a config and
+   not a subscription link (`sub.config_direct`). Left out when the service has no config, or when it is too long for one message.
+2. **The tutorial video**: the owner's post (`delivery.video_post`, a `https://t.me/<channel>/<n>` link) copied into the chat, so the video plays there.
+3. **A tutorial** (`delivery.tutorial`): the tutorial of the Tutorials section that the owner picked, sent as that section shows it: its text, and a
+   button for each https link it has. One that is gone or switched off is left out.
+
+It is for a service a customer **bought** and, while `delivery.bundle_trial` is on, for the **free test**; never for a renewal, a traffic package, a
+reseller's purchase or a service of a bulk purchase (its links come in the bulk's one message). `delivery.bundle` (on by default) switches all of it
+off; the video and the tutorial are sent only once the owner sets them (Settings > After a purchase). Every part is best effort: one that cannot be
+sent is logged and left out, and the delivery is never retried because of it (it would send the link again). The event tells the bot whether the
+service is a free test or a reseller's (`trial`, `reseller` in `SubscriptionProvisionedEvent`).
+
 ## Key flows
 **Buy:** plan list -> plan detail (price, GB, days) -> discount code (optional) -> payment method
 (wallet / card / Zarinpal / Stars / crypto) -> confirm -> pay -> delivery message (subscription link, QR, connect guide per platform).

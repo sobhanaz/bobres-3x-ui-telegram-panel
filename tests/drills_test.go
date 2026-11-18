@@ -645,6 +645,11 @@ func (f *telegram) SendPhoto(ctx context.Context, chatID int64, _ tg.Photo, capt
 	return f.SendMessage(ctx, chatID, caption, kb)
 }
 
+func (f *telegram) CopyMessage(ctx context.Context, chatID int64, _ string, _ int64, kb *tg.Keyboard) error {
+	_, err := f.SendMessage(ctx, chatID, "", kb)
+	return err
+}
+
 func (f *telegram) total() int {
 	f.mu.Lock()
 	defer f.mu.Unlock()

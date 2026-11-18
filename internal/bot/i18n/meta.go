@@ -296,6 +296,7 @@ var buttonStyles = map[string]string{
 	"btn.faq_support":    "primary", // the way on to support from the FAQ, like Support itself
 	"btn.pm_manage":      "primary", // under the alert about services not on the panel
 	"btn.ud_manage":      "primary", // under the alerts about paid orders not delivered
+	"btn.view_channel":   "primary", // under the copy of a channel's post (the channel buttons of the menu)
 
 	"btn.cancel":          "danger",
 	"btn.reject":          "danger",

@@ -8,6 +8,18 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+## [0.26.0] — 2026-11-18
+
+**The bot's menu can show your channels, and a delivered service brings a direct config, the tutorial video and a tutorial.** No database migration; the bot and core update together (the update does that).
+
+### Updating
+- No database migration: the new settings are ordinary settings. The bot and core update together (the delivery event gains two optional fields, `trial` and `reseller`; the update does that).
+
+### Added
+- **Channel buttons in the bot's menu.** The store's channels can now be buttons of the menu, up to 6, each on a full-width row right under Buy service and Free trial, in the bottom menu and on the home screen. A customer who taps one sees a copy of the channel's first post, the way the owner wrote it (the picture, the text and its formatting, with no "forwarded from" line), and one button under it, **📢 View channel**, that opens the channel. The owner fills them in at **Settings > Channel buttons** (setting `bot.channel_cards`): the button's text in Persian and English, the channel's link, and the link of the post to show (in Telegram: open the post, Copy Link). Add the bot to each of these channels as an administrator (Telegram lets a bot copy only a post it can read, and nothing from a channel with *Restrict saving content* on); a private channel also needs its invite link. When a post cannot be copied the customer still gets the button's name and View channel, and staff are told to look at the post link. Every customer gets the new menu at the next thing they do. See [docs/03-bot-ux.md](docs/03-bot-ux.md#channel-buttons).
+- **A direct config, the tutorial video and a tutorial after a purchase.** After the subscription link and the QR code of a new service, the bot now also sends one **direct config** (the first of the service's configs, a code span to tap and copy), the **tutorial video** (a post of the owner's channel that the bot copies into the chat, so it plays there) and **a tutorial** picked from the Tutorials section (its text and link buttons). It goes with a bought service and, while its switch is on, with the free test; never with a renewal, a traffic package, a reseller's purchase or a bulk purchase. **Settings > After a purchase**: `delivery.bundle` and `delivery.bundle_trial` (both on by default, so the direct config goes out as soon as the store updates), `delivery.video_post` and `delivery.tutorial` (empty until the owner sets them). Every part is best effort and never makes the delivery come back. See [docs/03-bot-ux.md](docs/03-bot-ux.md#what-a-delivered-service-brings).
+- The bot can copy a post of a channel into a chat (`copyMessage`), and the fake Telegram the tests and the end-to-end run use records such copies.
+
 ## [0.25.0] — 2026-11-11
 
 **Owner accounts' purchases can be kept out of revenue and reports and shown on their own.** Off until the owner turns it on. One additive migration (core 00059); the bot and core update together (the update does that).

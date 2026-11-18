@@ -1750,6 +1750,7 @@
       "required": "Bir kanal veya grup girin ya da bu satırı kaldırın.",
       "duplicate": "Bu kanal veya grup zaten listede.",
       "tme_link": "https://t.me/ ile başlayan bir bağlantı",
+      "tme_post": "Bir Telegram kanalındaki gönderiye bağlantı, örneğin https://t.me/yourchannel/12.",
       "link_required": "Özel bir kanal (sayısal kimlik) için davet bağlantısı gerekir.",
       "https": "https:// ile başlayan tam bir adres",
       "trc20": "TRC20 adresi T ile başlar ve 34 karakterden oluşur.",
@@ -1771,6 +1772,12 @@
       "prizes": "Her ödül için tam sayı bir Toman tutarı (en az 1) ve 1 ile 1.000.000 arasında bir ağırlık gerekir.",
       "prizes_dup": "İki ödülün tutarı aynı.",
       "prizes_many": "En fazla 12 ödül.",
+      "cards": "Kanal düğmeleri okunamadı. Hepsini kaldırıp yeniden ekleyin.",
+      "cards_many": "En fazla 6 kanal düğmesi.",
+      "cards_label": "Her düğme için tek satırlık, en fazla 40 karakterlik bir metin gerekir; Farsça veya İngilizce yazın.",
+      "cards_post": "Her düğme için kanalının ilk gönderisinin bağlantısı gerekir, örneğin https://t.me/yourchannel/2. Telegram’da gönderiyi açıp “Bağlantıyı kopyala” seçeneğini seçin.",
+      "cards_channel": "Kanal bağlantısı https://t.me/yourchannel gibi olmalı. Özel bir kanal için davet bağlantısını (https://t.me/+…) girin: özel bir kanalın gönderisi için her zaman gerekir.",
+      "cards_dup": "İki düğme aynı gönderiyi kullanıyor.",
       "percent": "0,01 ile 20 arasında bir yüzde, örneğin 2,5.",
       "langs": "fa, en, ar, ru ve tr dil kodlarını, her birini bir kez kullanın.",
       "langs_empty": "En az bir dil seçin."
@@ -1877,6 +1884,16 @@
         "title": "İlk bağlantıdan itibaren günler",
         "desc": "Satın alınan bir hizmetin günleri, oluşturulduğunda değil, yapılandırması ilk bağlandığında başlasın.",
         "note": "Yeni bir hizmet, etkin ve bitiş tarihi olmadan, yapılandırması ilk kez bağlanana kadar ne kadar sürerse sürsün bekler: bu sırada sona eremez. Sonra günleri (örneğin 30) başlar. Ücretsiz deneme yine hemen başlar. Hâlâ bekleyen bir hizmeti yenilemek, günlerini beklemeye ekler. Daha önce oluşturulan hizmetler tarihlerini korur. 3x-ui, Marzban, S-UI ve Hiddify sunucularında çalışır. Siz açana kadar kapalıdır."
+      },
+      "channels": {
+        "title": "Kanal düğmeleri",
+        "desc": "Kanallarınızı botun menüsüne ekleyin. Bir düğmeye dokunan müşteri kanalın ilk gönderisini ve kanalı açan bir düğme görür.",
+        "note": "Her düğme, botun ana menüsünde ve ana ekranında, “Paket satın al” ile “Ücretsiz deneme” düğmelerinin altında, aşağıdaki listenin sırasıyla kendi satırını alır. Müşteri düğmeye dokunduğunda bot, bağlantısını verdiğiniz gönderiyi onun sohbetine kopyalar ve altına “Kanalı görüntüle” düğmesini koyar. Telegram, botun yalnızca okuyabildiği bir gönderiyi kopyalamasına izin verir; bu yüzden botu bu kanalların her birine yönetici olarak ekleyin ve içlerinde “Restrict saving content” seçeneğini kapalı bırakın. En fazla 6 düğme."
+      },
+      "delivery": {
+        "title": "Satın alma sonrası",
+        "desc": "Bot yeni bir hizmeti teslim ettikten sonra ne gönderir.",
+        "note": "Hizmetin kendisinden sonra bot bir doğrudan yapılandırma (hizmetin ilk yapılandırması), ardından eğitim videosunu, ardından eğitimi gönderir. Yenilemeler ve bayilerin satın aldığı hizmetler bunlardan hiçbirini almaz. Video bağlantısını veya eğitimi boş bırakırsanız o kısım gönderilmez."
       }
     },
     "field": {
@@ -1894,6 +1911,10 @@
         "plan_layout": {
           "label": "Paket listesi düzeni",
           "help": "Müşteri satın alırken veya yenilerken botun paketleri nasıl listelediği. Tablo, her paketi başlık satırının altında iki düğmeli bir satıra koyar: adı ve fiyatı. Liste, paket başına tek düğme kullanır; ad ve fiyat birlikte görünür."
+        },
+        "channel_cards": {
+          "label": "Düğmeler",
+          "help": "Her düğmenin metnini Farsça ve İngilizce yazın: müşteri kendi dilindeki metni görür, yoksa İngilizce, o da yoksa Farsça olanı. Gönderi için kanalın ilk gönderisini Telegram’da açın, ona dokunun (bilgisayarda sağ tıklayın) ve “Bağlantıyı kopyala” seçeneğini seçin. Özel bir kanal için ayrıca davet bağlantısı da gerekir."
         }
       },
       "bulk": {
@@ -2221,6 +2242,24 @@
           "label": "Bayi hizmetleri ilk bağlantıda başlar",
           "help": "Açık: bir bayinin bir müşteri için tek tek veya toplu aldığı hizmetin günleri, yapılandırması ilk bağlandığında başlar."
         }
+      },
+      "delivery": {
+        "bundle": {
+          "label": "Doğrudan yapılandırma, video ve eğitim gönder",
+          "help": "Yeni bir hizmet teslim edildikten sonra bot ayrıca bir doğrudan yapılandırma, ardından eğitim videosunu, ardından eğitimi gönderir. Kapatılırsa yalnızca hizmetin kendisi gönderilir."
+        },
+        "bundle_trial": {
+          "label": "Ücretsiz deneme için de",
+          "help": "Açıkken ücretsiz deneme hizmeti de satın alma gibi doğrudan yapılandırmayı, videoyu ve eğitimi alır."
+        },
+        "video_post": {
+          "label": "Eğitim videosu (gönderi bağlantısı)",
+          "help": "Telegram kanalınızdaki eğitim videosunun bulunduğu gönderinin bağlantısı. Telegram’da gönderiyi açın, ona dokunun (bilgisayarda sağ tıklayın) ve “Bağlantıyı kopyala” seçeneğini seçin. Bot bu gönderiyi müşterinin sohbetine kopyalar, böylece video orada oynar. Botu o kanala yönetici olarak ekleyin ve “Restrict saving content” seçeneğini kapalı bırakın. Boş bırakılırsa video gönderilmez."
+        },
+        "tutorial": {
+          "label": "Eğitim",
+          "help": "Marka ve metinler → Yardım içeriği bölümünde yazdığınız eğitimlerden biri. Bot, videodan sonra onun metnini ve bağlantı düğmelerini gönderir. Listede yalnızca açık olan eğitimler vardır. “Yok” eğitim gönderilmeyeceği anlamına gelir."
+        }
       }
     },
     "payments_moved": "Ödeme yöntemleri ve ayrıntıları:",
@@ -2244,6 +2283,27 @@
       "add": "Ödül ekle",
       "max": "Çark en fazla {n} ödül alır.",
       "sorted": "Ödüller tutar sırasına göre kaydedilir."
+    },
+    "channel_cards": {
+      "empty": "Henüz kanal düğmesi yok. Botun menüsünde bir kanal göstermek için bir tane ekleyin.",
+      "row": "Düğme {n}",
+      "label_fa": "Düğme metni (Farsça)",
+      "label_en": "Düğme metni (İngilizce)",
+      "channel": "Kanal bağlantısı",
+      "post": "Kanalın ilk gönderisinin bağlantısı",
+      "post_hint": "Telegram’da gönderiyi açıp “Bağlantıyı kopyala” seçeneğini seçin. Özel bir kanal için “Kanal bağlantısı” alanına davet bağlantısını da yazın.",
+      "move_up": "{n}. düğmeyi yukarı taşı",
+      "move_down": "{n}. düğmeyi aşağı taşı",
+      "remove": "{n}. düğmeyi kaldır",
+      "add": "Düğme ekle",
+      "max": "Menüye en fazla {n} kanal düğmesi sığar.",
+      "order": "Düğmeler menüde bu sırayla gelir."
+    },
+    "tutorial": {
+      "none": "Yok",
+      "unavailable": "Eğitim kullanılamıyor",
+      "saved": "Kayıtlı eğitim",
+      "load_failed": "Eğitim listesi yüklenemedi, bu yüzden yalnızca kayıtlı seçim gösteriliyor. Yeniden denemek için sayfayı yenileyin."
     },
     "langs": {
       "default": "Varsayılan",

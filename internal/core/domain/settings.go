@@ -17,8 +17,10 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/bot/i18n"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/channelcards"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/core/store"
 	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/release"
+	"github.com/sobhanaz/bobres-3x-ui-telegram-panel/internal/tglink"
 )
 
 // Setting kinds: how a value is checked and stored.
@@ -57,6 +59,19 @@ const (
 	permSecurity = "security.write"
 )
 
+// What a delivered service brings with it besides its subscription link and QR code (the bot's notifier reads these): one direct config, then
+// the tutorial video (a channel's post the bot copies) and a tutorial of the Tutorials section.
+const (
+	SettingDeliveryBundle      = "delivery.bundle"
+	SettingDeliveryBundleTrial = "delivery.bundle_trial"
+	SettingDeliveryVideo       = "delivery.video_post"
+	SettingDeliveryTutorial    = "delivery.tutorial"
+)
+
+// channelCardsMaxBytes is the longest list of channel buttons: Max buttons of five texts of LabelMax characters, two links and the JSON around
+// them come to about 4 KB.
+const channelCardsMaxBytes = 6000
+
 // The layouts of the bot's plan lists (SettingPlanLayout): a table puts each
 // plan on a row of two buttons (its name and its price) under a header row;
 // a list has one button per plan.
@@ -89,6 +104,8 @@ type SettingSpec struct {
 	Max     int64 // KindInt
 	Options []string
 	MaxLen  int // KindText, in characters
+	// MaxBytes is the longest value in bytes where the usual 1000 is too little (a list of rows).
+	MaxBytes int
 	// Multiline lets a KindText hold line breaks and tabs (a page's text); its limit in bytes is MaxLen * 4. Line breaks are kept as \n.
 	Multiline bool
 	Help      string
@@ -120,6 +137,18 @@ var SettingSpecs = []SettingSpec{
 		Help: "https://t.me/… link of the join button (needed for a private channel)"},
 	{Key: "join.label", Group: "join", Kind: KindText, Perm: permSettings, MaxLen: JoinLabelMax,
 		Help: "short name of this channel on the join button when customers must join several (empty = its @name)"},
+	// The owner's channels as buttons of the bot's menu (internal/channelcards), shown under Buy and Free trial.
+	{Key: channelcards.Setting, Group: "channels", Kind: KindList, Perm: permSettings, MaxBytes: channelCardsMaxBytes,
+		Help: "channel buttons in the bot's menu, under Buy and Free trial, at most 6: each has a text by language, the link of the post of the channel that the bot copies into the chat when the button is tapped (in Telegram: open the post, Copy Link: https://t.me/<channel>/<number>) and, for a private channel, the channel's invite link (https://t.me/+…); under the copy a View channel button opens the channel. Add the bot to each channel as an administrator: Telegram lets a bot copy only a post it can read, and nothing from a channel with Restrict saving content on. For example [{\"label\":{\"fa\":\"کانال نظرات\",\"en\":\"Reviews\"},\"post\":\"https://t.me/mychannel/2\"}]"},
+	// What a delivered service brings with it besides its subscription link and QR code (the bot's notifier sends it).
+	{Key: SettingDeliveryBundle, Group: "delivery", Kind: KindBool, Perm: permSettings, Default: "true",
+		Help: "true = when a new service is delivered the bot also sends one direct config (the first of the service's configs), then the tutorial video and the tutorial named below; renewals and services bought by resellers get none of it; false = only the subscription link and QR code"},
+	{Key: SettingDeliveryBundleTrial, Group: "delivery", Kind: KindBool, Perm: permSettings, Default: "true",
+		Help: "true = the free test service brings the same extras as a purchase; false = the free test gets only the subscription link and QR code"},
+	{Key: SettingDeliveryVideo, Group: "delivery", Kind: KindURL, Perm: permSettings,
+		Help: "link of a post with the tutorial video in your Telegram channel (https://t.me/<channel>/<number>; in Telegram: open the post, Copy Link): the bot copies that post into the customer's chat, so the video plays there (empty = no video)"},
+	{Key: SettingDeliveryTutorial, Group: "delivery", Kind: KindText, Perm: permSettings, MaxLen: 36,
+		Help: "the id of one tutorial of the Tutorials section (pick it in the dashboard): its text and link buttons are sent after the video (empty = none)"},
 	{Key: "notify.new_payment", Group: "notify", Kind: KindBool, Perm: permSettings, Default: "true",
 		Help: "message staff when a payment needs review"},
 	{Key: "notify.new_ticket", Group: "notify", Kind: KindBool, Perm: permSettings, Default: "true",
@@ -397,6 +426,8 @@ var (
 	trc20Re       = regexp.MustCompile(`^T[1-9A-HJ-NP-Za-km-z]{33}$`)
 	erc20Re       = regexp.MustCompile(`^0x[0-9a-fA-F]{40}$`)
 	cardRe        = regexp.MustCompile(`^([0-9]{16}|IR[0-9]{24})$`)
+	// tutorialIDRe is the id of a help entry (a lower-case uuid).
+	tutorialIDRe = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
 )
 
 // latinDigits turns Persian and Arabic digits into ASCII ones.
@@ -441,7 +472,10 @@ func NormalizeSetting(key, value string) (string, error) {
 	}
 	bad := func(msg string) (string, error) { return "", &FieldError{key, msg} }
 	limit := maxSettingLen
-	if sp.Multiline {
+	switch {
+	case sp.MaxBytes > 0:
+		limit = sp.MaxBytes
+	case sp.Multiline:
 		limit = sp.MaxLen * 4
 	}
 	if !utf8.ValidString(value) || len(value) > limit {
@@ -503,6 +537,11 @@ func NormalizeSetting(key, value string) (string, error) {
 			if !erc20Re.MatchString(value) {
 				return bad("not an ERC20 address (0x followed by 40 hex digits)")
 			}
+		case SettingDeliveryTutorial: // the id of a tutorial: whether it exists is for the bot to find out when it sends it
+			value = strings.ToLower(value)
+			if !tutorialIDRe.MatchString(value) {
+				return bad("the id of a tutorial: pick one in the dashboard")
+			}
 		}
 	case KindInt:
 		digits := strings.NewReplacer(",", "", "_", "", " ", "", "٬", "", "،", "").Replace(latinDigits(value))
@@ -538,6 +577,13 @@ func NormalizeSetting(key, value string) (string, error) {
 		}
 		value = t
 	case KindURL:
+		if key == SettingDeliveryVideo { // a post of a channel, stored as t.me/<channel>/<number> whichever way it was copied
+			p, err := tglink.ParsePost(value)
+			if err != nil {
+				return bad(err.Error())
+			}
+			return p.URL(), nil
+		}
 		u, err := url.Parse(value)
 		if err != nil || u.Scheme != "https" || u.Host == "" || u.User != nil {
 			return bad("must be an https:// link")
@@ -603,6 +649,8 @@ func normalizeList(key, value string) (string, error) {
 			return "", err
 		}
 		return FormatWheelPrizes(prizes), nil
+	case channelcards.Setting:
+		return channelcards.Normalize(value)
 	}
 	return "", errors.New("not a list")
 }

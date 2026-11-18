@@ -21,6 +21,8 @@ The Telegram bot is where customers buy and get help. It speaks Persian and Engl
 
 A **bottom menu** keeps the main buttons one tap away: **Buy service** and **Free trial** first, each on a row of its own, then the rest. After `/start` the customer gets the welcome with the bottom menu only, so the welcome stays in view; `/menu` shows the main menu in the chat too. Buttons are colored by what they do: green pays or confirms, blue opens a main action, red cancels.
 
+**Channel buttons.** You can make your own channels buttons of the menu (up to 6): each on a full-width row right under Buy service and Free trial, in the bottom menu and on the home screen. A customer who taps one sees a copy of that channel's post (the picture, the text and the formatting as you wrote it) with a **View channel** button under it. Fill them in at **Settings → Channel buttons**: the button's text, the channel's link and the link of the post to show (in Telegram, open the post and choose Copy Link). Add the bot to each of these channels as an administrator: Telegram lets a bot copy only a post it can read, and not at all from a channel with *Restrict saving content* switched on. A private channel also needs its invite link.
+
 ### Commands
 
 | Command | Does |
@@ -66,6 +68,7 @@ By default a service's days start when it is made: a 30-day service bought today
 
 ### After the purchase
 
+- **What arrives with a new service:** after the link and the QR code, the bot sends one **direct config** (the first of the service's configs; tap to copy), the **tutorial video** (a post of your channel that the bot copies into the chat, so it plays there) and **a tutorial** from the Tutorials section. It goes with a bought service and with the free test, not with a renewal or a reseller's purchase. **Settings → After a purchase** switches it on and off, takes the link of the video's post and lets you pick the tutorial; the video and the tutorial are sent only once you set them.
 - **Renew and add traffic** from My services, with the same link.
 - **Find by link:** a customer who does not see a service in their list sends its subscription link, sees its state, and can renew it.
 - **Reminders** come 3 days and 1 day before expiry, at 80% of the traffic and when it ends, with Renew and Add traffic buttons.

@@ -306,6 +306,10 @@ type SubscriptionProvisionedEvent struct {
 	Late bool `json:"late,omitempty"`
 	// FirstUseDays: the service waits for its first connection and then runs this many days (ExpiresAt is 0 then).
 	FirstUseDays int32 `json:"first_use_days,omitempty"`
+	// Trial: the service is a free test (its plan is a trial plan). Reseller: the buyer is a reseller. The bot sends a direct config and the
+	// tutorial after the link of a service bought by a customer, and of a free test while the store wants it, never to a reseller.
+	Trial    bool `json:"trial,omitempty"`
+	Reseller bool `json:"reseller,omitempty"`
 }
 
 // RewardCodeIssuedEvent: the buyer of a plan that gives a reward got a discount code, bound to them, one use, for any plan. It is a percent
