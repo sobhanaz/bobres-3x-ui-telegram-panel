@@ -8,7 +8,7 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
-## [0.26.0] — 2026-11-17
+## [0.26.0] — 2026-11-18
 
 **The bot's menu can show your channels, and a delivered service brings a direct config, the tutorial video and a tutorial.** No database migration; the bot and core update together (the update does that).
 

@@ -786,7 +786,7 @@ at `https://<domain>/admin`
 
 ### 🚦 Status
 
-**Latest release: v0.26.0 (2026-11-17)**: the bot's menu can show your channels as buttons (a tap shows a copy of the
+**Latest release: v0.26.0 (2026-11-18)**: the bot's menu can show your channels as buttons (a tap shows a copy of the
 channel's first post with a View channel button), and a delivered service now brings a direct config, the tutorial video and a
 tutorial after its link. v0.25.0 let purchases by owner accounts be kept out of revenue and reports (one switch, off
 until the owner turns it on), and v0.24.1 made the live USDT price work again on servers where it had stopped
