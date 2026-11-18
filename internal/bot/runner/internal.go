@@ -62,8 +62,9 @@ const (
 // ChannelCheck tells the dashboard whether the bot can enforce joining a
 // channel or group, at GET /internal/channel-check?chat=<@name|-100id>: the
 // chat exists and the bot is one of its administrators (Telegram shows other
-// members to admins only). It answers 200 with {"ok":true,"title","bot_admin"}
-// or {"ok":false,"problem","detail"}.
+// members to admins only). It answers 200 with {"ok":true,"title","bot_admin","can_post"}
+// (and "protected_content":true while the chat has Restrict saving content on, which stops
+// the bot from copying its posts) or {"ok":false,"problem","detail"}.
 func ChannelCheck(bot ChatChecker, botID int64, coreToken string) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !fromCore(r, coreToken) {
@@ -115,7 +116,12 @@ func checkChannel(ctx context.Context, bot ChatChecker, botID int64, chat string
 		return fail(ProblemNotAdmin, "the bot is not an administrator of this channel (its status: "+m.Status+")")
 	}
 	// can_post: whether the bot may also post there (product announcements need it; a required chat does not).
-	return map[string]any{"ok": true, "title": ch.Title, "bot_admin": true, "can_post": m.CanPost(ch.Type)}
+	out := map[string]any{"ok": true, "title": ch.Title, "bot_admin": true, "can_post": m.CanPost(ch.Type)}
+	// protected_content (only when true): Restrict saving content is on, so the bot cannot copy the chat's posts (the channel buttons need to).
+	if ch.HasProtectedContent {
+		out["protected_content"] = true
+	}
+	return out
 }
 
 // telegramError is the HTTP code and text of a Bot API error (0 and the

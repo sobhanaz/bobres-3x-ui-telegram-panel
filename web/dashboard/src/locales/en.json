@@ -1888,7 +1888,7 @@
       "channels": {
         "title": "Channel buttons",
         "desc": "Add your channels to the bot's menu. A customer who taps one sees the channel's first post, with a button to open the channel.",
-        "note": "Each button gets a full row in the bot's main menu and on its home screen, under Buy and Free trial, in the order of the list below. When a customer taps it, the bot copies the post you linked into their chat, with a View channel button under it. Telegram lets a bot copy only a post it can read, so add the bot to each of these channels as an administrator, and leave Restrict saving content off in them. Up to 6 buttons."
+        "note": "Each button gets a full row in the bot's main menu and on its home screen, under Buy and Free trial, in the order of the list below. When a customer taps it, the bot copies the post you linked into their chat, with a View channel button under it. Telegram lets a bot copy only a post it can read, so add the bot to each of these channels as an administrator, leave Restrict saving content off in them, then press “Check the bot's access” under each button. Up to 6 buttons."
       },
       "delivery": {
         "title": "After a purchase",
@@ -1914,7 +1914,7 @@
         },
         "channel_cards": {
           "label": "Buttons",
-          "help": "Write each button's text in Persian and English: a customer sees their own language, else English, else Persian. For the post, open the channel's first post in Telegram, tap it (right-click on a computer) and choose Copy Link. A private channel also needs its invite link."
+          "help": "Write each button's text in Persian and English: a customer sees their own language, else English, else Persian. For the post, open the channel's first post in Telegram, tap it (right-click on a computer) and choose Copy Link. A private channel also needs its invite link. “Check the bot's access” under a button tells you whether the bot can copy its post."
         }
       },
       "bulk": {
@@ -2297,7 +2297,15 @@
       "remove": "Remove button {n}",
       "add": "Add a button",
       "max": "The menu holds at most {n} channel button. | The menu holds at most {n} channel buttons.",
-      "order": "Buttons come in the menu in this order."
+      "order": "Buttons come in the menu in this order.",
+      "check": "Check the bot's access",
+      "check_need_post": "Enter the link of a post first (like https://t.me/yourchannel/2), then check.",
+      "check_ok": "The bot is an administrator of “{title}”, so it can copy this channel's posts. It does not check that this post exists.",
+      "check_protected": "“{title}” has Restrict saving content switched on, so Telegram does not let the bot copy its posts. Switch it off in the channel's settings.",
+      "check_not_admin": "The bot is not an administrator of this channel. Add it as an administrator (it needs no special rights), then check again.",
+      "check_not_found": "Telegram does not know this channel. Check the link of the post.",
+      "check_not_channel": "This link is not a channel or a group.",
+      "check_error": "The bot could not check this channel."
     },
     "tutorial": {
       "none": "None",

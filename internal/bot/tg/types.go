@@ -27,6 +27,8 @@ type Chat struct {
 	Type     string `json:"type"`               // private | group | supergroup | channel
 	Title    string `json:"title,omitempty"`    // groups and channels
 	Username string `json:"username,omitempty"` // public chats
+	// HasProtectedContent: Restrict saving content is on, so a message of the chat cannot be forwarded or copied (getChat only).
+	HasProtectedContent bool `json:"has_protected_content,omitempty"`
 }
 
 // ChatMember is a user's membership in a chat (getChatMember).

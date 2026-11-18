@@ -3,13 +3,19 @@ import { computed, nextTick, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import InputText from 'primevue/inputtext'
 import Button from 'primevue/button'
-import { LANGS, num, type Lang } from '../../format'
-import { MAX_CARD_LABEL, MAX_CHANNEL_CARDS, normalizeChannelCards, parseChannelCards } from '../../settings'
+import Message from 'primevue/message'
+import { api } from '../../api'
+import { errorText } from '../../errors'
+import { isolate, LANGS, num, type Lang } from '../../format'
+import { describeAccess, MAX_CARD_LABEL, MAX_CHANNEL_CARDS, normalizeChannelCards, parseChannelCards, tmePostChat, unreachable } from '../../settings'
+import type { ChannelCheck } from '../../types'
 
 // The channel buttons of the bot's menu (setting bot.channel_cards): rows of the button's text in Persian and in English, the link of the channel and
 // the link of the channel's first post, in the order the buttons come in the menu. The setting is compact JSON; the rows keep what was typed, so a
 // half-typed link is not lost, and the value sent up is the rows as JSON (the card flags a row that is not right and saves the list made canonical).
-// A text in another language that is already saved (Arabic, Russian, Turkish) has no input here: it stays with its row.
+// A text in another language that is already saved (Arabic, Russian, Turkish) has no input here: it stays with its row. A button under each post link asks
+// the bot whether it can copy the posts of that channel (it must be an administrator, and the channel must not restrict saving content): the answer is
+// shown under the row, belongs to the row (it moves with it) and goes when the post link changes.
 const props = defineProps<{ modelValue: string; inputId: string; invalid?: boolean; locked?: boolean; describedBy?: string }>()
 const emit = defineEmits<{ 'update:modelValue': [value: string]; touch: [] }>()
 const { t, locale } = useI18n()
@@ -17,18 +23,31 @@ const lang = computed(() => locale.value as Lang)
 
 type Field = 'fa' | 'en' | 'channel' | 'post'
 
+interface Check {
+  /** tells this check from the next one: an answer that comes after the row changed, or after another check began, is dropped */
+  id: number
+  busy: boolean
+  result: { severity: 'success' | 'warn' | 'error'; text: string; detail: string } | null
+}
+
 interface Row {
+  /** tells this row from the others while rows are added, removed and moved (an answer of the bot finds its row by it) */
+  uid: number
   fa: string
   en: string
   channel: string
   post: string
   /** the texts in the other languages, as saved */
   more: Partial<Record<Lang, string>>
+  check: Check | null
 }
+
+let lastRow = 0
+let lastCheck = 0
 
 function rowsOf(text: string): Row[] {
   const p = parseChannelCards(text)
-  return 'cards' in p ? p.cards.map(({ label: { fa = '', en = '', ...more }, channel, post }) => ({ fa, en, channel, post, more })) : []
+  return 'cards' in p ? p.cards.map(({ label: { fa = '', en = '', ...more }, channel, post }) => ({ uid: ++lastRow, fa, en, channel, post, more, check: null })) : []
 }
 
 /** draft is the rows as the value of the setting ("" for none). */
@@ -55,17 +74,18 @@ watch(
 )
 
 // The first input of the first row has the field's id (the card focuses it on Save, the label points at it); every other input has one of its own.
-const fid = (i: number, f: Field | 'up' | 'down') => (i === 0 && f === 'fa' ? props.inputId : `${props.inputId}-${i}-${f}`)
+const fid = (i: number, f: Field | 'up' | 'down' | 'check') => (i === 0 && f === 'fa' ? props.inputId : `${props.inputId}-${i}-${f}`)
 
 function changed() {
   emit('update:modelValue', draft(rows.value))
 }
 function setField(i: number, field: Field, v: string | undefined) {
-  rows.value = rows.value.map((r, j) => (j === i ? { ...r, [field]: v ?? '' } : r))
+  // another post link is another channel to check: what the bot said of the old one goes
+  rows.value = rows.value.map((r, j) => (j === i ? { ...r, [field]: v ?? '', ...(field === 'post' ? { check: null } : {}) } : r))
   changed()
 }
 async function add() {
-  rows.value = [...rows.value, { fa: '', en: '', channel: '', post: '', more: {} }]
+  rows.value = [...rows.value, { uid: ++lastRow, fa: '', en: '', channel: '', post: '', more: {}, check: null }]
   changed()
   emit('touch')
   // the new button is what is typed next
@@ -92,6 +112,28 @@ async function move(i: number, by: -1 | 1) {
 }
 
 const canAdd = computed(() => !props.locked && rows.value.length < MAX_CHANNEL_CARDS)
+// The chat each post is in, which is where the bot copies from ("" while the post link is not one: there is nothing to check yet).
+const chats = computed(() => rows.value.map((r) => tmePostChat(r.post)))
+
+async function runCheck(i: number) {
+  const row = rows.value[i]
+  const chat = chats.value[i]
+  if (!row || !chat || row.check?.busy) return
+  const { uid } = row
+  const id = ++lastCheck
+  row.check = { id, busy: true, result: null }
+  let result: NonNullable<Check['result']>
+  try {
+    const view = describeAccess(await api<ChannelCheck>('POST', '/settings/channel-check', { chat }))
+    result = { severity: view.severity, text: t(view.key, { title: isolate(view.title || chat) }), detail: view.detail }
+  } catch (e) {
+    if (unreachable(e)) result = { severity: 'error', text: t('settings.check.unreachable'), detail: '' }
+    else result = { severity: 'error', ...errorText(e, t) }
+  }
+  // The answer is for the row it was asked for, if that is still there with the same post link: rows are added, removed and moved while the bot answers.
+  const now = rows.value.find((r) => r.uid === uid)
+  if (now?.check?.id === id) now.check = { id, busy: false, result }
+}
 const channelExample = 'https://t.me/yourchannel'
 const postExample = 'https://t.me/yourchannel/2'
 </script>
@@ -99,7 +141,14 @@ const postExample = 'https://t.me/yourchannel/2'
 <template>
   <div class="channel-cards" role="group" :aria-describedby="describedBy">
     <p v-if="!rows.length" class="app-muted empty">{{ t('settings.channel_cards.empty') }}</p>
-    <div v-for="(r, i) in rows" :key="i" class="channel-card" role="group" :aria-label="t('settings.channel_cards.row', { n: num(i + 1, lang) })">
+    <div
+      v-for="(r, i) in rows"
+      :key="i"
+      class="channel-card"
+      role="group"
+      :aria-label="t('settings.channel_cards.row', { n: num(i + 1, lang) })"
+      :aria-busy="r.check?.busy || undefined"
+    >
       <div class="head">
         <span class="title">{{ t('settings.channel_cards.row', { n: num(i + 1, lang) }) }}</span>
         <span v-if="!locked" class="actions">
@@ -207,8 +256,27 @@ const postExample = 'https://t.me/yourchannel/2'
             @blur="emit('touch')"
           />
           <small :id="fid(i, 'post') + '-hint'" class="app-muted hint">{{ t('settings.channel_cards.post_hint') }}</small>
+          <Button
+            v-if="!locked"
+            :id="fid(i, 'check')"
+            type="button"
+            icon="pi pi-search"
+            :label="t('settings.channel_cards.check')"
+            severity="secondary"
+            outlined
+            size="small"
+            class="check-btn"
+            :loading="!!r.check?.busy"
+            :disabled="!chats[i] || !!r.check?.busy"
+            :title="chats[i] ? undefined : t('settings.channel_cards.check_need_post')"
+            @click="runCheck(i)"
+          />
         </div>
       </div>
+      <Message v-if="r.check?.result" :severity="r.check.result.severity" size="small" :closable="false" aria-live="polite">
+        {{ r.check.result.text }}
+        <div v-if="r.check.result.detail" class="app-ltr detail">{{ r.check.result.detail }}</div>
+      </Message>
     </div>
     <div v-if="!locked" class="foot">
       <Button
@@ -277,6 +345,15 @@ const postExample = 'https://t.me/yourchannel/2'
 .hint {
   font-size: 0.78rem;
   line-height: 1.6;
+}
+.check-btn {
+  justify-self: start;
+  margin-block-start: 0.2rem;
+}
+.detail {
+  font-size: 0.85rem;
+  margin-block-start: 0.25rem;
+  overflow-wrap: anywhere;
 }
 .foot {
   display: flex;

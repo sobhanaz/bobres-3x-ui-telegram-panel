@@ -66,7 +66,13 @@ read: **add the bot to every channel used here as an administrator** (a private 
 Telegram may refuse a bot that is not in it). A channel with **Restrict saving content** switched on cannot have its posts copied at all: switch it off
 for the channels used here. When the post cannot be copied (the bot cannot read the channel, the post was deleted) the customer still
 gets the button's name in bold with View channel under it, never nothing, and staff also get a line telling them to add the bot and look at the post link
-(`channels.copy_failed`). A customer who blocked the bot is told nothing.
+(`channels.copy_failed`, which points at the check below). A customer who blocked the bot is told nothing.
+
+**Check the bot's access** (dashboard, a button on every row of Settings > Channel buttons): the bot asks Telegram, for the channel of the row's post,
+whether the bot is one of its administrators and whether Restrict saving content is on, and the dashboard says what to fix in plain words (a post can
+be copied only while the bot administers the channel and the restriction is off). It cannot tell whether the post number exists: only a tap can. It
+is the settings page's channel check (`POST /api/v1/settings/channel-check`, the bot's `GET /internal/channel-check`) with one more answer,
+`protected_content`, set only when the channel has the restriction on.
 
 Callback data is `chc:<id>`, the id being eight hex digits made from the post's link, so it stays when the list is reordered; a menu sent before the
 owner removed or changed a button answers "this menu is old" for it and shows the home screen. The bottom menu is rebuilt from the list, so every

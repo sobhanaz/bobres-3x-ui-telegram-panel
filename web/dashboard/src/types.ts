@@ -383,6 +383,8 @@ export interface ChannelCheck {
   ok: boolean
   title?: string
   bot_admin?: boolean
+  /** the channel has Restrict saving content on, so the bot cannot copy its posts (core sets it only when ok is true) */
+  protected_content?: boolean
   problem?: 'not_found' | 'not_admin' | 'not_channel' | 'error'
   detail?: string
 }

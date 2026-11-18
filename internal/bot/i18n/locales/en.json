@@ -644,7 +644,7 @@
   "menu.placeholder": "Choose from the menu",
   "btn.open_page": "🌐 Open page",
   "btn.view_channel": "📢 View channel",
-  "channels.copy_failed": "⚠️ The bot could not copy the channel's post. Add the bot to the channel (as an administrator) and check the post link in Settings → Channel buttons.",
+  "channels.copy_failed": "⚠️ The bot could not copy the channel's post. Open Settings → Channel buttons and press Check the bot's access: it says what to fix (the bot must be an administrator of the channel, and Restrict saving content must be off).",
   "subpage.guide.v2rayng": "Android: install v2rayNG, tap the button above, and confirm the import. Then pick the new profile and tap the connect button.",
   "subpage.guide.hiddify": "Android, iOS, Windows and macOS: install Hiddify, tap the button above, and confirm. Then press the big connect button.",
   "subpage.guide.streisand": "iPhone and iPad: install Streisand, tap the button above, and allow the import. Then turn the connection on.",

@@ -104,8 +104,9 @@ func TestChannelCheck(t *testing.T) {
 			"@teamchat":      {ID: -1005, Type: "group", Title: "Team"},
 			"@somebody":      {ID: 77, Type: "private", Title: "A user"},
 			"@readers":       {ID: -1004, Type: "channel", Title: "Readers"},
+			"@locked":        {ID: -1006, Type: "channel", Title: "Locked", HasProtectedContent: true},
 		},
-		status: map[string]string{"@mynews": "administrator", "-1009876543210": "creator", "@readers": "member", "@friends": "administrator", "@teamchat": "creator"},
+		status: map[string]string{"@mynews": "administrator", "-1009876543210": "creator", "@readers": "member", "@friends": "administrator", "@teamchat": "creator", "@locked": "administrator"},
 	}
 	h := ChannelCheck(bot, 42, coreTok)
 	check := func(chat string) map[string]any {
@@ -133,6 +134,10 @@ func TestChannelCheck(t *testing.T) {
 	}
 	if got := check("-1009876543210"); got["ok"] != true || got["title"] != "Private" {
 		t.Fatalf("private channel by id: %v", got)
+	}
+	// A channel with Restrict saving content on: the bot administers it, but cannot copy its posts (the channel buttons).
+	if got := check("@locked"); got["ok"] != true || got["title"] != "Locked" || got["bot_admin"] != true || got["protected_content"] != true || len(got) != 5 {
+		t.Fatalf("a channel with Restrict saving content on: %v", got)
 	}
 	// A group is a required chat like a channel.
 	if got := check("@friends"); got["ok"] != true || got["title"] != "Friends" || got["bot_admin"] != true {

@@ -644,7 +644,7 @@
   "menu.placeholder": "Menüden seçin",
   "btn.open_page": "🌐 Sayfayı aç",
   "btn.view_channel": "📢 Kanalı görüntüle",
-  "channels.copy_failed": "⚠️ Bot kanal gönderisini kopyalayamadı. Botu kanala yönetici olarak ekleyin ve Ayarlar'daki (kanal düğmeleri) gönderi bağlantısını kontrol edin.",
+  "channels.copy_failed": "⚠️ Bot kanal gönderisini kopyalayamadı. Ayarlar → Kanal düğmeleri bölümünde «Botun erişimini denetle» düğmesine basın: neyin düzeltileceğini söyler (bot kanalın yöneticisi olmalı ve «İçeriği kaydetmeyi kısıtla» kapalı olmalı).",
   "subpage.guide.v2rayng": "Android: v2rayNG uygulamasını yükleyin, yukarıdaki düğmeye dokunun ve içe aktarmayı onaylayın. Sonra yeni profili seçip bağlan düğmesine dokunun.",
   "subpage.guide.hiddify": "Android, iOS, Windows ve macOS: Hiddify uygulamasını yükleyin, yukarıdaki düğmeye dokunun ve onaylayın. Sonra büyük bağlan düğmesine basın.",
   "subpage.guide.streisand": "iPhone ve iPad: Streisand uygulamasını yükleyin, yukarıdaki düğmeye dokunun ve içe aktarmaya izin verin. Sonra bağlantıyı açın.",

@@ -116,6 +116,9 @@ type ChannelCheck struct {
 	Detail   string `json:"detail,omitempty"`
 	// CanPost: the bot may also post there (product announcements need it). An older bot does not say (false).
 	CanPost bool `json:"can_post"`
+	// ProtectedContent: the channel has Restrict saving content on, so the bot cannot copy its posts (the channel buttons need to). An older
+	// bot does not say (false).
+	ProtectedContent bool `json:"protected_content,omitempty"`
 }
 
 // CheckChannel asks the bot whether it can see who is in the channel.

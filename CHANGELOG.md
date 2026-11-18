@@ -8,6 +8,13 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+## [0.26.1] — 2026-11-18
+
+**Every channel button has a "Check the bot's access" button in the dashboard.** No database migration; the bot and core update together (the update does that).
+
+### Added
+- **Check the bot's access** (Settings > Channel buttons, a button on every row): the bot asks Telegram, for the channel of the row's post, whether the bot is an administrator there and whether the channel has *Restrict saving content* on, and the dashboard says what to fix in plain words, since a post can be copied only while the bot administers the channel and the restriction is off. It cannot tell whether the post number exists; only a tap on the button in the bot can. The settings page's channel check (`POST /api/v1/settings/channel-check`) gains one answer, `protected_content`, set only for a channel that has the restriction on. The line staff get under a post that could not be copied now points at this button. Texts in Persian, English, Arabic, Russian and Turkish; see [docs/03-bot-ux.md](docs/03-bot-ux.md#channel-buttons).
+
 ## [0.26.0] — 2026-11-18
 
 **The bot's menu can show your channels, and a delivered service brings a direct config, the tutorial video and a tutorial.** No database migration; the bot and core update together (the update does that).
