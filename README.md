@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/readme/hero.svg" alt="BOBRES: launch your own VPN store on Telegram, in one command. Live v0.26.0." width="100%">
+  <img src="docs/readme/hero.svg" alt="BOBRES: launch your own VPN store on Telegram, in one command. Live v0.26.1." width="100%">
 </p>
 
 <p align="center">
@@ -449,8 +449,8 @@ Run `sudo bobres` for the management menu, or use any item as a command. The hea
 <summary><b>The same menu as text (<code>sudo bobres</code>)</b></summary>
 
 ```text
-   n____n   BOBRES manager  bobres v0.26.0
-  ( o  o )  /opt/bobres  ·  shop.example.com  ·  version 0.26.0
+   n____n   BOBRES manager  bobres v0.26.1
+  ( o  o )  /opt/bobres  ·  shop.example.com  ·  version 0.26.1
    \_||_/   Store     running (9/9 services)
             License   Standard license, 214 days left
             HTTPS     auto, certificate expires in 79 days
@@ -786,11 +786,10 @@ at `https://<domain>/admin`
 
 ### 🚦 Status
 
-**Latest release: v0.26.0 (2026-11-18)**: the bot's menu can show your channels as buttons (a tap shows a copy of the
-channel's first post with a View channel button), and a delivered service now brings a direct config, the tutorial video and a
-tutorial after its link. v0.25.0 let purchases by owner accounts be kept out of revenue and reports (one switch, off
-until the owner turns it on), and v0.24.1 made the live USDT price work again on servers where it had stopped
-([CHANGELOG.md](CHANGELOG.md)).
+**Latest release: v0.26.1 (2026-11-18)**: every channel button of the bot's menu has a **Check the bot's access** button in the
+dashboard that says whether the bot can copy its post. v0.26.0 let the bot's menu show your channels as buttons (a tap shows a
+copy of the channel's first post with a View channel button), and a delivered service now brings a direct config, the tutorial
+video and a tutorial after its link ([CHANGELOG.md](CHANGELOG.md)).
 
 Phases 0 to 7 of the plan are built and tested in CI ([docs/PLAN.md](docs/PLAN.md) §10). The first public release, v0.1.0,
 came out on 2026-10-14, and 28 stable releases have followed. Each one is signed, built for amd64 and arm64, and verified by the

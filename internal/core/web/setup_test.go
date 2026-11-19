@@ -77,6 +77,7 @@ type fakeBot struct {
 	tests     []botfiles.TestBroadcast
 	down      bool
 	canPost   bool // the bot may post in the channels it checks (product announcements)
+	protected bool // the channels it checks have Restrict saving content on (the channel buttons cannot copy their posts)
 }
 
 func (b *fakeBot) RefreshSettings(context.Context) error {
@@ -93,7 +94,7 @@ func (b *fakeBot) CheckChannel(_ context.Context, chat string) (*botfiles.Channe
 		return nil, errors.New("bot down")
 	}
 	b.checked = append(b.checked, chat)
-	return &botfiles.ChannelCheck{OK: true, Title: "News", BotAdmin: true, CanPost: b.canPost}, nil
+	return &botfiles.ChannelCheck{OK: true, Title: "News", BotAdmin: true, CanPost: b.canPost, ProtectedContent: b.protected}, nil
 }
 
 func (b *fakeBot) TestBroadcast(_ context.Context, t botfiles.TestBroadcast) (*botfiles.TestResult, error) {
@@ -241,6 +242,14 @@ func TestSettingsPage(t *testing.T) {
 	if code, out := b.do(http.MethodPost, "/api/v1/settings/channel-check", map[string]string{"chat": "@my_news"}); code != 200 || out["ok"] != true || out["title"] != "News" {
 		t.Fatalf("channel check: %d %v", code, out)
 	}
+	if code, out := b.do(http.MethodPost, "/api/v1/settings/channel-check", map[string]string{"chat": "@my_news"}); code != 200 || out["protected_content"] != nil {
+		t.Fatalf("protected_content is only there when the channel has Restrict saving content on: %d %v", code, out)
+	}
+	bot.protected = true // the channel buttons' check says why the bot cannot copy a post
+	if code, out := b.do(http.MethodPost, "/api/v1/settings/channel-check", map[string]string{"chat": "@my_news"}); code != 200 || out["ok"] != true || out["protected_content"] != true {
+		t.Fatalf("channel check of a protected channel: %d %v", code, out)
+	}
+	bot.protected = false
 	if code, _ := b.do(http.MethodPost, "/api/v1/settings/channel-check", map[string]string{"chat": "not a channel"}); code != 400 {
 		t.Fatalf("bad channel: %d", code)
 	}

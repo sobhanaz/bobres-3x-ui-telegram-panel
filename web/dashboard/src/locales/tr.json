@@ -1888,7 +1888,7 @@
       "channels": {
         "title": "Kanal düğmeleri",
         "desc": "Kanallarınızı botun menüsüne ekleyin. Bir düğmeye dokunan müşteri kanalın ilk gönderisini ve kanalı açan bir düğme görür.",
-        "note": "Her düğme, botun ana menüsünde ve ana ekranında, “Paket satın al” ile “Ücretsiz deneme” düğmelerinin altında, aşağıdaki listenin sırasıyla kendi satırını alır. Müşteri düğmeye dokunduğunda bot, bağlantısını verdiğiniz gönderiyi onun sohbetine kopyalar ve altına “Kanalı görüntüle” düğmesini koyar. Telegram, botun yalnızca okuyabildiği bir gönderiyi kopyalamasına izin verir; bu yüzden botu bu kanalların her birine yönetici olarak ekleyin ve içlerinde “Restrict saving content” seçeneğini kapalı bırakın. En fazla 6 düğme."
+        "note": "Her düğme, botun ana menüsünde ve ana ekranında, “Paket satın al” ile “Ücretsiz deneme” düğmelerinin altında, aşağıdaki listenin sırasıyla kendi satırını alır. Müşteri düğmeye dokunduğunda bot, bağlantısını verdiğiniz gönderiyi onun sohbetine kopyalar ve altına “Kanalı görüntüle” düğmesini koyar. Telegram, botun yalnızca okuyabildiği bir gönderiyi kopyalamasına izin verir; bu yüzden botu bu kanalların her birine yönetici olarak ekleyin, içlerinde “Restrict saving content” seçeneğini kapalı bırakın, sonra her düğmenin altındaki “Botun erişimini denetle” düğmesine basın. En fazla 6 düğme."
       },
       "delivery": {
         "title": "Satın alma sonrası",
@@ -1914,7 +1914,7 @@
         },
         "channel_cards": {
           "label": "Düğmeler",
-          "help": "Her düğmenin metnini Farsça ve İngilizce yazın: müşteri kendi dilindeki metni görür, yoksa İngilizce, o da yoksa Farsça olanı. Gönderi için kanalın ilk gönderisini Telegram’da açın, ona dokunun (bilgisayarda sağ tıklayın) ve “Bağlantıyı kopyala” seçeneğini seçin. Özel bir kanal için ayrıca davet bağlantısı da gerekir."
+          "help": "Her düğmenin metnini Farsça ve İngilizce yazın: müşteri kendi dilindeki metni görür, yoksa İngilizce, o da yoksa Farsça olanı. Gönderi için kanalın ilk gönderisini Telegram’da açın, ona dokunun (bilgisayarda sağ tıklayın) ve “Bağlantıyı kopyala” seçeneğini seçin. Özel bir kanal için ayrıca davet bağlantısı da gerekir. Her düğmenin altındaki “Botun erişimini denetle”, botun o gönderiyi kopyalayıp kopyalayamayacağını gösterir."
         }
       },
       "bulk": {
@@ -2297,7 +2297,15 @@
       "remove": "{n}. düğmeyi kaldır",
       "add": "Düğme ekle",
       "max": "Menüye en fazla {n} kanal düğmesi sığar.",
-      "order": "Düğmeler menüde bu sırayla gelir."
+      "order": "Düğmeler menüde bu sırayla gelir.",
+      "check": "Botun erişimini denetle",
+      "check_need_post": "Önce bir gönderi bağlantısı girin (örneğin https://t.me/yourchannel/2), sonra denetleyin.",
+      "check_ok": "Bot “{title}” kanalının yöneticisi, bu yüzden bu kanalın gönderilerini kopyalayabilir. Gönderinin kendisinin var olup olmadığı denetlenmez.",
+      "check_protected": "“{title}” kanalında “Restrict saving content” açık, bu yüzden Telegram botun gönderilerini kopyalamasına izin vermez. Kanal ayarlarından kapatın.",
+      "check_not_admin": "Bot bu kanalın yöneticisi değil. Onu yönetici olarak ekleyin (özel bir yetki gerekmez), sonra yeniden denetleyin.",
+      "check_not_found": "Telegram bu kanalı tanımıyor. Gönderi bağlantısını denetleyin.",
+      "check_not_channel": "Bu bağlantı bir kanal ya da grup değil.",
+      "check_error": "Bot bu kanalı denetleyemedi."
     },
     "tutorial": {
       "none": "Yok",

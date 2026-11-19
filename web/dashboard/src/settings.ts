@@ -186,6 +186,15 @@ export function tmePostLink(raw: string): string | null {
   return parseTmePost(raw)?.link ?? null
 }
 
+/** tmePostChat is the chat a post's link is in, as core and the bot name a chat: "@name" for a public channel, "-100<digits>" for a private one
+ * (t.me/c/<digits>/<n>); "" when the link is not a post's. A check of the bot's access asks about this chat, because it is where the bot copies from. */
+export function tmePostChat(raw: string): string {
+  const link = tmePostLink(raw)
+  if (!link) return ''
+  const [first, second] = link.slice('https://t.me/'.length).split('/')
+  return first === 'c' ? '-100' + second : '@' + first
+}
+
 /** tmeChannelLink reads the link of a channel and returns it as it is stored: https://t.me/<name>, or an invite link (https://t.me/+<token>,
  * https://t.me/joinchat/<token>, the token 5 to 64 letters, digits, _ and -); null for anything else. */
 export function tmeChannelLink(raw: string): string | null {
@@ -581,6 +590,36 @@ export function describeCheck(res: ChannelCheck): CheckView {
   }
   const p = checkProblems.includes(res.problem ?? '') ? res.problem : 'error'
   return { severity: p === 'not_admin' ? 'warn' : 'error', key: `settings.check.problem.${p}`, title, detail: res.detail ?? '' }
+}
+
+/** What a check of the bot's access to a channel says to the owner of a channel button: whether the bot can copy the posts of that channel. */
+export interface AccessView {
+  severity: 'success' | 'warn' | 'error'
+  /** message key; {title} is the channel's title */
+  key: string
+  title: string
+  /** Telegram's own words (English), when it said more and the message is about something that went wrong in the check */
+  detail: string
+}
+
+/** describeAccess turns the bot's channel-check answer into a message about copying posts. The bot is an administrator when the check is ok (core
+ * says so with ok alone; an answer that also says it is not one is read that way), and a channel with Restrict saving content on cannot be copied from
+ * even then. Being an administrator is not the whole of it, and finding the channel is not finding the post: the success says only what was checked. */
+export function describeAccess(res: ChannelCheck): AccessView {
+  const title = res.title ?? ''
+  const view = (severity: AccessView['severity'], key: string, detail = ''): AccessView => ({ severity, key, title, detail })
+  if (res.ok && res.bot_admin !== false) {
+    return res.protected_content ? view('error', 'settings.channel_cards.check_protected') : view('success', 'settings.channel_cards.check_ok')
+  }
+  switch (res.ok ? 'not_admin' : res.problem) {
+    case 'not_admin':
+      return view('warn', 'settings.channel_cards.check_not_admin')
+    case 'not_found':
+      return view('error', 'settings.channel_cards.check_not_found')
+    case 'not_channel':
+      return view('error', 'settings.channel_cards.check_not_channel')
+  }
+  return view('error', 'settings.channel_cards.check_error', res.detail ?? '')
 }
 
 let zones: string[] | null = null
