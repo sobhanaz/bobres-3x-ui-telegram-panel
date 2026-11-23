@@ -15,6 +15,13 @@ What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 - **Digital accounts are priced from the live USDT price.** A pricing card on the Digital accounts page shows the price of one USDT in Toman (the rate the bot's wallet uses, with *Read the price now*), the owner's **markup in percent** and a switch. A product's price is the supplier's cost x the USDT rate x (100 + markup) / 100, rounded up to the next 1 000 Toman, and the prices follow the rate in steps (after every catalog read, and when it moves half a percent). Any product can instead have a price the owner types (*Own price*), and **Apply to all products** takes every product back to the formula. A new product is priced as it arrives and still waits switched off. `GET|PUT /api/v1/supplier/pricing`, `POST /api/v1/supplier/pricing/apply`, `price_mode` on a product; audited. docs/supplier.md, "Pricing".
 - **The Digital accounts list stays current.** The page reads the supplier's catalog again by itself when it opens on a read older than ten minutes, marks the products that still need Persian texts, and has a filter (all, on sale, not in the catalog now, needs Persian texts). **Export texts** now carries what a translator needs: which products need texts, the supplier's cost and a short style guide (Persian in `fa`, BOBRES-style English in `en`).
 
+## [0.26.2] — 2026-11-23
+
+**A customer's own config name is checked again when one panel is down.** No database migration; only the provisioner changes (the update does that).
+
+### Fixed
+- **"Could not check the name, try again" for every name.** Checking a name asks every enabled server whether it already has a client of that name, and a name is never called free without every answer. A server that was enabled but down (its panel did not answer) therefore turned every name away, in the bot and in the Mini App, until the server was fixed or disabled. The check now leaves out a server the health loop currently finds down: it takes no new service anyway. A server that is not yet checked, or is healthy but slow, is still asked, and a name a healthy panel has is still refused as taken. The rare name that only the down panel holds is caught when the service is made, and the automatic name replaces it.
+
 ## [0.26.1] — 2026-11-18
 
 **Every channel button has a "Check the bot's access" button in the dashboard.** No database migration; the bot and core update together (the update does that).
