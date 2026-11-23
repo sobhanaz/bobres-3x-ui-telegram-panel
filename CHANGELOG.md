@@ -8,6 +8,10 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+## [0.27.0] — 2026-11-23
+
+**The digital accounts of the vendor's own store are priced from the live USDT price, and their list stays current.** One additive database migration (core 00060); only core and its dashboard change (the update does that).
+
 ### Updating
 - One database migration, additive, in core: 00060 (`supplier_products.price_mode`; a product that already has a price keeps it as an own price, so nothing changes until the owner switches the new pricing on).
 
