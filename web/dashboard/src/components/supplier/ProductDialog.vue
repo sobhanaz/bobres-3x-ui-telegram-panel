@@ -6,14 +6,18 @@ import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
 import Textarea from 'primevue/textarea'
 import ToggleSwitch from 'primevue/toggleswitch'
-import { costText, parsePrice, type SupplierProduct } from '../../supplier'
+import { autoPrice, costText, parsePrice, type SupplierPricing, type SupplierProduct } from '../../supplier'
+import { money, type Lang } from '../../format'
 
 // One supplier product: what the supplier says, and what the owner writes (price in Toman, names and descriptions per language).
-const props = defineProps<{ visible: boolean; product: SupplierProduct | null; saving: boolean }>()
+const props = defineProps<{ visible: boolean; product: SupplierProduct | null; saving: boolean; pricing: SupplierPricing | null }>()
 const emit = defineEmits<{ 'update:visible': [boolean]; save: [Record<string, unknown>] }>()
-const { t } = useI18n()
+const { t, locale } = useI18n()
+const lang = computed(() => locale.value as Lang)
 
 const price = ref('')
+// The price follows the USDT rate (supplier cost x rate x markup) instead of being typed.
+const follow = ref(false)
 const enabled = ref(false)
 const sort = ref('0')
 const titleFa = ref('')
@@ -26,6 +30,7 @@ watch(
     const p = props.product
     if (!p) return
     price.value = p.sell_price === null ? '' : String(p.sell_price)
+    follow.value = p.price_mode === 'auto' && p.can_follow
     enabled.value = p.enabled
     sort.value = String(p.sort)
     titleFa.value = p.title.fa ?? ''
@@ -43,21 +48,32 @@ function copySupplierText() {
   if (p.description) descEn.value = p.description.slice(0, 3000)
 }
 const parsed = computed(() => (price.value.trim() === '' ? 0 : parsePrice(price.value)))
+// What the formula gives now (a preview: core prices it when the product is saved, or when the rate moves).
+const formula = computed(() => (props.product && props.pricing ? autoPrice(props.product.cost_micro, props.pricing.usdt.rate, props.pricing.markup, props.pricing.step) : null))
+// The price a following product has: the one it was last priced at, else what the formula gives now.
+const followPrice = computed(() => (props.product?.price_mode === 'auto' && props.product.sell_price !== null ? props.product.sell_price : formula.value))
+// Following needs a known rate, unless the product already follows.
+const canSwitchFollow = computed(() => follow.value || (props.pricing?.usdt.rate ?? 0) > 0)
 const problem = computed(() => {
-  if (parsed.value === null) return 'price'
-  if (enabled.value && parsed.value === 0) return 'need_price'
+  if (follow.value) {
+    if (enabled.value && followPrice.value === null) return 'need_price'
+  } else {
+    if (parsed.value === null) return 'price'
+    if (enabled.value && parsed.value === 0) return 'need_price'
+  }
   if (!/^-?\d{1,6}$/.test(sort.value.trim())) return 'sort'
   return ''
 })
 function save() {
   if (problem.value || !props.product) return
-  emit('save', {
+  const common = {
     enabled: enabled.value,
-    sell_price: parsed.value ?? 0,
     sort: Number(sort.value),
     title: { fa: titleFa.value, en: titleEn.value },
     desc: { fa: descFa.value, en: descEn.value },
-  })
+  }
+  // A product that follows the rate sends no price (core works it out); one that does not sends the price typed.
+  emit('save', follow.value ? { ...common, price_mode: 'auto' } : { ...common, price_mode: 'fixed', sell_price: parsed.value ?? 0 })
 }
 </script>
 
@@ -75,10 +91,24 @@ function save() {
         <div class="supplier-body" dir="auto" tabindex="0">{{ product.description }}</div>
       </div>
       <Button v-if="product.description || product.name" type="button" outlined size="small" icon="pi pi-copy" :label="t('supplier.copy_text')" @click="copySupplierText" />
-      <label class="field">
+      <label v-if="product.can_follow" class="switch">
+        <ToggleSwitch v-model="follow" :disabled="!canSwitchFollow" :aria-label="t('supplier.follow')" />
+        <span>{{ t('supplier.follow') }}</span>
+      </label>
+      <small v-if="product.can_follow && !canSwitchFollow" class="app-muted">{{ t('supplier.follow_no_rate') }}</small>
+      <small v-else-if="!product.can_follow" class="app-muted">{{ t('supplier.follow_no_cost') }}</small>
+      <div v-if="follow" class="follow">
+        <span class="app-muted small">{{ t('supplier.price') }}</span>
+        <strong v-if="followPrice !== null">{{ money({ amount: followPrice, currency: 'IRT' }, lang) }}</strong>
+        <span v-else class="app-muted">{{ t('supplier.no_price') }}</span>
+        <small class="app-muted">{{ t('supplier.follow_help') }}</small>
+        <small v-if="pricing && !pricing.auto" class="app-muted">{{ t('supplier.follow_off_note') }}</small>
+      </div>
+      <label v-else class="field">
         <span>{{ t('supplier.price') }}</span>
         <InputText v-model="price" class="app-ltr" inputmode="numeric" :invalid="problem === 'price' || problem === 'need_price'" />
         <small class="app-muted">{{ t('supplier.price_help') }}</small>
+        <small v-if="formula !== null" class="app-muted">{{ t('supplier.formula_would', { price: money({ amount: formula, currency: 'IRT' }, lang) }) }}</small>
       </label>
       <label class="switch">
         <ToggleSwitch v-model="enabled" :aria-label="t('supplier.sell')" />
@@ -144,6 +174,13 @@ function save() {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+}
+.follow {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--p-content-border-color);
+  border-radius: 0.5rem;
 }
 .small {
   font-size: 0.85rem;

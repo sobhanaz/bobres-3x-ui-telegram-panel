@@ -157,15 +157,15 @@ func (s *Service) RefreshUsdtRate(ctx context.Context) (LiveRate, error) {
 }
 
 // RunUsdtRateWorker keeps the live rate fresh while the store uses it: every two minutes when automatic rates are on and the store takes
-// crypto (an address is set) or sells licenses.
+// crypto (an address is set), sells licenses or prices its digital accounts from the rate.
 func (s *Service) RunUsdtRateWorker(ctx context.Context) {
 	t := time.NewTicker(liveRateEvery)
 	defer t.Stop()
 	first := time.After(10 * time.Second)
 	read := func() {
-		// It runs while the store takes crypto (an address is set) or sells licenses (priced in USDT): both need the rate.
+		// It runs while the store takes crypto (an address is set), sells licenses (priced in USDT) or prices digital accounts from it: all need the rate.
 		if !s.UsdtAutoOn(ctx) || (s.setting(ctx, "payments.usdt_trc20") == "" && s.setting(ctx, "payments.usdt_erc20") == "" && !s.VendorOn(ctx) &&
-			!s.autoCrypto(ctx)) {
+			!s.autoCrypto(ctx) && !s.SupplierPriceAutoOn(ctx)) {
 			return
 		}
 		if _, err := s.RefreshUsdtRate(ctx); err != nil && ctx.Err() == nil {

@@ -95,25 +95,29 @@ func (s *Server) syncSupplier(w http.ResponseWriter, r *http.Request) {
 }
 
 type supplierProductJSON struct {
-	ID           string            `json:"id"`
-	Name         string            `json:"name"`
-	Description  string            `json:"description"`
-	Category     string            `json:"category"`
-	CostMicro    *int64            `json:"cost_micro"`
-	CostCurrency string            `json:"cost_currency"`
-	Stock        *int32            `json:"stock"`
-	Listed       bool              `json:"listed"`
-	Enabled      bool              `json:"enabled"`
-	SellPrice    *int64            `json:"sell_price"`
-	Title        map[string]string `json:"title"`
-	Desc         map[string]string `json:"desc"`
-	Sort         int32             `json:"sort"`
-	SyncedAt     *int64            `json:"synced_at"`
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	Description  string `json:"description"`
+	Category     string `json:"category"`
+	CostMicro    *int64 `json:"cost_micro"`
+	CostCurrency string `json:"cost_currency"`
+	Stock        *int32 `json:"stock"`
+	Listed       bool   `json:"listed"`
+	Enabled      bool   `json:"enabled"`
+	SellPrice    *int64 `json:"sell_price"`
+	// PriceMode is "auto" (the price follows the USDT rate) or "fixed" (the owner's); CanFollow says the supplier's cost is known in USDT, so
+	// the price can follow.
+	PriceMode string            `json:"price_mode"`
+	CanFollow bool              `json:"can_follow"`
+	Title     map[string]string `json:"title"`
+	Desc      map[string]string `json:"desc"`
+	Sort      int32             `json:"sort"`
+	SyncedAt  *int64            `json:"synced_at"`
 }
 
 func supplierProductOf(p *store.SupplierProduct) supplierProductJSON {
 	return supplierProductJSON{ID: p.ID, Name: p.Name, Description: p.Description, Category: domain.SupplierCategory(p), CostMicro: p.CostMicro, CostCurrency: p.CostCurrency, Stock: p.Stock,
-		Listed: p.Listed, Enabled: p.Enabled, SellPrice: p.SellPrice, Title: p.Title, Desc: p.Desc, Sort: p.Sort, SyncedAt: unix(p.SyncedAt)}
+		Listed: p.Listed, Enabled: p.Enabled, SellPrice: p.SellPrice, PriceMode: p.PriceMode, CanFollow: domain.SupplierCostFollows(p), Title: p.Title, Desc: p.Desc, Sort: p.Sort, SyncedAt: unix(p.SyncedAt)}
 }
 
 // listSupplierProducts: GET /api/v1/supplier/products.
@@ -130,7 +134,7 @@ func (s *Server) listSupplierProducts(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"items": items, "total": len(items)})
 }
 
-// updateSupplierProduct: PUT /api/v1/supplier/products/{id} {enabled, sell_price, title, desc, sort}: any of them.
+// updateSupplierProduct: PUT /api/v1/supplier/products/{id} {enabled, sell_price, price_mode, title, desc, sort}: any of them.
 func (s *Server) updateSupplierProduct(w http.ResponseWriter, r *http.Request) {
 	id, ok := supplierProductID(w, r)
 	if !ok {
@@ -139,6 +143,7 @@ func (s *Server) updateSupplierProduct(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Enabled   *bool             `json:"enabled"`
 		SellPrice *int64            `json:"sell_price"`
+		PriceMode *string           `json:"price_mode"`
 		Title     map[string]string `json:"title"`
 		Desc      map[string]string `json:"desc"`
 		Sort      *int32            `json:"sort"`
@@ -146,7 +151,7 @@ func (s *Server) updateSupplierProduct(w http.ResponseWriter, r *http.Request) {
 	if !readJSON(w, r, &req) {
 		return
 	}
-	p, err := s.cfg.Domain.UpdateSupplierProduct(r.Context(), actor(r), id, domain.SupplierEdit{Enabled: req.Enabled, SellPrice: req.SellPrice, Title: req.Title, Desc: req.Desc, Sort: req.Sort})
+	p, err := s.cfg.Domain.UpdateSupplierProduct(r.Context(), actor(r), id, domain.SupplierEdit{Enabled: req.Enabled, SellPrice: req.SellPrice, PriceMode: req.PriceMode, Title: req.Title, Desc: req.Desc, Sort: req.Sort})
 	if err != nil {
 		s.fail(w, "change a supplier product", err)
 		return
@@ -219,4 +224,70 @@ func (s *Server) refundSupplierOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"id": o.ID, "status": o.Status})
+}
+
+// supplierPricingBody is the pricing as the dashboard shows it: the owner's switch and markup, the rate the store charges now (as
+// GET /usdt-rate answers) and the rate the prices were last worked out at, and how many products are priced each way.
+func (s *Server) supplierPricingBody(r *http.Request) (map[string]any, error) {
+	p, err := s.cfg.Domain.SupplierPricing(r.Context())
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{
+		"auto": p.Auto, "markup": p.Markup, "max_markup": domain.MaxSupplierMarkup, "step": domain.SupplierPriceStep,
+		"usdt": s.usdtRateBody(r), "applied_rate": p.AppliedRate, "applied_at": p.AppliedAt,
+		"counts": map[string]any{"auto": p.Counts.Auto, "fixed": p.Counts.Fixed, "hand_priced": p.Counts.HandPriced, "cannot_follow": p.Counts.CannotFollow},
+	}, nil
+}
+
+func (s *Server) writePricing(w http.ResponseWriter, r *http.Request, res *domain.SupplierPricingResult) {
+	body, err := s.supplierPricingBody(r)
+	if err != nil {
+		s.fail(w, "read the supplier pricing", err)
+		return
+	}
+	if res != nil {
+		body["changed"], body["switched"], body["replaced"] = res.Changed, res.Switched, res.Replaced
+	}
+	writeJSON(w, http.StatusOK, body)
+}
+
+// getSupplierPricing: GET /api/v1/supplier/pricing.
+func (s *Server) getSupplierPricing(w http.ResponseWriter, r *http.Request) {
+	s.writePricing(w, r, nil)
+}
+
+// putSupplierPricing: PUT /api/v1/supplier/pricing {auto, markup}: save the switch and the markup (percent) and, when on, price every
+// product that follows the rate now.
+func (s *Server) putSupplierPricing(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Auto   bool  `json:"auto"`
+		Markup int64 `json:"markup"`
+	}
+	if !readJSON(w, r, &req) {
+		return
+	}
+	res, err := s.cfg.Domain.SetSupplierPricing(r.Context(), actor(r), req.Auto, req.Markup)
+	if err != nil {
+		s.fail(w, "set the supplier pricing", err)
+		return
+	}
+	s.writePricing(w, r, &res)
+}
+
+// applySupplierPricing: POST /api/v1/supplier/pricing/apply {all}: price the products now; all also makes every product that can follow the
+// rate follow it (a price the owner typed for one is replaced).
+func (s *Server) applySupplierPricing(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		All bool `json:"all"`
+	}
+	if !readJSON(w, r, &req) {
+		return
+	}
+	res, err := s.cfg.Domain.ApplySupplierPricing(r.Context(), actor(r), req.All)
+	if err != nil {
+		s.fail(w, "apply the supplier pricing", err)
+		return
+	}
+	s.writePricing(w, r, &res)
 }

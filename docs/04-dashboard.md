@@ -99,7 +99,8 @@ ticked. Default `fa,en`. The bot's admin settings leave it out.
     server and the licenses the bot sold, each with **Give months**, **Revoke** and **Refund** (the buyer gets back what they paid in their
     wallet, the license is revoked, and an affiliate's commission is taken back within 30 days of the payment; `POST
     /api/v1/vendor/licenses/{id}/refund {reason}`, audited as `vendor.refund`). **Digital accounts**: the supplier resale
-    ([supplier.md](supplier.md)). **Affiliates** ([18-hosted-and-affiliate-plans.md](18-hosted-and-affiliate-plans.md), section 2): the
+    ([supplier.md](supplier.md); the pricing card prices every product from the live USDT price and the owner's markup, `GET|PUT
+    /api/v1/supplier/pricing`, `POST /api/v1/supplier/pricing/apply`, `price_mode` on a product). **Affiliates** ([18-hosted-and-affiliate-plans.md](18-hosted-and-affiliate-plans.md), section 2): the
     program's switch (off by default), percent (20 by default) and minimum payout (`PUT /api/v1/affiliates/settings`); the affiliates with
     their code, percent (own or the program's), status, customers brought, licenses, earned, paid and wallet (`GET /api/v1/affiliates`); one
     affiliate's commissions, with what refunds took back, and payouts (`GET /api/v1/affiliates/{id}`); a percent of their own or pausing them
