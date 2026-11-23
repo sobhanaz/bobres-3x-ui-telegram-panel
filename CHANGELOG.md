@@ -8,6 +8,13 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+## [0.26.2] — 2026-11-23
+
+**A customer's own config name is checked again when one panel is down.** No database migration; only the provisioner changes (the update does that).
+
+### Fixed
+- **"Could not check the name, try again" for every name.** Checking a name asks every enabled server whether it already has a client of that name, and a name is never called free without every answer. A server that was enabled but down (its panel did not answer) therefore turned every name away, in the bot and in the Mini App, until the server was fixed or disabled. The check now leaves out a server the health loop currently finds down: it takes no new service anyway. A server that is not yet checked, or is healthy but slow, is still asked, and a name a healthy panel has is still refused as taken. The rare name that only the down panel holds is caught when the service is made, and the automatic name replaces it.
+
 ## [0.26.1] — 2026-11-18
 
 **Every channel button has a "Check the bot's access" button in the dashboard.** No database migration; the bot and core update together (the update does that).

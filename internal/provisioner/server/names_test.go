@@ -82,6 +82,27 @@ func TestCheckClientName(t *testing.T) {
 	if res := check("free1234"); res.GetAvailable() || res.GetReason() != NameUnchecked {
 		t.Fatalf("an enabled server that does not answer = %+v", res)
 	}
+	// A server the health loop found down is not asked: one dead panel must not
+	// turn every name away. Once it is healthy again it is asked again.
+	cur, err := f.st.GetServer(ctx, off.GetId())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.st.RecordHealth(ctx, cur.ID, cur.UpdatedAt, false, "", "the panel did not answer in time"); err != nil {
+		t.Fatal(err)
+	}
+	if res := check("free1234"); !res.GetAvailable() || res.GetReason() != "" {
+		t.Fatalf("a server found down was asked: %+v", res)
+	}
+	if res := check("stranger1"); res.GetReason() != NameTaken {
+		t.Fatalf("taken on a healthy panel, another found down = %+v", res)
+	}
+	if err := f.st.RecordHealth(ctx, cur.ID, cur.UpdatedAt, true, "v3.9.0", ""); err != nil {
+		t.Fatal(err)
+	}
+	if res := check("free1234"); res.GetAvailable() || res.GetReason() != NameUnchecked {
+		t.Fatalf("a recovered server that does not answer = %+v", res)
+	}
 	// A name some panel has is "taken" even while another cannot be asked.
 	if res := check("stranger1"); res.GetReason() != NameTaken {
 		t.Fatalf("taken on one panel, another down = %+v", res)

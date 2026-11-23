@@ -2,7 +2,7 @@
 
 What has shipped, what is still open, and what was left out on purpose. Nothing here is promised for a date. The detailed, ordered list is [docs/ROADMAP.md](https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/blob/main/docs/ROADMAP.md), and each release's notes are in the [changelog](https://github.com/sobhanaz/bobres-3x-ui-telegram-panel/blob/main/CHANGELOG.md).
 
-As of v0.26.1, 2026-11-18.
+As of v0.26.2, 2026-11-23.
 
 ## Shipped
 
@@ -31,6 +31,7 @@ As of v0.26.1, 2026-11-18.
 | v0.19.0 | 2026-10-29 | Cashback, reseller monthly targets and a daily wheel; Aqayepardakht and automatic TON payments |
 | v0.20.0 | 2026-10-29 | Messages and a weekly settlement reminder for resellers; bot and dashboard buttons for services the panel no longer has |
 | v0.21.0 | 2026-10-31 | S-UI and Hiddify panels; Arabic, Russian and Turkish (beta); new product announcements; the vendor's affiliate program and hosted-store tooling; a benchmark baseline and a faster wallet |
+| v0.26.2 | 2026-11-23 | A customer's own config name is checked again when one panel is down: a server the health loop finds down is no longer asked |
 | v0.26.1 | 2026-11-18 | A Check the bot's access button on every channel button in the dashboard: is the bot an administrator, and is Restrict saving content on |
 | v0.26.0 | 2026-11-18 | Your channels as buttons of the bot's menu (a tap shows a copy of the channel's first post with a View channel button); a delivered service brings a direct config, the tutorial video and a tutorial after its link |
 | v0.25.0 | 2026-11-11 | Owner accounts' purchases can be kept out of revenue and reports (one switch, off by default) and are shown on their own: an Internal orders card, a CSV column and a line in the daily summary |

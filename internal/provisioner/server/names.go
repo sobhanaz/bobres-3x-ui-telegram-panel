@@ -46,10 +46,13 @@ func validClientName(name string) bool {
 }
 
 // CheckClientName says whether a name is free: no client the provisioner holds
-// has it (a reservation included), and every enabled server, healthy or not,
-// answered that it has no client of that name. A server that does not answer
-// (or whose token does not decrypt) makes the answer "unchecked": a name is
-// never reported free without every server's word.
+// has it (a reservation included), and every enabled server the health loop has
+// not found down answered that it has no client of that name. A server that
+// does not answer (or whose token does not decrypt) makes the answer
+// "unchecked": a name is never reported free without every such server's word.
+// A server the health loop currently finds down is not asked: it takes no new
+// client, so one dead panel must not turn every name away; the rare name that
+// panel holds is caught when the service is made (the automatic name replaces it).
 func (s *Server) CheckClientName(ctx context.Context, req *provisionerv1.CheckClientNameRequest) (*provisionerv1.CheckClientNameResponse, error) {
 	name := req.GetName()
 	if !validClientName(name) {
@@ -71,7 +74,7 @@ func (s *Server) CheckClientName(ctx context.Context, req *provisionerv1.CheckCl
 	var panels []adapter.PanelAdapter
 	unchecked := false
 	for _, in := range infos {
-		if !in.Enabled {
+		if !in.Enabled || (in.HealthOK != nil && !*in.HealthOK) {
 			continue
 		}
 		sv, err := s.st.GetServer(ctx, in.ID)

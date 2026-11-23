@@ -175,9 +175,9 @@ bot -> core.CreateOrder -> `order.created` -> payments creates intent -> user pa
   the daily notice `subscriptions.panel_missing` (below, `system.alert.v1`).
 - provisioner, **config names** (built 2026-11-02; [03-bot-ux.md](03-bot-ux.md), "Config names"): `CheckClientName {name}` answers
   `{available, reason}`: available only when no row of `client_map` (a reservation included, any server) has the name and every
-  **enabled** server, healthy or not, answered that it has no client of that name (`ClientSubID` per adapter, 8 s each, all at once).
+  **enabled** server that the health loop has not found down answered that it has no client of that name (`ClientSubID` per adapter, 8 s each, all at once).
   `reason` is `taken` (BOBRES or a panel has it; it wins) or `unchecked` (a server did not answer, or its token does not decrypt): a
-  name is never reported free without every server's word. A malformed name is `INVALID_ARGUMENT`. `RenameClient {subscription_id,
+  name is never reported free without every asked server's word (a server found down is not asked: it takes no new service, and one dead panel must not turn every name away). A malformed name is `INVALID_ARGUMENT`. `RenameClient {subscription_id,
   new_name}` renames a provisioned client on its panel and in `client_map`, keeping its subscription link: 3x-ui (`clients/update`
   with the stored row and the new email; the link is keyed by the subscription id) and Hiddify (a `PATCH` of the user's name; the
   UUID in the links stays; the name index follows). `XUIServer.renames_clients` says which servers rename (the kinds whose adapter
