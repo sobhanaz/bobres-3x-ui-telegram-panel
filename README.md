@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/readme/hero.svg" alt="BOBRES: launch your own VPN store on Telegram, in one command. Live v0.26.2." width="100%">
+  <img src="docs/readme/hero.svg" alt="BOBRES: launch your own VPN store on Telegram, in one command. Live v0.27.0." width="100%">
 </p>
 
 <p align="center">
@@ -449,8 +449,8 @@ Run `sudo bobres` for the management menu, or use any item as a command. The hea
 <summary><b>The same menu as text (<code>sudo bobres</code>)</b></summary>
 
 ```text
-   n____n   BOBRES manager  bobres v0.26.2
-  ( o  o )  /opt/bobres  ·  shop.example.com  ·  version 0.26.2
+   n____n   BOBRES manager  bobres v0.27.0
+  ( o  o )  /opt/bobres  ·  shop.example.com  ·  version 0.27.0
    \_||_/   Store     running (9/9 services)
             License   Standard license, 214 days left
             HTTPS     auto, certificate expires in 79 days
@@ -786,8 +786,9 @@ at `https://<domain>/admin`
 
 ### 🚦 Status
 
-**Latest release: v0.26.2 (2026-11-23)**: choosing a config name works again when one server is down (a panel the health check
-finds down is no longer asked). v0.26.1 added a **Check the bot's access** button on every channel button in the
+**Latest release: v0.27.0 (2026-11-23)**: the digital accounts of the vendor's own store are priced from the live USDT price and one
+markup percent (a product can keep a price of its own), and their list stays current. v0.26.2 made choosing a config name work
+again when one server is down (a panel the health check finds down is no longer asked). v0.26.1 added a **Check the bot's access** button on every channel button in the
 dashboard. v0.26.0 let the bot's menu show your channels as buttons (a tap shows a
 copy of the channel's first post with a View channel button), and a delivered service now brings a direct config, the tutorial
 video and a tutorial after its link ([CHANGELOG.md](CHANGELOG.md)).
