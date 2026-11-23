@@ -10,6 +10,7 @@ import Select from 'primevue/select'
 import Tag from 'primevue/tag'
 import Dialog from 'primevue/dialog'
 import Textarea from 'primevue/textarea'
+import InputText from 'primevue/inputtext'
 import Message from 'primevue/message'
 import ToggleSwitch from 'primevue/toggleswitch'
 import Tab from 'primevue/tab'
@@ -25,7 +26,24 @@ import { api } from '../api'
 import { errorText } from '../errors'
 import { useList } from '../composables/useList'
 import { dateTime, money, num, type Lang } from '../format'
-import { costText, exportTexts, orderSeverity, orderStatuses, parseTextImport, type SupplierOrder, type SupplierProduct, type SupplierStatus } from '../supplier'
+import {
+  autoPrice,
+  catalogIsStale,
+  costText,
+  exportTexts,
+  filterProducts,
+  needsText,
+  orderSeverity,
+  orderStatuses,
+  parseMarkup,
+  parseTextImport,
+  productFilters,
+  type ProductFilter,
+  type SupplierOrder,
+  type SupplierPricing,
+  type SupplierProduct,
+  type SupplierStatus,
+} from '../supplier'
 import { keyPattern } from '../supplierkey'
 
 // The owner's own store resells a supplier's digital accounts: the API key, the catalog, the price and texts of each
@@ -95,18 +113,95 @@ async function loadProducts() {
   }
 }
 const syncing = ref(false)
-async function sync() {
+// quiet: the read the page makes by itself when it opens on an old catalog says nothing, and does not complain when the supplier is down.
+async function sync(quiet = false) {
   syncing.value = true
   try {
     const r = await api<{ count: number }>('POST', '/supplier/sync')
-    toast.add({ severity: 'success', summary: t('supplier.synced', { n: num(r.count, lang.value) }, r.count), life: 3000 })
-    await loadProducts()
+    if (!quiet) toast.add({ severity: 'success', summary: t('supplier.synced', { n: num(r.count, lang.value) }, r.count), life: 3000 })
+    await Promise.all([loadProducts(), loadPricing()]) // new products come in priced when the pricing is on
   } catch (e) {
-    fail(e)
+    if (!quiet) fail(e)
   } finally {
     syncing.value = false
   }
 }
+
+// ---- Pricing from the USDT price
+const pricing = ref<SupplierPricing | null>(null)
+const autoOn = ref(false)
+const markup = ref('0')
+function takePricing(p: SupplierPricing) {
+  pricing.value = p
+  autoOn.value = p.auto
+  markup.value = String(p.markup)
+}
+async function loadPricing() {
+  try {
+    takePricing(await api<SupplierPricing>('GET', '/supplier/pricing'))
+  } catch (e) {
+    fail(e)
+  }
+}
+const markupValue = computed(() => parseMarkup(markup.value, pricing.value?.max_markup ?? 500))
+const rate = computed(() => pricing.value?.usdt.rate ?? 0)
+const pricingDirty = computed(() => pricing.value !== null && (autoOn.value !== pricing.value.auto || markupValue.value !== pricing.value.markup))
+const savingPricing = ref(false)
+async function savePricing() {
+  if (markupValue.value === null) return
+  savingPricing.value = true
+  try {
+    const r = await api<SupplierPricing>('PUT', '/supplier/pricing', { auto: autoOn.value, markup: markupValue.value })
+    takePricing(r)
+    toast.add({ severity: 'success', summary: t('supplier.pricing_saved', { n: num(r.changed ?? 0, lang.value) }, r.changed ?? 0), life: 4000 })
+    await loadProducts()
+  } catch (e) {
+    fail(e)
+    await loadPricing() // the form goes back to what core has
+  } finally {
+    savingPricing.value = false
+  }
+}
+const readingRate = ref(false)
+async function readRate() {
+  readingRate.value = true
+  try {
+    await api('POST', '/usdt-rate/refresh')
+    await loadPricing()
+  } catch (e) {
+    fail(e)
+  } finally {
+    readingRate.value = false
+  }
+}
+const applyOpen = ref(false)
+const applying = ref(false)
+async function applyAll() {
+  applying.value = true
+  try {
+    const r = await api<SupplierPricing>('POST', '/supplier/pricing/apply', { all: true })
+    takePricing(r)
+    toast.add({ severity: 'success', summary: t('supplier.applied', { n: num(r.switched ?? 0, lang.value), replaced: num(r.replaced ?? 0, lang.value) }, r.switched ?? 0), life: 5000 })
+    applyOpen.value = false
+    await loadProducts()
+  } catch (e) {
+    fail(e)
+  } finally {
+    applying.value = false
+  }
+}
+// What the formula would give a product that keeps its own price, to compare with it.
+function formulaOf(p: SupplierProduct): number | null {
+  return pricing.value ? autoPrice(p.cost_micro, pricing.value.usdt.rate, pricing.value.markup, pricing.value.step) : null
+}
+function rateTime(unix: number): string {
+  return dateTime(unix, lang.value)
+}
+
+// ---- The list's filter
+const filter = ref<ProductFilter>('all')
+const filterOptions = computed(() => productFilters.map((f) => ({ label: t('supplier.filter_' + f), value: f })))
+const shown = computed(() => filterProducts(products.value, filter.value))
 // The texts of every product in one file: hand it to a translator (the Persian texts go in "fa"), bring it back, and it fills them in.
 function downloadTexts() {
   const url = URL.createObjectURL(new Blob([exportTexts(products.value)], { type: 'application/json' }))
@@ -158,6 +253,7 @@ async function saveProduct(body: Record<string, unknown>) {
     const i = products.value.findIndex((x) => x.id === p.id)
     if (i >= 0) products.value[i] = p
     editing.value = null
+    void loadPricing() // how many products follow the price may have changed
   } catch (e) {
     fail(e)
   } finally {
@@ -212,10 +308,11 @@ async function refund() {
 }
 
 const tab = ref('products')
-onMounted(() => {
-  void loadStatus()
-  void loadProducts()
+onMounted(async () => {
   void orders.load()
+  await Promise.all([loadStatus(), loadProducts(), loadPricing()])
+  // An old catalog is read again by itself, so the list is the supplier's as of now.
+  if (status.value.configured && catalogIsStale(products.value, Date.now())) await sync(true)
 })
 </script>
 
@@ -249,6 +346,44 @@ onMounted(() => {
     </div>
   </section>
 
+  <section v-if="loaded && pricing" class="card">
+    <h2 class="card-title">{{ t('supplier.pricing_title') }}</h2>
+    <div class="rate">
+      <div v-if="rate > 0">
+        <strong class="rate-value">{{ t('supplier.rate_line', { rate: num(rate, lang) }) }}</strong>
+        <Tag :severity="pricing.usdt.source === 'live' ? 'success' : 'secondary'" :value="t('supplier.rate_source_' + pricing.usdt.source)" class="tag" />
+        <div v-if="pricing.usdt.source === 'live' && pricing.usdt.margin > 0" class="app-muted small">{{ t('supplier.rate_margin', { n: num(pricing.usdt.margin, lang) }) }}</div>
+        <div v-if="pricing.usdt.live" class="app-muted small">{{ t('supplier.rate_at', { time: rateTime(pricing.usdt.live.at) }) }}</div>
+      </div>
+      <Message v-else severity="warn" :closable="false">{{ t('supplier.rate_none') }}</Message>
+      <Button icon="pi pi-refresh" outlined size="small" :label="t('supplier.rate_refresh')" :loading="readingRate" @click="readRate" />
+    </div>
+    <form class="form" autocomplete="off" @submit.prevent="savePricing">
+      <label class="switch">
+        <ToggleSwitch v-model="autoOn" :aria-label="t('supplier.pricing_auto')" />
+        <span>{{ t('supplier.pricing_auto') }}</span>
+      </label>
+      <label class="field">
+        <span>{{ t('supplier.markup') }}</span>
+        <InputText v-model="markup" class="app-ltr markup" inputmode="numeric" :invalid="markupValue === null" />
+        <small class="app-muted">{{ t('supplier.markup_help', { max: num(pricing.max_markup, lang) }) }}</small>
+      </label>
+      <small class="app-muted">{{ t('supplier.formula', { step: num(pricing.step, lang) }) }}</small>
+      <div class="row">
+        <Button type="submit" :label="t('supplier.pricing_save')" :loading="savingPricing" :disabled="!pricingDirty || markupValue === null" />
+        <Button
+          type="button"
+          severity="secondary"
+          outlined
+          :label="t('supplier.apply_all')"
+          :disabled="pricingDirty || !pricing.auto || rate <= 0"
+          @click="applyOpen = true"
+        />
+        <span class="app-muted small">{{ t('supplier.counts', { auto: num(pricing.counts.auto, lang), fixed: num(pricing.counts.fixed, lang) }) }}</span>
+      </div>
+    </form>
+  </section>
+
   <Tabs v-model:value="tab" class="tabs">
     <TabList>
       <Tab value="products">{{ t('supplier.tab_products') }}</Tab>
@@ -257,7 +392,8 @@ onMounted(() => {
     <TabPanels>
       <TabPanel value="products">
         <div class="app-toolbar">
-          <Button icon="pi pi-refresh" outlined :label="t('supplier.sync')" :loading="syncing" :disabled="!status.configured" @click="sync" />
+          <Button icon="pi pi-refresh" outlined :label="t('supplier.sync')" :loading="syncing" :disabled="!status.configured" @click="sync()" />
+          <Select v-model="filter" :options="filterOptions" option-label="label" option-value="value" :aria-label="t('supplier.filter')" />
           <Button icon="pi pi-download" outlined :label="t('supplier.export_texts')" :disabled="!products.length" @click="downloadTexts" />
           <label class="import">
             <Button as="span" icon="pi pi-upload" outlined :label="t('supplier.import_texts')" :loading="importing" :disabled="!products.length" />
@@ -267,11 +403,12 @@ onMounted(() => {
         </div>
         <p class="app-muted small">{{ t('supplier.products_help') }}</p>
         <p class="app-muted small">{{ t('supplier.texts_help') }}</p>
-        <DataTable :value="products" data-key="id" size="small" scrollable paginator :rows="25" :loading="loadingProducts">
+        <DataTable :value="shown" data-key="id" size="small" scrollable paginator :rows="25" :loading="loadingProducts">
           <template #empty>{{ t('supplier.no_products') }}</template>
           <Column :header="t('supplier.product')">
             <template #body="{ data: p }">
               <bdi class="name">{{ p.title.fa || p.title.en || p.name || p.id }}</bdi>
+              <Tag v-if="needsText(p)" severity="info" :value="t('supplier.needs_text')" class="tag" />
               <div class="app-muted small app-ltr app-mono">{{ p.id }}</div>
             </template>
           </Column>
@@ -288,6 +425,10 @@ onMounted(() => {
             <template #body="{ data: p }">
               <span v-if="p.sell_price !== null">{{ money({ amount: p.sell_price, currency: 'IRT' }, lang) }}</span>
               <span v-else class="app-muted">{{ t('supplier.no_price') }}</span>
+              <Tag v-if="p.can_follow" :severity="p.price_mode === 'auto' ? 'info' : 'secondary'" :value="t('supplier.mode_' + p.price_mode)" class="tag" />
+              <div v-if="p.can_follow && p.price_mode === 'fixed' && formulaOf(p) !== null" class="app-muted small">
+                {{ t('supplier.formula_would', { price: money({ amount: formulaOf(p) ?? 0, currency: 'IRT' }, lang) }) }}
+              </div>
             </template>
           </Column>
           <Column :header="t('supplier.sell')">
@@ -359,7 +500,18 @@ onMounted(() => {
   </Tabs>
 
   <AnnounceDialog v-if="announcing" v-model:visible="announceOpen" kind="supplier" :product-id="announcing.id" :title="announcing.title[lang] || announcing.title.fa || announcing.name || announcing.id" />
-  <ProductDialog v-model:visible="editVisible" :product="editing" :saving="savingProduct" @save="saveProduct" />
+  <ProductDialog v-model:visible="editVisible" :product="editing" :saving="savingProduct" :pricing="pricing" @save="saveProduct" />
+
+  <Dialog :visible="applyOpen" modal :header="t('supplier.apply_all')" :style="{ width: '28rem', maxWidth: '96vw' }" @update:visible="(v: boolean) => (applyOpen = v)">
+    <p class="app-muted">{{ t('supplier.apply_help') }}</p>
+    <p v-if="pricing && pricing.counts.hand_priced > 0">
+      <strong>{{ t('supplier.apply_replaces', { n: num(pricing.counts.hand_priced, lang) }, pricing.counts.hand_priced) }}</strong>
+    </p>
+    <template #footer>
+      <Button text :label="t('app.cancel')" @click="applyOpen = false" />
+      <Button :label="t('supplier.apply_all')" :loading="applying" @click="applyAll" />
+    </template>
+  </Dialog>
 
   <Dialog :visible="refunding !== null" modal :header="t('supplier.refund')" :style="{ width: '26rem' }" @update:visible="(v: boolean) => !v && (refunding = null)">
     <p class="app-muted">{{ t('supplier.refund_help') }}</p>
@@ -419,6 +571,24 @@ onMounted(() => {
 }
 .reason {
   inline-size: 100%;
+}
+.switch {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.rate {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.rate-value {
+  font-size: 1.1rem;
+}
+.markup {
+  max-inline-size: 8rem;
 }
 .import {
   position: relative;

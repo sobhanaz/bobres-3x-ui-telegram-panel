@@ -13,7 +13,8 @@ If you want to sell VPN subscriptions, you do not need it. Use [Plans and Pricin
 ## How it works
 
 - **Core has no internet access.** Every call to the supplier goes through the bot. Core names an action and gives the API key for that call. The bot calls the one supplier address it is configured for.
-- **The catalog** is read every half hour, and every five minutes while something on the shelf is sold out. A new product arrives switched off and without a price. The owner sets the price, writes the names and descriptions in both languages, and switches it on.
+- **The catalog** is read every half hour, and every five minutes while something on the shelf is sold out. The Digital accounts page also reads it when it opens on an old one. A new product arrives switched off. The owner writes the names and descriptions in both languages, checks the price, and switches it on.
+- **Pricing from the USDT price.** The owner can price the accounts from the live price of USDT instead of by hand: the supplier's cost in USDT, times the store's USDT rate (the one the wallet uses), times the owner's markup in percent, rounded up to the next 1,000 Toman. The prices follow the rate in steps (after every catalog read, and when the rate moves half a percent). Any single product can instead have a price the owner types. A new product is priced as it arrives, and still waits switched off.
 - **A sold-out product** is still shown, marked as sold out, and cannot be bought. The same holds for a product the supplier no longer lists.
 - **A purchase** is paid from the customer's wallet in Toman. One database transaction takes the money and writes the order. The supplier is then asked, using the order's own ID as the external order ID, so a repeated request never charges twice. The account the supplier returns is stored encrypted and shown to the customer in the bot and under **My purchases**.
 - **If the supplier does not answer,** the order stays paid and waiting, and a worker asks again with growing waits. If the supplier refuses for good, the money goes back at once. The owner can retry or refund an order that was never delivered.
@@ -25,11 +26,11 @@ The home of the feature shows the supplier's categories in a grid, red when noth
 
 ## Texts
 
-The owner can use **Export texts** to download every product's name and text as a file, have the Persian texts filled in by a translator, and **Import texts** to bring them back. Prices and switches are not part of that file.
+The page marks the products that still need Persian texts. The owner can use **Export texts** to download every product's name and text as a file (with a note for the translator on how the texts should read), have the Persian texts and the BOBRES-style English filled in, and **Import texts** to bring them back. Prices and switches are not part of that file.
 
 ## Limits
 
-- Prices are in Toman only.
+- Prices are in Toman only. Pricing from the USDT price needs the supplier's cost in USDT.
 - A purchase takes 1 to 25 accounts.
 - The supplier's stock figure is trusted as read.
 - What a delivery looks like depends on the supplier's answer. It is shown as text, so check the first real order.

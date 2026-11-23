@@ -109,6 +109,13 @@ func newSupplierEnv(t *testing.T) *supplierEnv {
 	svc.cfg.VendorNow = func() time.Time { return *e.clock }
 	svc.SetSupplierTransport(e.fake)
 	ctx := context.Background()
+	// The tests of this package share one database: every test starts from no products, no orders, no pricing and no rate.
+	for _, q := range []string{`DELETE FROM core.supplier_orders`, `DELETE FROM core.supplier_products`,
+		`DELETE FROM core.settings WHERE key IN ('` + supplierPricingKey + `', '` + liveRateKey + `', '` + SettingUSDTMargin + `', 'payments.usdt_rate')`} {
+		if _, err := s.DB().Exec(ctx, q); err != nil {
+			t.Fatal(err)
+		}
+	}
 	if err := svc.SetSupplierKey(ctx, e.owner, supplierTestKey); err != nil {
 		t.Fatal(err)
 	}

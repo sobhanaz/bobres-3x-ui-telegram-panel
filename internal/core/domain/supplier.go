@@ -178,7 +178,14 @@ func (s *Service) SyncSupplierCatalog(ctx context.Context) (int, error) {
 		}
 		rows = append(rows, store.SupplierProduct{ID: p.ID, Name: p.Name, Description: p.Description, CostMicro: p.CostMicro, CostCurrency: p.CostCurrency, Stock: stock, Raw: p.Raw})
 	}
-	return len(rows), s.st.WithTx(ctx, func(tx pgx.Tx) error { return s.st.SyncSupplierCatalog(ctx, tx, rows) })
+	if err := s.st.WithTx(ctx, func(tx pgx.Tx) error { return s.st.SyncSupplierCatalog(ctx, tx, rows) }); err != nil {
+		return 0, err
+	}
+	// New products and new costs are priced at once (a failure here is the pricing's, not the read's).
+	if _, err := s.RepriceSupplierProducts(ctx, true); err != nil && ctx.Err() == nil {
+		s.cfg.Log.Warn("supplier prices", "err", err)
+	}
+	return len(rows), nil
 }
 
 // ListSupplierProducts is every product of the catalog as read, with the owner's choices.
@@ -191,6 +198,9 @@ func (s *Service) ListSupplierProducts(ctx context.Context) ([]store.SupplierPro
 type SupplierEdit struct {
 	Enabled   *bool
 	SellPrice *int64 // Toman; 0 clears it
+	// PriceMode is "auto" (the price follows the rate, see supplier_pricing.go) or "fixed". A price typed that is not the one the product has
+	// makes it fixed, unless the mode is given.
+	PriceMode *string
 	Title     map[string]string
 	Desc      map[string]string
 	Sort      *int32
@@ -217,10 +227,13 @@ func cleanI18n(in map[string]string, max int) (map[string]string, error) {
 }
 
 // UpdateSupplierProduct applies the owner's edit: the price, the texts, the order and whether it is sold. A product is
-// switched on only with a price.
+// switched on only with a price. A price typed makes the product's price its own (fixed); asking it to follow the rate prices it now.
 func (s *Service) UpdateSupplierProduct(ctx context.Context, actor *store.User, id string, e SupplierEdit) (*store.SupplierProduct, error) {
 	if e.SellPrice != nil && (*e.SellPrice < 0 || *e.SellPrice > supplierMaxPrice) {
 		return nil, &FieldError{"sell_price", "a price in Toman, 1 to 1 000 000 000 000 (0 clears it)"}
+	}
+	if e.PriceMode != nil && *e.PriceMode != PriceModeAuto && *e.PriceMode != PriceModeFixed {
+		return nil, &FieldError{"price_mode", "auto or fixed"}
 	}
 	title, err := cleanI18n(e.Title, 200)
 	if err != nil {
@@ -230,19 +243,45 @@ func (s *Service) UpdateSupplierProduct(ctx context.Context, actor *store.User, 
 	if err != nil {
 		return nil, err
 	}
+	// The rate and the markup are read before the transaction: a handler that holds a connection must not ask the pool for another.
+	rate, markup := s.UsdtRate(ctx), s.supplierPricingState(ctx).Markup
 	var out *store.SupplierProduct
 	err = s.st.WithTx(ctx, func(tx pgx.Tx) error {
 		before, err := s.st.GetSupplierProduct(ctx, tx, id, true)
 		if err != nil {
 			return err
 		}
-		price := before.SellPrice
+		price, mode := before.SellPrice, before.PriceMode
+		if e.PriceMode != nil {
+			mode = *e.PriceMode
+		}
 		if e.SellPrice != nil {
 			if *e.SellPrice == 0 {
 				price = nil
 			} else {
 				price = e.SellPrice
 			}
+			if e.PriceMode == nil && !sameSupplierPrice(price, before.SellPrice) {
+				mode = PriceModeFixed // a price the owner typed is the owner's
+			}
+		}
+		var storePrice *int64 // what the store writes: the typed price, or the one worked out now
+		if e.SellPrice != nil && mode == PriceModeFixed {
+			storePrice = e.SellPrice
+		}
+		if mode == PriceModeAuto && before.PriceMode != PriceModeAuto {
+			// Switched to follow the rate: price it now.
+			if !SupplierCostFollows(before) {
+				return &FieldError{"price_mode", "the supplier gives no cost in USDT for this product, so its price cannot follow the rate"}
+			}
+			if rate <= 0 {
+				return stateErr("the USDT rate is not known yet: read it in Gateways, or type one, first")
+			}
+			p, ok := SupplierAutoPrice(*before.CostMicro, rate, markup)
+			if !ok {
+				return &FieldError{"price_mode", "this product's price cannot be worked out from its cost"}
+			}
+			price, storePrice = &p, &p
 		}
 		if e.Enabled != nil && *e.Enabled && price == nil {
 			return &FieldError{"sell_price", "set a price before selling this product"}
@@ -250,13 +289,21 @@ func (s *Service) UpdateSupplierProduct(ctx context.Context, actor *store.User, 
 		if price == nil && before.Enabled && (e.Enabled == nil || *e.Enabled) {
 			return &FieldError{"sell_price", "a product on sale needs a price: switch it off first"}
 		}
-		if out, err = s.st.UpdateSupplierProduct(ctx, tx, id, store.SupplierProductEdit{Enabled: e.Enabled, SellPrice: e.SellPrice, Title: title, Desc: desc, Sort: e.Sort}); err != nil {
+		if out, err = s.st.UpdateSupplierProduct(ctx, tx, id, store.SupplierProductEdit{Enabled: e.Enabled, SellPrice: storePrice, PriceMode: &mode, Title: title, Desc: desc, Sort: e.Sort}); err != nil {
 			return err
 		}
 		return s.auditChange(ctx, tx, actor, "supplier.product", "supplier_product", id,
-			map[string]any{"enabled": before.Enabled, "sell_price": before.SellPrice}, map[string]any{"enabled": out.Enabled, "sell_price": out.SellPrice}, "")
+			map[string]any{"enabled": before.Enabled, "sell_price": before.SellPrice, "price_mode": before.PriceMode},
+			map[string]any{"enabled": out.Enabled, "sell_price": out.SellPrice, "price_mode": out.PriceMode}, "")
 	})
 	return out, err
+}
+
+func sameSupplierPrice(a, b *int64) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return *a == *b
 }
 
 // SupplierOffers are the products a customer may buy now, in the owner's order.
@@ -567,7 +614,8 @@ func (s *Service) SettleSupplierOrders(ctx context.Context) (int, error) {
 	return n, nil
 }
 
-// RunSupplierWorker settles waiting orders every half minute and reads the catalog every half hour, until ctx ends.
+// RunSupplierWorker settles waiting orders every half minute, reads the catalog every half hour and lets the prices follow the USDT rate
+// (supplier_pricing.go), until ctx ends.
 func (s *Service) RunSupplierWorker(ctx context.Context) {
 	t := time.NewTicker(30 * time.Second)
 	defer t.Stop()

@@ -26,11 +26,13 @@ type SupplierProduct struct {
 	Raw          json.RawMessage
 	Enabled      bool
 	SellPrice    *int64 // Toman; nil until the owner sets it
-	Title        map[string]string
-	Desc         map[string]string
-	Sort         int32
-	SyncedAt     *time.Time
-	UpdatedAt    time.Time
+	// PriceMode is "auto" (the price follows the supplier's cost at the store's USDT rate, see domain.SupplierAutoPrice) or "fixed" (the owner's own).
+	PriceMode string
+	Title     map[string]string
+	Desc      map[string]string
+	Sort      int32
+	SyncedAt  *time.Time
+	UpdatedAt time.Time
 }
 
 // SupplierOrder is one purchase of a supplier product.
@@ -77,12 +79,12 @@ func (s *Store) SetSupplierKey(ctx context.Context, q querier, enc []byte) error
 	return nil
 }
 
-const supplierProductCols = `id, name, description, cost_micro, cost_currency, stock, listed, raw, enabled, sell_price, title_i18n, desc_i18n, sort, synced_at, updated_at`
+const supplierProductCols = `id, name, description, cost_micro, cost_currency, stock, listed, raw, enabled, sell_price, price_mode, title_i18n, desc_i18n, sort, synced_at, updated_at`
 
 func scanSupplierProduct(row pgx.Row) (*SupplierProduct, error) {
 	var p SupplierProduct
 	var title, desc []byte
-	err := row.Scan(&p.ID, &p.Name, &p.Description, &p.CostMicro, &p.CostCurrency, &p.Stock, &p.Listed, &p.Raw, &p.Enabled, &p.SellPrice,
+	err := row.Scan(&p.ID, &p.Name, &p.Description, &p.CostMicro, &p.CostCurrency, &p.Stock, &p.Listed, &p.Raw, &p.Enabled, &p.SellPrice, &p.PriceMode,
 		&title, &desc, &p.Sort, &p.SyncedAt, &p.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
@@ -173,6 +175,7 @@ func (s *Store) GetSupplierProduct(ctx context.Context, q querier, id string, fo
 type SupplierProductEdit struct {
 	Enabled   *bool
 	SellPrice *int64 // 0 clears the price
+	PriceMode *string
 	Title     map[string]string
 	Desc      map[string]string
 	Sort      *int32
@@ -194,6 +197,9 @@ func (s *Store) UpdateSupplierProduct(ctx context.Context, q querier, id string,
 			cur.SellPrice = e.SellPrice
 		}
 	}
+	if e.PriceMode != nil {
+		cur.PriceMode = *e.PriceMode
+	}
 	if e.Title != nil {
 		cur.Title = e.Title
 	}
@@ -212,8 +218,8 @@ func (s *Store) UpdateSupplierProduct(ctx context.Context, q querier, id string,
 		return nil, err
 	}
 	if _, err := q.Exec(ctx, `
-		UPDATE core.supplier_products SET enabled = $2, sell_price = $3, title_i18n = $4, desc_i18n = $5, sort = $6, updated_at = now() WHERE id = $1`,
-		id, cur.Enabled, cur.SellPrice, title, desc, cur.Sort); err != nil {
+		UPDATE core.supplier_products SET enabled = $2, sell_price = $3, title_i18n = $4, desc_i18n = $5, sort = $6, price_mode = $7, updated_at = now() WHERE id = $1`,
+		id, cur.Enabled, cur.SellPrice, title, desc, cur.Sort, cur.PriceMode); err != nil {
 		return nil, fmt.Errorf("update supplier product: %w", err)
 	}
 	return s.GetSupplierProduct(ctx, q, id, false)
@@ -377,4 +383,73 @@ func (s *Store) MarkSupplierOrderNotified(ctx context.Context, q querier, id str
 		return false, fmt.Errorf("mark supplier order notified: %w", err)
 	}
 	return tag.RowsAffected() == 1, nil
+}
+
+// supplierFollowable is the SQL for "its price can follow the USDT rate": the supplier's cost is read and is in a dollar currency
+// (domain.SupplierCostFollows is the same rule in Go).
+const supplierFollowable = `(cost_micro IS NOT NULL AND cost_micro > 0 AND cost_currency IN ('USDT', 'USD', 'USDC'))`
+
+// ListSupplierAutoProducts locks and returns the products whose price follows the rate and can (the pricing pass's rows).
+func (s *Store) ListSupplierAutoProducts(ctx context.Context, tx pgx.Tx) ([]SupplierProduct, error) {
+	rows, err := tx.Query(ctx, `SELECT `+supplierProductCols+` FROM core.supplier_products WHERE price_mode = 'auto' AND `+supplierFollowable+` ORDER BY id FOR UPDATE`)
+	if err != nil {
+		return nil, fmt.Errorf("list supplier auto products: %w", err)
+	}
+	defer rows.Close()
+	var out []SupplierProduct
+	for rows.Next() {
+		p, err := scanSupplierProduct(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *p)
+	}
+	return out, rows.Err()
+}
+
+// SetSupplierAutoPrice writes the price an auto product was worked out at (a fixed product is never touched).
+func (s *Store) SetSupplierAutoPrice(ctx context.Context, tx pgx.Tx, id string, price int64) error {
+	_, err := tx.Exec(ctx, `UPDATE core.supplier_products SET sell_price = $2, updated_at = now() WHERE id = $1 AND price_mode = 'auto'`, id, price)
+	if err != nil {
+		return fmt.Errorf("set supplier auto price: %w", err)
+	}
+	return nil
+}
+
+// SwitchSupplierProductsToAuto makes every product that can follow the rate follow it, and returns how many were fixed before and how many
+// of those had a price of their own (which the pricing pass now replaces).
+func (s *Store) SwitchSupplierProductsToAuto(ctx context.Context, tx pgx.Tx) (switched, replaced int, err error) {
+	err = tx.QueryRow(ctx, `
+		WITH changed AS (
+			UPDATE core.supplier_products SET price_mode = 'auto', updated_at = now()
+			WHERE price_mode = 'fixed' AND `+supplierFollowable+`
+			RETURNING sell_price)
+		SELECT count(*), count(sell_price) FROM changed`).Scan(&switched, &replaced)
+	if err != nil {
+		return 0, 0, fmt.Errorf("switch supplier products to auto: %w", err)
+	}
+	return switched, replaced, nil
+}
+
+// SupplierPricingCounts says how the products are priced now.
+type SupplierPricingCounts struct {
+	Auto         int // follow the rate
+	Fixed        int // the owner's own price (or none yet)
+	HandPriced   int // fixed, with a price, and able to follow: what "Apply to all products" would replace
+	CannotFollow int // no cost in USDT: always the owner's price
+}
+
+// CountSupplierPricing counts the products by how they are priced.
+func (s *Store) CountSupplierPricing(ctx context.Context, q querier) (SupplierPricingCounts, error) {
+	var c SupplierPricingCounts
+	err := q.QueryRow(ctx, `
+		SELECT count(*) FILTER (WHERE price_mode = 'auto'),
+		       count(*) FILTER (WHERE price_mode = 'fixed'),
+		       count(*) FILTER (WHERE price_mode = 'fixed' AND sell_price IS NOT NULL AND `+supplierFollowable+`),
+		       count(*) FILTER (WHERE NOT `+supplierFollowable+`)
+		FROM core.supplier_products`).Scan(&c.Auto, &c.Fixed, &c.HandPriced, &c.CannotFollow)
+	if err != nil {
+		return c, fmt.Errorf("count supplier pricing: %w", err)
+	}
+	return c, nil
 }
