@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/readme/hero.svg" alt="BOBRES: launch your own VPN store on Telegram, in one command. Live v0.27.0." width="100%">
+  <img src="docs/readme/hero.svg" alt="BOBRES: launch your own VPN store on Telegram, in one command. Live v0.28.0." width="100%">
 </p>
 
 <p align="center">
@@ -449,8 +449,8 @@ Run `sudo bobres` for the management menu, or use any item as a command. The hea
 <summary><b>The same menu as text (<code>sudo bobres</code>)</b></summary>
 
 ```text
-   n____n   BOBRES manager  bobres v0.27.0
-  ( o  o )  /opt/bobres  ·  shop.example.com  ·  version 0.27.0
+   n____n   BOBRES manager  bobres v0.28.0
+  ( o  o )  /opt/bobres  ·  shop.example.com  ·  version 0.28.0
    \_||_/   Store     running (9/9 services)
             License   Standard license, 214 days left
             HTTPS     auto, certificate expires in 79 days
@@ -786,15 +786,16 @@ at `https://<domain>/admin`
 
 ### 🚦 Status
 
-**Latest release: v0.27.0 (2026-11-23)**: the digital accounts of the vendor's own store are priced from the live USDT price and one
-markup percent (a product can keep a price of its own), and their list stays current. v0.26.2 made choosing a config name work
+**Latest release: v0.28.0 (2026-11-26)**: you choose which config a customer gets on its own after a purchase (a word of its name, such as
+Turkey), and a service waiting for its first connection is read from the panel every 2 minutes. v0.27.0 priced the digital accounts of the
+vendor's own store from the live USDT price and one markup percent (a product can keep a price of its own), and kept their list current. v0.26.2 made choosing a config name work
 again when one server is down (a panel the health check finds down is no longer asked). v0.26.1 added a **Check the bot's access** button on every channel button in the
 dashboard. v0.26.0 let the bot's menu show your channels as buttons (a tap shows a
 copy of the channel's first post with a View channel button), and a delivered service now brings a direct config, the tutorial
 video and a tutorial after its link ([CHANGELOG.md](CHANGELOG.md)).
 
 Phases 0 to 7 of the plan are built and tested in CI ([docs/PLAN.md](docs/PLAN.md) §10). The first public release, v0.1.0,
-came out on 2026-10-14, and 28 stable releases have followed. Each one is signed, built for amd64 and arm64, and verified by the
+came out on 2026-10-14, and 29 stable releases have followed. Each one is signed, built for amd64 and arm64, and verified by the
 installer and by `bobres update`. Releases are tried in a Docker lab with two Ubuntu servers
 ([docs/11-staging-run.md](docs/11-staging-run.md)), and the vendor's own store runs every one of them.
 

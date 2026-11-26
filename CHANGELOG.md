@@ -8,6 +8,13 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+## [0.28.0] — 2026-11-26
+
+**You choose which config a customer gets on its own after a purchase, and a service waiting for its first connection starts sooner in BOBRES.** No database migration; the bot, core and the provisioner change (the update does that).
+
+### Updating
+- No database migration. A new setting, `delivery.config_match`, is empty by default, so deliveries behave as before until you set it.
+
 ### Added
 - **Choose which config is sent on its own after a purchase.** The direct config of a delivery was always the first of the service's configs. **Settings > After a purchase > Which config to send on its own** (`delivery.config_match`) takes words of a config's name, separated by commas (for example `turkey, 🇹🇷`): the bot sends the first config whose name has one of them, on its own after the message with the subscription link, and the first config when none matches or the setting is empty. docs/03-bot-ux.md, "What a delivered service brings".
 
