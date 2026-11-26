@@ -68,7 +68,7 @@ By default a service's days start when it is made: a 30-day service bought today
 
 ### After the purchase
 
-- **What arrives with a new service:** after the link and the QR code, the bot sends one **direct config** (the first of the service's configs; tap to copy), the **tutorial video** (a post of your channel that the bot copies into the chat, so it plays there) and **a tutorial** from the Tutorials section. It goes with a bought service and with the free test, not with a renewal or a reseller's purchase. **Settings → After a purchase** switches it on and off, takes the link of the video's post and lets you pick the tutorial; the video and the tutorial are sent only once you set them.
+- **What arrives with a new service:** after the link and the QR code, the bot sends one **direct config** (the first of the service's configs, or the one you pick: put a word of its name, such as `turkey`, in **Which config to send on its own**; tap to copy), the **tutorial video** (a post of your channel that the bot copies into the chat, so it plays there) and **a tutorial** from the Tutorials section. It goes with a bought service and with the free test, not with a renewal or a reseller's purchase. **Settings → After a purchase** switches it on and off, takes the link of the video's post and lets you pick the tutorial; the video and the tutorial are sent only once you set them.
 - **Renew and add traffic** from My services, with the same link.
 - **Find by link:** a customer who does not see a service in their list sends its subscription link, sees its state, and can renew it.
 - **Reminders** come 3 days and 1 day before expiry, at 80% of the traffic and when it ends, with Renew and Add traffic buttons.

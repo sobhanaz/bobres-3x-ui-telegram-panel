@@ -82,8 +82,11 @@ customer gets the new menu at the next thing they do. The bot's admin menu leave
 
 The delivery message (the ready text with the subscription link, and an Open page button) is followed by the QR code and by what helps a customer
 connect, each a message of its own and in this order (the bot's notifier, `internal/bot/notify`):
-1. **A direct config**: the first of the service's configs (as the panel lists them), in a code span to tap and copy, for apps that want a config and
-   not a subscription link (`sub.config_direct`). Left out when the service has no config, or when it is too long for one message.
+1. **A direct config**: one of the service's configs, in a code span to tap and copy, for apps that want a config and not a subscription link
+   (`sub.config_direct`); the subscription link is already in the ready message above it. It is the first config (as the panel lists them), or the one
+   the owner picks with `delivery.config_match`: words (comma separated, any case, such as `turkey, 🇹🇷`) looked for in each config's name (the text after
+   the `#` of its link; a vmess link's `ps`), and the first config whose name has one of them is sent; with none, or when none matches, the first.
+   Left out when the service has no config, or when it is too long for one message.
 2. **The tutorial video**: the owner's post (`delivery.video_post`, a `https://t.me/<channel>/<n>` link) copied into the chat, so the video plays there.
 3. **A tutorial** (`delivery.tutorial`): the tutorial of the Tutorials section that the owner picked, sent as that section shows it: its text, and a
    button for each https link it has. One that is gone or switched off is left out.
@@ -370,7 +373,7 @@ connection** and with `/set` in the bot. While the one of the buyer's role is on
   an on-hold user, S-UI a delayed start and Hiddify a package without a start date. The panel sets the end at the first
   connection. Until then the service is **active with no end date** and waits as long as it takes: it cannot expire and gets no
   reminder about its end (traffic reminders still apply). Core holds the days (`subscriptions.first_use_days`), and the usage sync
-  takes the end the panel set once the config connected; from then on the service runs like any other.
+  takes the end the panel set once the config connected (a waiting service is read every 2 minutes, a running one every 10); from then on the service runs like any other.
 - The bot, the Mini App, the dashboard and the service's page show *30 days, from the first connection* where the end date goes,
   and the delivery message says the days start at the first connection.
 - **Renewing** a service still waiting adds the plan's days to the wait (30 + 30 = 60 days from the first connection); a traffic

@@ -30,6 +30,9 @@ type UsageWorker struct {
 	log  *slog.Logger
 	// Every is how often each subscription is synced.
 	Every time.Duration
+	// WaitingEvery is how often a service waiting for its first connection (first_use.go) is synced: its days start at that
+	// connection, so the customer who has just connected sees them start within this time, not within Every. At most Every.
+	WaitingEvery time.Duration
 	// MissingEvery is how often a service the panel has no client for is asked about again: there is
 	// nothing to read until an operator makes the client again, and asking every Every would only repeat
 	// the answer.
@@ -47,7 +50,7 @@ func (s *Service) NewUsageWorker(prov Provisioner, log *slog.Logger) *UsageWorke
 		log = slog.New(slog.DiscardHandler)
 	}
 	return &UsageWorker{svc: s, prov: prov, log: log.With("worker", "usage"),
-		Every: 10 * time.Minute, MissingEvery: 6 * time.Hour, Tick: 30 * time.Second, Batch: 50, now: time.Now}
+		Every: 10 * time.Minute, WaitingEvery: 2 * time.Minute, MissingEvery: 6 * time.Hour, Tick: 30 * time.Second, Batch: 50, now: time.Now}
 }
 
 // Run syncs until ctx is done. Errors are logged; they never stop the loop.
@@ -70,7 +73,8 @@ func (w *UsageWorker) Run(ctx context.Context) error {
 // many it looked at.
 func (w *UsageWorker) SyncDue(ctx context.Context) (int, error) {
 	st := w.svc.st
-	due, err := st.DueUsageSync(ctx, st.Conn(), w.now().Add(-w.Every), w.now().Add(-w.MissingEvery), w.Batch)
+	waiting := min(w.Every, w.WaitingEvery)
+	due, err := st.DueUsageSync(ctx, st.Conn(), w.now().Add(-w.Every), w.now().Add(-w.MissingEvery), w.now().Add(-waiting), w.Batch)
 	if err != nil {
 		return 0, err
 	}

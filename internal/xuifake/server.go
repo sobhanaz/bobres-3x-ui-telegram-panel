@@ -47,6 +47,8 @@ type record struct {
 	rowID      int64
 	up, down   int64
 	inboundIDs []int
+	// trafficExpiry is the end the panel's traffic row holds when it differs from the client record's (see StaleClientRecords): 0 = the same.
+	trafficExpiry int64
 }
 
 // stored is the client as the real panel returns it from clients/get: the
@@ -81,6 +83,7 @@ type Server struct {
 	hidden       map[string]bool // clients the next paged listing leaves out
 	ignoreAdd    bool            // bulkAdd answers but changes nothing
 	reuseOwn     bool            // clients/add of a client the panel has (same subId) succeeds and changes nothing
+	staleRecords bool            // a first connection starts the client in its traffic row only, not in the client record
 }
 
 // NewServer starts a fake panel that accepts only the given Bearer token.
@@ -177,6 +180,11 @@ func (s *Server) SetLatency(d time.Duration) { s.mu.Lock(); s.latency = d; s.mu.
 // Calls returns how many authenticated calls hit a route name (e.g. "add").
 func (s *Server) Calls(name string) int { s.mu.Lock(); defer s.mu.Unlock(); return s.calls[name] }
 
+// StaleClientRecords makes a client's first connection start it in the panel's traffic row (clients/traffic) only: the client
+// record (clients/get) keeps the negative expiry. The real panel writes the traffic row for certain and syncs the record after
+// it in a step whose failure it only logs, so a record can stay behind.
+func (s *Server) StaleClientRecords(on bool) { s.mu.Lock(); s.staleRecords = on; s.mu.Unlock() }
+
 // AddUsage simulates traffic usage for a client.
 // A client waiting for its first connection (a negative expiry) starts with
 // its first traffic, as the panel does: its end becomes now plus that duration.
@@ -187,7 +195,12 @@ func (s *Server) AddUsage(email string, up, down int64) {
 		r.up += up
 		r.down += down
 		if r.ExpiryTime < 0 && up+down > 0 {
-			r.ExpiryTime = time.Now().UnixMilli() - r.ExpiryTime
+			end := time.Now().UnixMilli() - r.ExpiryTime
+			if s.staleRecords {
+				r.trafficExpiry = end
+			} else {
+				r.ExpiryTime = end
+			}
 		}
 	}
 }
@@ -456,6 +469,7 @@ func (s *Server) update(w http.ResponseWriter, r *http.Request) {
 		s.clients[c.Email] = rec
 	}
 	rec.client = c
+	rec.trafficExpiry = 0 // an update writes the traffic row too
 	reply(w, http.StatusOK, true, "Inbound client has been updated.", nil)
 }
 
@@ -552,9 +566,13 @@ func (s *Server) traffic(w http.ResponseWriter, r *http.Request) {
 		notFound(w)
 		return
 	}
+	expiry := rec.ExpiryTime
+	if rec.trafficExpiry != 0 {
+		expiry = rec.trafficExpiry
+	}
 	reply(w, http.StatusOK, true, "", map[string]any{
 		"email": rec.Email, "up": rec.up, "down": rec.down, "total": rec.TotalGB,
-		"expiryTime": rec.ExpiryTime, "enable": rec.Enable,
+		"expiryTime": expiry, "enable": rec.Enable,
 	})
 }
 

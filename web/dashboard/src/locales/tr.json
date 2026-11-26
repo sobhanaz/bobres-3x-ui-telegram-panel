@@ -1926,7 +1926,7 @@
       "delivery": {
         "title": "Satın alma sonrası",
         "desc": "Bot yeni bir hizmeti teslim ettikten sonra ne gönderir.",
-        "note": "Hizmetin kendisinden sonra bot bir doğrudan yapılandırma (hizmetin ilk yapılandırması), ardından eğitim videosunu, ardından eğitimi gönderir. Yenilemeler ve bayilerin satın aldığı hizmetler bunlardan hiçbirini almaz. Video bağlantısını veya eğitimi boş bırakırsanız o kısım gönderilmez."
+        "note": "Hizmetin kendisinden sonra bot bir doğrudan yapılandırma (hizmetin ilk yapılandırması veya adındaki bir kelimeyle seçtiğiniz), ardından eğitim videosunu, ardından eğitimi gönderir. Yenilemeler ve bayilerin satın aldığı hizmetler bunlardan hiçbirini almaz. Video bağlantısını veya eğitimi boş bırakırsanız o kısım gönderilmez."
       }
     },
     "field": {
@@ -2284,6 +2284,10 @@
         "bundle_trial": {
           "label": "Ücretsiz deneme için de",
           "help": "Açıkken ücretsiz deneme hizmeti de satın alma gibi doğrudan yapılandırmayı, videoyu ve eğitimi alır."
+        },
+        "config_match": {
+          "label": "Hangi yapılandırma tek başına gönderilsin",
+          "help": "Yapılandırmanın adında aranacak kelimeler, virgülle ayrılmış; örneğin: turkey, 🇹🇷. Yapılandırmanın adı, panelin onun için gösterdiği addır (inbound açıklaması ve istemci adı). Bot, adında bu kelimelerden biri geçen ilk yapılandırmayı abonelik bağlantısından sonra tek başına gönderir. Boşsa veya hiçbiri uymazsa ilk yapılandırma gönderilir."
         },
         "video_post": {
           "label": "Eğitim videosu (gönderi bağlantısı)",

@@ -8,6 +8,13 @@ All notable changes to BOBRES are written here. The format follows
 
 What comes next is in [docs/ROADMAP.md](docs/ROADMAP.md).
 
+### Added
+- **Choose which config is sent on its own after a purchase.** The direct config of a delivery was always the first of the service's configs. **Settings > After a purchase > Which config to send on its own** (`delivery.config_match`) takes words of a config's name, separated by commas (for example `turkey, 🇹🇷`): the bot sends the first config whose name has one of them, on its own after the message with the subscription link, and the first config when none matches or the setting is empty. docs/03-bot-ux.md, "What a delivered service brings".
+
+### Fixed
+- **A service waiting for its first connection is read from the panel every 2 minutes, not every 10.** Its days start at the first connection, and a customer who had just connected saw *30 days, from the first connection* for up to ten minutes. Running services are still read every 10 minutes.
+- **A service that waits for its first connection could stay waiting for ever in BOBRES.** At the first connection 3x-ui writes the end date it sets to the client's traffic row (the one it enforces) and then syncs it to the client record that BOBRES read, in a step whose failure the panel only logs. A record left behind kept saying *30 days, from the first connection* after the service had started. The provisioner now checks the traffic row when the record still says waiting.
+
 ## [0.27.0] — 2026-11-23
 
 **The digital accounts of the vendor's own store are priced from the live USDT price, and their list stays current.** One additive database migration (core 00060); only core and its dashboard change (the update does that).

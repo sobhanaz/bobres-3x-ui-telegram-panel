@@ -64,6 +64,7 @@ const (
 const (
 	SettingDeliveryBundle      = "delivery.bundle"
 	SettingDeliveryBundleTrial = "delivery.bundle_trial"
+	SettingDeliveryConfigMatch = "delivery.config_match"
 	SettingDeliveryVideo       = "delivery.video_post"
 	SettingDeliveryTutorial    = "delivery.tutorial"
 )
@@ -142,9 +143,11 @@ var SettingSpecs = []SettingSpec{
 		Help: "channel buttons in the bot's menu, under Buy and Free trial, at most 6: each has a text by language, the link of the post of the channel that the bot copies into the chat when the button is tapped (in Telegram: open the post, Copy Link: https://t.me/<channel>/<number>) and, for a private channel, the channel's invite link (https://t.me/+…); under the copy a View channel button opens the channel. Add the bot to each channel as an administrator: Telegram lets a bot copy only a post it can read, and nothing from a channel with Restrict saving content on. For example [{\"label\":{\"fa\":\"کانال نظرات\",\"en\":\"Reviews\"},\"post\":\"https://t.me/mychannel/2\"}]"},
 	// What a delivered service brings with it besides its subscription link and QR code (the bot's notifier sends it).
 	{Key: SettingDeliveryBundle, Group: "delivery", Kind: KindBool, Perm: permSettings, Default: "true",
-		Help: "true = when a new service is delivered the bot also sends one direct config (the first of the service's configs), then the tutorial video and the tutorial named below; renewals and services bought by resellers get none of it; false = only the subscription link and QR code"},
+		Help: "true = when a new service is delivered the bot also sends one direct config (the first of the service's configs, or the one picked by the config words below), then the tutorial video and the tutorial named below; renewals and services bought by resellers get none of it; false = only the subscription link and QR code"},
 	{Key: SettingDeliveryBundleTrial, Group: "delivery", Kind: KindBool, Perm: permSettings, Default: "true",
 		Help: "true = the free test service brings the same extras as a purchase; false = the free test gets only the subscription link and QR code"},
+	{Key: SettingDeliveryConfigMatch, Group: "delivery", Kind: KindText, Perm: permSettings, MaxLen: 100,
+		Help: "which config is sent on its own after the subscription link: words to look for in the config's name (the name the panel shows: the inbound's remark and the client's name), separated by commas, for example turkey, 🇹🇷; the first config whose name has one of them is sent, and when none has (or this is empty) the first config is sent"},
 	{Key: SettingDeliveryVideo, Group: "delivery", Kind: KindURL, Perm: permSettings,
 		Help: "link of a post with the tutorial video in your Telegram channel (https://t.me/<channel>/<number>; in Telegram: open the post, Copy Link): the bot copies that post into the customer's chat, so the video plays there (empty = no video)"},
 	{Key: SettingDeliveryTutorial, Group: "delivery", Kind: KindText, Perm: permSettings, MaxLen: 36,
