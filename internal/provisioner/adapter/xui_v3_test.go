@@ -127,3 +127,30 @@ func TestVersions(t *testing.T) {
 		}
 	}
 }
+
+// A client waiting for its first connection starts at that connection even when the panel's client record (clients/get) is left
+// behind with the negative expiry: the end is read from the traffic row, which the panel writes first.
+func TestStatusReadsTheEndOfAStartedClientFromTheTrafficRow(t *testing.T) {
+	for _, stale := range []bool{false, true} {
+		a, fake := testAdapter(t)
+		fake.StaleClientRecords(stale)
+		ctx := context.Background()
+		const email = "u60-wait"
+		if err := a.CreateClient(ctx, email, "sub60", -30*86400*1000, 1<<30, []int{1}); err != nil {
+			t.Fatal(err)
+		}
+		st, err := a.Status(ctx, email)
+		if err != nil || st.ExpiryMs != -30*86400*1000 {
+			t.Fatalf("stale %v, waiting: %+v %v", stale, st, err)
+		}
+		fake.AddUsage(email, 10, 20)
+		st, err = a.Status(ctx, email)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := time.Now().Add(30 * 24 * time.Hour).UnixMilli()
+		if d := st.ExpiryMs - want; d < -60_000 || d > 60_000 {
+			t.Errorf("stale %v, after the first connection: expiry %d, want about %d", stale, st.ExpiryMs, want)
+		}
+	}
+}

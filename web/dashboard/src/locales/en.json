@@ -1926,7 +1926,7 @@
       "delivery": {
         "title": "After a purchase",
         "desc": "What the bot sends after it delivers a new service.",
-        "note": "After the service itself, the bot sends one direct config (the first of the service's configs), then the tutorial video, then the tutorial. Renewals and services bought by resellers get none of it. Leave the video link or the tutorial empty and that part is not sent."
+        "note": "After the service itself, the bot sends one direct config (the first of the service's configs, or the one you pick by a word of its name), then the tutorial video, then the tutorial. Renewals and services bought by resellers get none of it. Leave the video link or the tutorial empty and that part is not sent."
       }
     },
     "field": {
@@ -2284,6 +2284,10 @@
         "bundle_trial": {
           "label": "Also for the free trial",
           "help": "On: the free trial service gets the direct config, the video and the tutorial too, like a purchase."
+        },
+        "config_match": {
+          "label": "Which config to send on its own",
+          "help": "Words to look for in a config's name, separated by commas, for example: turkey, 🇹🇷. The config's name is what the panel shows for it (the inbound's remark and the client's name). The bot sends the first config whose name has one of the words, on its own after the subscription link. Empty, or no config matches: the first config is sent."
         },
         "video_post": {
           "label": "Tutorial video (link to a post)",

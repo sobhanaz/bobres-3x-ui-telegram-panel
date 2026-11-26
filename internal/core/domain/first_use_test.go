@@ -201,3 +201,32 @@ func TestPanelExpiry(t *testing.T) {
 		}
 	}
 }
+
+// A service waiting for its first connection is read from the panel again within minutes, not the ten of a running one: the
+// customer who has just connected should see the days start soon.
+func TestWaitingServiceIsSyncedSooner(t *testing.T) {
+	svc, s := testService(t)
+	ctx := context.Background()
+	plan := planWithLimits(t, s, 30, 50<<30)
+
+	firstUseOn(t, svc, owner(t, svc), true, false)
+	_, waiting, fp, _ := delivered(t, svc, s, 5811, plan)
+	firstUseOn(t, svc, owner(t, svc), false, false)
+	_, running, _, _ := delivered(t, svc, s, 5812, plan)
+	if waiting.FirstUseDays == nil || running.FirstUseDays != nil {
+		t.Fatalf("setup: waiting %+v, running %+v", waiting, running)
+	}
+	for _, id := range []string{waiting.ID, running.ID} {
+		if _, err := s.DB().Exec(ctx, `UPDATE core.subscriptions SET last_synced_at = now() - interval '3 minutes' WHERE id = $1`, id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	uw := svc.NewUsageWorker(fp, nil) // production intervals
+	due, err := s.DueUsageSync(ctx, s.Conn(), uw.now().Add(-uw.Every), uw.now().Add(-uw.MissingEvery), uw.now().Add(-uw.WaitingEvery), 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(due) != 1 || due[0].ID != waiting.ID {
+		t.Fatalf("due after 3 minutes: %d services, want only the waiting one", len(due))
+	}
+}

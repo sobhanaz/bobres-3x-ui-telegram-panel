@@ -1285,6 +1285,7 @@ func (n *Notifier) sendQR(ctx context.Context, lang string, e events.Subscriptio
 const (
 	setDeliveryBundle      = "delivery.bundle"
 	setDeliveryBundleTrial = "delivery.bundle_trial"
+	setDeliveryConfigMatch = "delivery.config_match"
 	setDeliveryVideo       = "delivery.video_post"
 	setDeliveryTutorial    = "delivery.tutorial"
 )
@@ -1303,13 +1304,14 @@ func (n *Notifier) sendBundle(ctx context.Context, lang string, e events.Subscri
 	n.sendTutorial(ctx, lang, e)
 }
 
-// sendDirectConfig sends the first of the service's configs, for an app that wants a config and not a subscription link.
+// sendDirectConfig sends one of the service's configs, for an app that wants a config and not a subscription link: the first whose name has a
+// word of delivery.config_match (the owner's Turkey config, say), else the first.
 func (n *Notifier) sendDirectConfig(ctx context.Context, lang string, e events.SubscriptionProvisionedEvent, links *corev1.SubscriptionLinks) {
 	configs := links.GetConfigLinks()
 	if len(configs) == 0 {
 		return
 	}
-	text := n.cat.T(lang, "sub.config_direct", "config", html.EscapeString(configs[0]))
+	text := n.cat.T(lang, "sub.config_direct", "config", html.EscapeString(pickConfig(configs, n.set.Get(setDeliveryConfigMatch))))
 	if i18n.TextLength(text) > i18n.MaxMessage { // more than a message takes: the subscription link has every config
 		n.log.Warn("direct config too long to send", "subscription", e.SubscriptionID)
 		return

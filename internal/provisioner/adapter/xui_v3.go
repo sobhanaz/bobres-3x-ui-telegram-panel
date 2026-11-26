@@ -198,7 +198,17 @@ func (a *XUIv3) Status(ctx context.Context, email string) (ClientStatus, error) 
 	if err != nil {
 		return ClientStatus{}, err
 	}
-	return ClientStatus{UsedBytes: d.UsedTraffic, TotalBytes: d.Client.TotalGB, ExpiryMs: d.Client.ExpiryTime, Enabled: d.Client.Enable}, nil
+	expiry := d.Client.ExpiryTime
+	if expiry < 0 {
+		// A client waiting for its first connection (a negative expiry). At that connection the panel writes the end it sets to the
+		// client's traffic row, which it enforces, and then syncs it to the client record that clients/get reads, in a step whose failure
+		// it only logs. So a record that still says "waiting" is checked against the traffic row: without that, a service that has
+		// started would show "days from the first connection" for ever.
+		if t, terr := a.c.Traffic(ctx, email); terr == nil && t.ExpiryTime > 0 {
+			expiry = t.ExpiryTime
+		}
+	}
+	return ClientStatus{UsedBytes: d.UsedTraffic, TotalBytes: d.Client.TotalGB, ExpiryMs: expiry, Enabled: d.Client.Enable}, nil
 }
 
 func (a *XUIv3) Delete(ctx context.Context, email string) error {

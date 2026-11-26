@@ -365,12 +365,17 @@ func (s *Store) ApplySubscriptionLimits(ctx context.Context, q querier, id strin
 // before olderThan (never synced first). A service the panel has no client for
 // (panel_missing_since set) is asked about less often: it is due once its last
 // sync is older than missingOlderThan, which is earlier than olderThan.
-// Disabled ones are left alone.
-func (s *Store) DueUsageSync(ctx context.Context, q querier, olderThan, missingOlderThan time.Time, limit int) ([]Subscription, error) {
+// A service waiting for its first connection (first_use_days set, no end date) is due once its last sync is older
+// than waitingOlderThan, which is later than olderThan: the panel starts its days at that connection, and the customer
+// who just connected should see them start soon. Disabled ones are left alone.
+func (s *Store) DueUsageSync(ctx context.Context, q querier, olderThan, missingOlderThan, waitingOlderThan time.Time, limit int) ([]Subscription, error) {
 	rows, err := q.Query(ctx, `SELECT `+subscriptionCols+` FROM core.subscriptions
 		WHERE status IN ('active', 'expiring_soon', 'expired', 'depleted') AND server_id IS NOT NULL
-		  AND (last_synced_at IS NULL OR last_synced_at < CASE WHEN panel_missing_since IS NULL THEN $1::timestamptz ELSE $3::timestamptz END)
-		ORDER BY last_synced_at NULLS FIRST LIMIT $2`, olderThan, limit, missingOlderThan)
+		  AND (last_synced_at IS NULL OR last_synced_at < CASE
+		        WHEN panel_missing_since IS NOT NULL THEN $3::timestamptz
+		        WHEN first_use_days IS NOT NULL AND expires_at IS NULL THEN $4::timestamptz
+		        ELSE $1::timestamptz END)
+		ORDER BY last_synced_at NULLS FIRST LIMIT $2`, olderThan, limit, missingOlderThan, waitingOlderThan)
 	if err != nil {
 		return nil, fmt.Errorf("due usage sync: %w", err)
 	}
